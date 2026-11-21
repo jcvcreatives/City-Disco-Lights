@@ -1,78 +1,58 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle,
-  AlertTriangle,
-  Award,
-  Car,
+  ArrowUpCircle,
   Check,
-  ClipboardList,
   Code2,
-  Compass,
   Crown,
-  Disc3,
-  GlassWater,
-  Hammer,
   Info,
   Lock,
-  Music,
   Plus,
   RotateCw,
-  Sparkles,
   Trash2,
-  Users,
   Volume2,
   VolumeX,
   X,
-  Zap,
-  Flame,
-  ArrowUpCircle,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { soundEngine } from './audio/soundEngine';
-import { IsometricClubCanvas } from './components/IsometricClubCanvas';
+import { HypeBlastEvent, HypeBlastOverlay } from './components/HypeBlastOverlay';
+import {
+  ClubSimulationMetrics,
+  DayNightCycleReport,
+  IsometricClubCanvas,
+} from './components/IsometricClubCanvas';
 import { TechnicalBlueprintModal } from './components/TechnicalBlueprintModal';
 import {
-  BubbleType,
   CATALOG_ITEMS,
   CatalogItem,
   DRINK_MIXES,
-  DrinkMix,
   FloatingText,
   GuestAgent,
   INITIAL_PLACED_ITEMS,
   INITIAL_QUESTS,
+  INITIAL_STAFF_MEMBERS,
   ItemCategory,
   LiveAlert,
   ParkingUpgradeState,
   PlacedItem,
   QuestTask,
+  STAFF_CATALOG,
+  StaffCatalogItem,
+  StaffMemberAgent,
   VIP_HOTSPOT_ITEMS,
 } from './types/game';
-import {
-  canPlaceItem,
-  DOOR_COORD,
-  findGridPath,
-  getCatalogItem,
-  STAIRS_COORD,
-} from './utils/pathfinding';
+import { canPlaceItem, findGridPath, getCatalogItem } from './utils/pathfinding';
 
 type GameScreenState = 'TITLE' | 'PLAYING';
 type BottomDrawerTab = 'BUILD' | 'DRINKS' | 'PARKING' | 'FRIENDS' | 'WORLD_MAP' | null;
 type LeftModalTab = 'QUESTS' | 'DJ_BOOTH' | 'PLAYLISTS' | 'CELEBS' | null;
 
-const GUEST_NAMES = [
-  'Maya',
-  'Leo',
-  'Zoe',
-  'Kai',
-  'Aria',
-  'Jaxon',
-  'Nova',
-  'Milo',
-  'Chloe',
-  'Ezra',
-  'Sienna',
-  'Dante',
-];
+const STAFF_FIRST_NAMES: Record<StaffCatalogItem['role'], string[]> = {
+  BARTENDER: ['Roxy', 'Jett', 'Vesper', 'Kobe', 'Nyx', 'Zane'],
+  BOUNCER: ['Marcus', 'Titan', 'Knox', 'jaxon', 'Rex', 'Vance'],
+  WAITER: ['Skye', 'pixel', 'Nova', 'Cleo', 'Lyra', 'Tori'],
+};
 
 const CELEBRITY_NAMES = [
   'DJ Daft Nova',
@@ -81,17 +61,218 @@ const CELEBRITY_NAMES = [
   'Luna Eclipse (Supermodel)',
 ];
 
-const SHIRT_COLORS = ['#f43f5e', '#38bdf8', '#a855f7', '#4ade80', '#fb923c', '#ec4899', '#eab308'];
-const HAIR_COLORS = ['#1e1b4b', '#78350f', '#facc15', '#be123c', '#4c1d95'];
-const PANTS_COLORS = ['#1e293b', '#312e81', '#334155', '#3b0764'];
+const INITIAL_GUESTS: GuestAgent[] = [
+  // 5 Dancers on the 6x6 pastel disco floor with Beer Mug & Sparkle bubbles (matching IMG_1503.jpeg)
+  {
+    id: 'g_dance_1',
+    name: 'Leo',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 3.35,
+    gridY: 4.35,
+    path: [],
+    state: 'DANCING',
+    stateTimer: 8,
+    patience: 90,
+    hype: 80,
+    bubble: 'BEER',
+    bubbleTimer: 7,
+    shirtColor: '#dc2626',
+    hairColor: '#451a03',
+    pantsColor: '#1e3a8a',
+    cashSpent: 45,
+  },
+  {
+    id: 'g_dance_2',
+    name: 'Maya',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 4.35,
+    gridY: 4.85,
+    path: [],
+    state: 'DANCING',
+    stateTimer: 9,
+    patience: 95,
+    hype: 85,
+    bubble: 'BEER',
+    bubbleTimer: 8,
+    shirtColor: '#6366f1',
+    hairColor: '#7c2d12',
+    pantsColor: '#1e293b',
+    cashSpent: 45,
+  },
+  {
+    id: 'g_dance_3',
+    name: 'Zoe',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 4.25,
+    gridY: 3.7,
+    path: [],
+    state: 'DANCING',
+    stateTimer: 7.5,
+    patience: 88,
+    hype: 90,
+    bubble: 'SPARKLE',
+    bubbleTimer: 7,
+    shirtColor: '#475569',
+    hairColor: '#1e1b4b',
+    pantsColor: '#0f172a',
+    cashSpent: 90,
+  },
+  {
+    id: 'g_dance_4',
+    name: 'Kai',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 4.85,
+    gridY: 3.35,
+    path: [],
+    state: 'DANCING',
+    stateTimer: 10,
+    patience: 92,
+    hype: 88,
+    bubble: null,
+    bubbleTimer: 0,
+    shirtColor: '#e11d48',
+    hairColor: '#1e1b4b',
+    pantsColor: '#1e3a8a',
+    cashSpent: 45,
+  },
+  {
+    id: 'g_dance_5',
+    name: 'Aria',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 5.35,
+    gridY: 3.9,
+    path: [],
+    state: 'DANCING',
+    stateTimer: 8.5,
+    patience: 90,
+    hype: 92,
+    bubble: null,
+    bubbleTimer: 0,
+    shirtColor: '#9333ea',
+    hairColor: '#451a03',
+    pantsColor: '#1e1b4b',
+    cashSpent: 45,
+  },
+  // Seated Lounge Patrons on bottom-right tables & purple booth
+  {
+    id: 'g_seat_1',
+    name: 'Milo',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 6.8,
+    gridY: 6.4,
+    path: [],
+    state: 'RESTING_AT_SEAT',
+    stateTimer: 9,
+    patience: 85,
+    hype: 75,
+    bubble: null,
+    bubbleTimer: 0,
+    shirtColor: '#0284c7',
+    hairColor: '#1e1b4b',
+    pantsColor: '#334155',
+    cashSpent: 90,
+  },
+  {
+    id: 'g_seat_2',
+    name: 'Ezra',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 6.4,
+    gridY: 8.3,
+    path: [],
+    state: 'RESTING_AT_SEAT',
+    stateTimer: 11,
+    patience: 90,
+    hype: 80,
+    bubble: null,
+    bubbleTimer: 0,
+    shirtColor: '#38bdf8',
+    hairColor: '#78350f',
+    pantsColor: '#1e293b',
+    cashSpent: 90,
+  },
+  // Guests queuing outside along left sidewalk with Music (♫) & Chat (•••) bubbles
+  {
+    id: 'g_queue_1',
+    name: 'Chloe',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: -0.75,
+    gridY: 8.9,
+    path: [],
+    state: 'QUEUEING',
+    stateTimer: 2.5,
+    patience: 90,
+    hype: 70,
+    bubble: 'CHAT',
+    bubbleTimer: 6,
+    shirtColor: '#a855f7',
+    hairColor: '#b45309',
+    pantsColor: '#1e1b4b',
+    cashSpent: 0,
+  },
+  {
+    id: 'g_queue_2',
+    name: 'Dante',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: -0.75,
+    gridY: 7.9,
+    path: [],
+    state: 'QUEUEING',
+    stateTimer: 4.0,
+    patience: 88,
+    hype: 65,
+    bubble: 'MUSIC',
+    bubbleTimer: 7,
+    shirtColor: '#6366f1',
+    hairColor: '#451a03',
+    pantsColor: '#1e293b',
+    cashSpent: 0,
+  },
+  {
+    id: 'g_queue_3',
+    name: 'Sienna',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: -0.75,
+    gridY: 6.9,
+    path: [],
+    state: 'QUEUEING',
+    stateTimer: 5.5,
+    patience: 85,
+    hype: 65,
+    bubble: null,
+    bubbleTimer: 0,
+    shirtColor: '#ec4899',
+    hairColor: '#1e1b4b',
+    pantsColor: '#0f172a',
+    cashSpent: 0,
+  },
+];
 
 export default function App() {
-  // Game Screen State ('TITLE' -> 'PLAYING')
   const [gameState, setGameState] = useState<GameScreenState>('TITLE');
 
-  // Core Economy & Progression State (Matches reference image start: Level 1, $1,250, 5 Gems)
+  // Economy & Progression (Matched to IMG_1503.jpeg: Level 1, $1,250, 5 Diamonds)
   const [level, setLevel] = useState<number>(1);
-  const [xp, setXp] = useState<number>(65);
+  const [xp, setXp] = useState<number>(48);
   const [cash, setCash] = useState<number>(1250);
   const [gems, setGems] = useState<number>(5);
 
@@ -99,43 +280,62 @@ export default function App() {
   const [activeFloor, setActiveFloor] = useState<1 | 2>(1);
   const [unlockedFloors, setUnlockedFloors] = useState<1 | 2>(1);
 
-  // Placed Items on Floor 1 & Floor 2
+  // Placed Furniture
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>(INITIAL_PLACED_ITEMS);
-
-  // Active House Drink Mix
   const [activeDrinkId, setActiveDrinkId] = useState<string>('drink_draft_beer');
-
-  // Outside Parking & Bouncer Queue State
   const [parkingState, setParkingState] = useState<ParkingUpgradeState>({
     lotTier: 1,
     bouncerCount: 1,
     ropeTier: 1,
   });
 
-  // Build / Placement Mode State
+  // Build Mode & UI State (Default open in Build Mode showing Isometric Chair & Speaker like IMG_1503.jpeg)
   const [activeBottomTab, setActiveBottomTab] = useState<BottomDrawerTab>('BUILD');
+  const [showFullCatalog, setShowFullCatalog] = useState<boolean>(false);
   const [buildCategory, setBuildCategory] = useState<ItemCategory | 'ALL'>('ALL');
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogItem | null>(
     CATALOG_ITEMS.find((i) => i.id === 'seat_bistro') || null
   );
   const [buildRotation, setBuildRotation] = useState<0 | 90 | 180 | 270>(0);
   const [isRemoveMode, setIsRemoveMode] = useState<boolean>(false);
-  const [hoveredGrid, setHoveredGrid] = useState<{ x: number; y: number } | null>(null);
+
+  // Camera Zoom & Pan Reset for Phones & Browsers
+  const [cameraZoom, setCameraZoom] = useState<number>(1.0);
+  const [cameraResetTick, setCameraResetTick] = useState<number>(0);
 
   // Left Sidebar Modal & Technical Blueprint Modal
   const [activeLeftModal, setActiveLeftModal] = useState<LeftModalTab>(null);
   const [isBlueprintOpen, setIsBlueprintOpen] = useState<boolean>(false);
 
-  // Quests & Live Event Box
+  // Quests, Live Alerts & Audio
   const [quests, setQuests] = useState<QuestTask[]>(INITIAL_QUESTS);
   const [showLiveEvents, setShowLiveEvents] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [selectedBpm, setSelectedBpm] = useState<number>(124);
   const [activePlaylist, setActivePlaylist] = useState<string>('Synthwave Midnight');
+  const [queueCount, setQueueCount] = useState<number>(3);
+  const [hypeBlastEvent, setHypeBlastEvent] = useState<HypeBlastEvent | null>(null);
 
-  // Live Simulated Guest Agents & Floating Cash Pops
-  const [guests, setGuests] = useState<GuestAgent[]>([]);
-  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
+  // Staff Management System (Bartenders, Bouncers, Waiters placed on the Isometric Grid)
+  const [staffMembers, setStaffMembers] = useState<StaffMemberAgent[]>(
+    INITIAL_STAFF_MEMBERS.map((s) => ({ ...s, path: [] }))
+  );
+  const [placementModeStaff, setPlacementModeStaff] = useState<StaffCatalogItem | null>(null);
+  const [relocatingStaffUid, setRelocatingStaffUid] = useState<string | null>(null);
+
+  // Global Day/Night Cycle & Neon Emissive Glow State
+  const [dayNightOverrideHour, setDayNightOverrideHour] = useState<number | null>(null);
+  const [dayNightReport, setDayNightReport] = useState<DayNightCycleReport>({
+    hour: 18.25,
+    formattedTime: '6:15 PM',
+    phaseLabel: 'GOLDEN SUNSET',
+    nightIntensity: 0.42,
+    emissiveMultiplier: 1.52,
+  });
+
+  // 60fps Mutable Refs for Guests & Floating Cash Pops (Zero React re-renders during animation)
+  const guestsRef = useRef<GuestAgent[]>(INITIAL_GUESTS.map((g) => ({ ...g })));
+  const floatingTextsRef = useRef<FloatingText[]>([]);
 
   const xpToNextLevel = level * 150;
 
@@ -144,8 +344,8 @@ export default function App() {
     [activeDrinkId]
   );
 
-  // Compute Club Stats (Hype, Vibe, Bar Tier, Lighting Count, Dance Capacity, Tip Multiplier)
-  const clubMetrics = useMemo(() => {
+  // Compute Club Hype, Vibe, and Multipliers (including Hired Staff Bonuses)
+  const clubMetrics = useMemo<ClubSimulationMetrics>(() => {
     let totalHype = 0;
     let totalVibe = 0;
     let tipBonus = 0;
@@ -168,14 +368,25 @@ export default function App() {
       if (cat.category === 'SEATING') seatCount++;
     }
 
-    // Outside upgrades add to Hype & Vibe
-    totalHype += (parkingState.lotTier - 1) * 25 + (parkingState.bouncerCount - 1) * 15;
-    totalVibe += (parkingState.ropeTier - 1) * 20;
+    for (const s of staffMembers) {
+      const staffCat = STAFF_CATALOG.find((c) => c.id === s.catalogId);
+      if (staffCat) {
+        totalHype += staffCat.hypeBonus;
+        totalVibe += staffCat.vibeBonus;
+        tipBonus += 0.05;
+      }
+    }
 
-    // Normalize 1..3 star segment meters for Top-Right HUD
-    const hypeSegments = Math.min(3, Math.max(1, Math.floor(totalHype / 85) + 1));
-    const vibeSegments = Math.min(3, Math.max(1, Math.floor(totalVibe / 75) + 1));
-    const maxGuests = 6 + parkingState.lotTier * 3 + (unlockedFloors === 2 ? 6 : 0);
+    totalHype +=
+      activeDrink.hypeBoost +
+      (parkingState.lotTier - 1) * 25 +
+      (parkingState.bouncerCount - 1) * 15;
+    totalVibe += (parkingState.ropeTier - 1) * 20;
+    tipBonus += (activeDrink.tier - 1) * 0.08 + (parkingState.ropeTier - 1) * 0.06;
+
+    const hypeSegments = Math.min(3, Math.max(1, Math.floor(totalHype / 90) + 1));
+    const vibeSegments = Math.min(3, Math.max(1, Math.floor(totalVibe / 85) + 1));
+    const maxGuests = 8 + parkingState.lotTier * 3 + (unlockedFloors === 2 ? 6 : 0);
 
     return {
       totalHype,
@@ -189,9 +400,60 @@ export default function App() {
       vibeSegments,
       maxGuests,
     };
-  }, [placedItems, parkingState, unlockedFloors]);
+  }, [placedItems, staffMembers, parkingState, unlockedFloors, activeDrink]);
 
-  // Dynamic Live Event Alerts matching Bottom-Right reference box
+  // Compute exact screen pixel position of the Dance Floor Center (gridX = 4.5, gridY = 4.5)
+  const triggerHypeBlast = useCallback(
+    (hypeDelta: number, totalHypeVal: number, tipBonusVal: number) => {
+      const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const h = typeof window !== 'undefined' ? window.innerHeight : 720;
+      const autoScale = Math.min(1.22, Math.max(0.55, Math.min(w / 760, h / 640)));
+      const scale = autoScale * cameraZoom;
+      const tileH = 28 * scale;
+      const originX = w * (w < 640 ? 0.53 : 0.505);
+      const originY = h * (w < 640 ? 0.28 : 0.305);
+
+      const danceCenterX = originX;
+      const danceCenterY = originY + (4.5 + 4.5) * (tileH / 2) - 8 * scale;
+
+      setHypeBlastEvent({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        screenX: danceCenterX,
+        screenY: danceCenterY,
+        hypeDelta: Math.max(5, hypeDelta),
+        newTotalHype: totalHypeVal,
+        multiplierText: `${(1 + tipBonusVal).toFixed(2)}x`,
+      });
+    },
+    [cameraZoom]
+  );
+
+  // Automatically trigger SVG Hype Blast on the dance floor whenever Hype or Vibe multiplier increases
+  const prevHypeMetricsRef = useRef<{ hype: number; tipBonus: number }>({
+    hype: clubMetrics.totalHype,
+    tipBonus: clubMetrics.tipBonus,
+  });
+
+  useEffect(() => {
+    const prev = prevHypeMetricsRef.current;
+    const hypeDiff = clubMetrics.totalHype - prev.hype;
+    const multDiff = clubMetrics.tipBonus - prev.tipBonus;
+
+    if (gameState === 'PLAYING' && (hypeDiff > 0 || multDiff > 0.001)) {
+      triggerHypeBlast(
+        hypeDiff > 0 ? hypeDiff : Math.round(multDiff * 100),
+        clubMetrics.totalHype,
+        clubMetrics.tipBonus
+      );
+    }
+
+    prevHypeMetricsRef.current = {
+      hype: clubMetrics.totalHype,
+      tipBonus: clubMetrics.tipBonus,
+    };
+  }, [clubMetrics.totalHype, clubMetrics.tipBonus, gameState, triggerHypeBlast]);
+
+  // Live Event Alerts matching Bottom-Right reference box ("Guests want better lighting!")
   const liveAlerts = useMemo<LiveAlert[]>(() => {
     const alerts: LiveAlert[] = [];
     if (clubMetrics.lightingCount < 2) {
@@ -204,50 +466,48 @@ export default function App() {
       alerts.push({
         id: 'alert_light_2',
         severity: 'WARNING',
-        message: 'Add Laser Truss or String Lights to boost Vibe!',
+        message: 'Guests want better lighting!',
         actionTab: 'BUILD',
       });
-    }
-    const queueCount = guests.filter((g) => g.state === 'QUEUEING').length;
-    if (queueCount >= 3 && parkingState.bouncerCount < 3) {
+    } else if (queueCount >= 3 && parkingState.bouncerCount < 3) {
       alerts.push({
-        id: 'alert_queue',
-        severity: 'WARNING',
-        message: 'Queue is getting long! Hire more bouncers.',
+        id: 'alert_queue_1',
+        severity: 'CRITICAL',
+        message: 'Queue is getting long! Send more bouncers.',
         actionTab: 'PARKING',
       });
-    }
-    if (clubMetrics.danceTileCount < 11) {
       alerts.push({
-        id: 'alert_dance',
-        severity: 'INFO',
-        message: 'Expand Dance Floor tiles for bigger Hype Drops!',
-        actionTab: 'BUILD',
+        id: 'alert_queue_2',
+        severity: 'WARNING',
+        message: 'Expand parking lot for VIP arrivals!',
+        actionTab: 'PARKING',
       });
-    }
-    if (unlockedFloors === 1 && cash >= 2500) {
+    } else {
+      alerts.push({
+        id: 'alert_hype',
+        severity: 'INFO',
+        message: 'Dance floor Hype is surging! Keep drinks flowing.',
+        actionTab: 'DRINKS',
+      });
       alerts.push({
         id: 'alert_floor2',
-        severity: 'INFO',
-        message: 'Ready to unlock Floor 2 VIP Sky Lounge!',
-      });
-    }
-    if (alerts.length === 0) {
-      alerts.push({
-        id: 'alert_vibe_peak',
-        severity: 'INFO',
-        message: 'Club Vibe is electric! VIP celebrities are arriving.',
+        severity: 'WARNING',
+        message:
+          unlockedFloors === 1
+            ? 'Tap staircase to unlock Floor 2 VIP Lounge!'
+            : 'VIP Celebrities loving Floor 2 Sky Lounge!',
+        actionTab: 'BUILD',
       });
     }
     return alerts.slice(0, 2);
-  }, [clubMetrics, guests, parkingState.bouncerCount, unlockedFloors, cash]);
+  }, [clubMetrics.lightingCount, queueCount, parkingState.bouncerCount, unlockedFloors]);
 
   // Sync Quests Progress
   useEffect(() => {
     setQuests((prev) =>
       prev.map((q) => {
         if (q.id === 'quest_lighting') {
-          return { ...q, currentValue: Math.min(q.targetValue, clubMetrics.lightingCount) };
+          return { ...q, currentValue: Math.min(q.targetValue, clubMetrics.lightingCount + 1) };
         }
         if (q.id === 'quest_dancefloor') {
           return { ...q, currentValue: Math.min(q.targetValue, clubMetrics.danceTileCount) };
@@ -264,531 +524,42 @@ export default function App() {
     );
   }, [clubMetrics, activeDrinkId, unlockedFloors]);
 
-  // Helper to grant XP & handle Level Up
-  const addXp = (amount: number) => {
-    setXp((prevXp) => {
-      const next = prevXp + amount;
-      const threshold = level * 150;
-      if (next >= threshold) {
-        setLevel((l) => l + 1);
-        setGems((g) => g + 2);
-        soundEngine.playUpgradeFanfare();
-        return next - threshold;
-      }
-      return next;
-    });
-  };
-
-  // Spawn initial guests matching the reference screenshot (5 dancers on the 3x3 dance floor + 4 in queue + 2 at tables)
-  useEffect(() => {
-    const initialGuests: GuestAgent[] = [
-      // 5 Dancers on the 3x3 center floor with Beer Mug & Sparkle bubbles
-      {
-        id: 'g_dance_1',
-        name: 'Leo',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 3.3,
-        gridY: 4.2,
-        path: [],
-        state: 'DANCING',
-        stateTimer: 6,
-        patience: 90,
-        hype: 80,
-        bubble: 'BEER',
-        bubbleTimer: 5,
-        shirtColor: '#dc2626',
-        hairColor: '#78350f',
-        pantsColor: '#1e3a8a',
-        cashSpent: 45,
-      },
-      {
-        id: 'g_dance_2',
-        name: 'Maya',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 4.3,
-        gridY: 4.8,
-        path: [],
-        state: 'DANCING',
-        stateTimer: 7,
-        patience: 95,
-        hype: 85,
-        bubble: 'BEER',
-        bubbleTimer: 6,
-        shirtColor: '#6366f1',
-        hairColor: '#7c2d12',
-        pantsColor: '#1e293b',
-        cashSpent: 45,
-      },
-      {
-        id: 'g_dance_3',
-        name: 'Zoe',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 4.2,
-        gridY: 3.7,
-        path: [],
-        state: 'DANCING',
-        stateTimer: 5,
-        patience: 88,
-        hype: 90,
-        bubble: 'SPARKLE',
-        bubbleTimer: 5,
-        shirtColor: '#475569',
-        hairColor: '#1e1b4b',
-        pantsColor: '#0f172a',
-        cashSpent: 90,
-      },
-      {
-        id: 'g_dance_4',
-        name: 'Kai',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 4.8,
-        gridY: 3.4,
-        path: [],
-        state: 'DANCING',
-        stateTimer: 8,
-        patience: 92,
-        hype: 88,
-        bubble: null,
-        bubbleTimer: 0,
-        shirtColor: '#e11d48',
-        hairColor: '#1e1b4b',
-        pantsColor: '#1e3a8a',
-        cashSpent: 45,
-      },
-      {
-        id: 'g_dance_5',
-        name: 'Aria',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 5.3,
-        gridY: 3.9,
-        path: [],
-        state: 'DANCING',
-        stateTimer: 6.5,
-        patience: 90,
-        hype: 92,
-        bubble: null,
-        bubbleTimer: 0,
-        shirtColor: '#9333ea',
-        hairColor: '#451a03',
-        pantsColor: '#1e1b4b',
-        cashSpent: 45,
-      },
-      // Lounge guests on right side
-      {
-        id: 'g_seat_1',
-        name: 'Milo',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 6.8,
-        gridY: 5.8,
-        path: [],
-        state: 'RESTING_AT_SEAT',
-        stateTimer: 7,
-        patience: 85,
-        hype: 75,
-        bubble: 'CHAT',
-        bubbleTimer: 4,
-        shirtColor: '#0284c7',
-        hairColor: '#1e1b4b',
-        pantsColor: '#334155',
-        cashSpent: 90,
-      },
-      // Guests queuing outside along velvet rope with Music & Chat bubbles
-      {
-        id: 'g_queue_1',
-        name: 'Chloe',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 1.5,
-        gridY: 9.8,
-        path: [],
-        state: 'QUEUEING',
-        stateTimer: 2.0,
-        patience: 90,
-        hype: 70,
-        bubble: 'CHAT',
-        bubbleTimer: 5,
-        shirtColor: '#c084fc',
-        hairColor: '#fde047',
-        pantsColor: '#1e1b4b',
-        cashSpent: 0,
-      },
-      {
-        id: 'g_queue_2',
-        name: 'Dante',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 0.8,
-        gridY: 9.8,
-        path: [],
-        state: 'QUEUEING',
-        stateTimer: 3.5,
-        patience: 88,
-        hype: 65,
-        bubble: 'MUSIC',
-        bubbleTimer: 6,
-        shirtColor: '#ec4899',
-        hairColor: '#451a03',
-        pantsColor: '#1e293b',
-        cashSpent: 0,
-      },
-      {
-        id: 'g_queue_3',
-        name: 'Sienna',
-        isCelebrity: false,
-        floor: 1,
-        targetFloor: 1,
-        gridX: 0.1,
-        gridY: 9.8,
-        path: [],
-        state: 'QUEUEING',
-        stateTimer: 5.0,
-        patience: 85,
-        hype: 65,
-        bubble: null,
-        bubbleTimer: 0,
-        shirtColor: '#38bdf8',
-        hairColor: '#1e1b4b',
-        pantsColor: '#0f172a',
-        cashSpent: 0,
-      },
-    ];
-    setGuests(initialGuests);
-  }, []);
-
-  // Keep latest state refs for the simulation interval
-  const placedRef = useRef(placedItems);
-  placedRef.current = placedItems;
-  const drinkRef = useRef(activeDrink);
-  drinkRef.current = activeDrink;
-  const metricsRef = useRef(clubMetrics);
-  metricsRef.current = clubMetrics;
-  const unlockedFloorsRef = useRef(unlockedFloors);
-  unlockedFloorsRef.current = unlockedFloors;
-  const bouncerCountRef = useRef(parkingState.bouncerCount);
-  bouncerCountRef.current = parkingState.bouncerCount;
-
-  // Main Guest AI & Economy Simulation Loop (Runs every 250ms)
-  useEffect(() => {
-    if (gameState !== 'PLAYING') return;
-
-    const dt = 0.25;
-    const interval = setInterval(() => {
-      // Update floating cash popups
-      setFloatingTexts((prev) =>
-        prev
-          .map((ft) => ({ ...ft, age: ft.age + dt * 0.75 }))
-          .filter((ft) => ft.age < 1)
-      );
-
-      setGuests((prevGuests) => {
-        const items = placedRef.current;
-        const drink = drinkRef.current;
-        const metrics = metricsRef.current;
-        const maxFloors = unlockedFloorsRef.current;
-        const bouncers = bouncerCountRef.current;
-
-        const updated: GuestAgent[] = [];
-
-        for (const g of prevGuests) {
-          const guest = { ...g };
-          guest.stateTimer -= dt;
-          if (guest.bubbleTimer > 0) {
-            guest.bubbleTimer -= dt;
-            if (guest.bubbleTimer <= 0) guest.bubble = null;
-          }
-
-          // Move along A* path if path has waypoints
-          if (guest.path.length > 0) {
-            const nextWp = guest.path[0];
-            const dx = nextWp.x - guest.gridX;
-            const dy = nextWp.y - guest.gridY;
-            const dist = Math.hypot(dx, dy);
-            const speed = 2.2 * dt;
-            if (dist <= speed) {
-              guest.gridX = nextWp.x;
-              guest.gridY = nextWp.y;
-              guest.path = guest.path.slice(1);
-            } else {
-              guest.gridX += (dx / dist) * speed;
-              guest.gridY += (dy / dist) * speed;
-            }
-            updated.push(guest);
-            continue;
-          }
-
-          // State Machine Transitions when timer expires and path is complete
-          if (guest.stateTimer <= 0) {
-            if (guest.state === 'QUEUEING') {
-              // Bouncer checks guest in through front door (2, 9)
-              guest.gridX = DOOR_COORD.x;
-              guest.gridY = DOOR_COORD.y;
-              guest.floor = 1;
-              // Decide whether to stay on Floor 1 or go to Floor 2 VIP if unlocked
-              const wantsFloor2 = maxFloors === 2 && Math.random() < 0.38;
-              if (wantsFloor2) {
-                guest.targetFloor = 2;
-                guest.state = 'CLIMBING_STAIRS';
-                guest.path = findGridPath(
-                  items,
-                  1,
-                  guest.gridX,
-                  guest.gridY,
-                  STAIRS_COORD.x,
-                  STAIRS_COORD.y + 1
-                );
-                guest.stateTimer = 1.0;
-              } else {
-                const barItem =
-                  items.find(
-                    (i) =>
-                      i.floor === guest.floor &&
-                      getCatalogItem(i.catalogId)?.category === 'BAR_UNIT'
-                  ) || items[0];
-                const bx = barItem ? barItem.gridX + 1 : 2;
-                const by = barItem ? barItem.gridY + 1 : 2;
-                guest.state = 'WALKING_TO_BAR';
-                guest.path = findGridPath(items, guest.floor, guest.gridX, guest.gridY, bx, by);
-                guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
-                guest.bubbleTimer = 4;
-                guest.stateTimer = 1.2;
-              }
-            } else if (guest.state === 'CLIMBING_STAIRS') {
-              guest.floor = 2;
-              guest.gridX = STAIRS_COORD.x;
-              guest.gridY = STAIRS_COORD.y + 1;
-              guest.state = 'WALKING_TO_BAR';
-              const bar2 = items.find(
-                (i) => i.floor === 2 && getCatalogItem(i.catalogId)?.category === 'BAR_UNIT'
-              );
-              const bx = bar2 ? bar2.gridX + 1 : 3;
-              const by = bar2 ? bar2.gridY + 1 : 2;
-              guest.path = findGridPath(items, 2, guest.gridX, guest.gridY, bx, by);
-              guest.bubble = 'VIP_CROWN';
-              guest.bubbleTimer = 4;
-              guest.stateTimer = 1.2;
-            } else if (guest.state === 'WALKING_TO_BAR') {
-              guest.state = 'ORDERING_DRINK';
-              guest.stateTimer = Math.max(0.8, drink.prepTimeSec / metrics.maxBarTier);
-              guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
-              guest.bubbleTimer = 3.5;
-            } else if (guest.state === 'ORDERING_DRINK') {
-              // Pay for drink!
-              const drinkRevenue = Math.round(
-                drink.sellPrice * (1 + metrics.tipBonus * 0.5) * (guest.isCelebrity ? 2.5 : 1)
-              );
-              setCash((c) => c + drinkRevenue);
-              addXp(12);
-              setFloatingTexts((fts) => [
-                ...fts.slice(-12),
-                {
-                  id: `ft_${Date.now()}_${Math.random()}`,
-                  text: `+$${drinkRevenue}`,
-                  floor: guest.floor,
-                  gridX: guest.gridX,
-                  gridY: guest.gridY,
-                  color: '#4ade80',
-                  age: 0,
-                },
-              ]);
-
-              // Head to a Dance Tile on current floor
-              const danceTiles = items.filter(
-                (i) =>
-                  i.floor === guest.floor &&
-                  getCatalogItem(i.catalogId)?.category === 'DANCE_TILE'
-              );
-              const targetTile =
-                danceTiles.length > 0
-                  ? danceTiles[Math.floor(Math.random() * danceTiles.length)]
-                  : { gridX: 4, gridY: 4 };
-              guest.state = 'WALKING_TO_DANCE';
-              guest.path = findGridPath(
-                items,
-                guest.floor,
-                guest.gridX,
-                guest.gridY,
-                targetTile.gridX,
-                targetTile.gridY
-              );
-              guest.stateTimer = 1.0;
-            } else if (guest.state === 'WALKING_TO_DANCE') {
-              guest.state = 'DANCING';
-              guest.stateTimer = 5 + Math.random() * 4;
-              guest.bubble =
-                metrics.lightingCount < 2 && Math.random() < 0.35
-                  ? 'ANGRY_LIGHT'
-                  : Math.random() < 0.5
-                  ? 'SPARKLE'
-                  : 'BEER';
-              guest.bubbleTimer = 4.5;
-            } else if (guest.state === 'DANCING') {
-              // Find a Lounge Seat to rest & tip
-              const seats = items.filter(
-                (i) =>
-                  i.floor === guest.floor && getCatalogItem(i.catalogId)?.category === 'SEATING'
-              );
-              if (seats.length > 0) {
-                const chosenSeat = seats[Math.floor(Math.random() * seats.length)];
-                guest.state = 'WALKING_TO_SEAT';
-                guest.path = findGridPath(
-                  items,
-                  guest.floor,
-                  guest.gridX,
-                  guest.gridY,
-                  chosenSeat.gridX,
-                  chosenSeat.gridY
-                );
-                guest.stateTimer = 1.0;
-              } else {
-                guest.state = 'LEAVING';
-                guest.path = findGridPath(
-                  items,
-                  guest.floor,
-                  guest.gridX,
-                  guest.gridY,
-                  DOOR_COORD.x,
-                  DOOR_COORD.y
-                );
-                guest.stateTimer = 1.5;
-              }
-            } else if (guest.state === 'WALKING_TO_SEAT') {
-              guest.state = 'RESTING_AT_SEAT';
-              guest.stateTimer = 4 + Math.random() * 3;
-              guest.bubble = guest.isCelebrity ? 'VIP_CROWN' : 'CHAT';
-              guest.bubbleTimer = 3.5;
-            } else if (guest.state === 'RESTING_AT_SEAT') {
-              // Leave generous lounge tip and exit
-              const seatTip = Math.round(
-                35 * (1 + metrics.tipBonus) * (guest.isCelebrity ? 3 : 1)
-              );
-              setCash((c) => c + seatTip);
-              addXp(15);
-              setFloatingTexts((fts) => [
-                ...fts.slice(-12),
-                {
-                  id: `ft_tip_${Date.now()}_${Math.random()}`,
-                  text: `+$${seatTip} TIP`,
-                  floor: guest.floor,
-                  gridX: guest.gridX,
-                  gridY: guest.gridY,
-                  color: '#facc15',
-                  age: 0,
-                },
-              ]);
-
-              if (guest.floor === 2) {
-                guest.state = 'DESCENDING_STAIRS';
-                guest.path = findGridPath(
-                  items,
-                  2,
-                  guest.gridX,
-                  guest.gridY,
-                  STAIRS_COORD.x,
-                  STAIRS_COORD.y + 1
-                );
-                guest.stateTimer = 1.0;
-              } else {
-                guest.state = 'LEAVING';
-                guest.path = findGridPath(
-                  items,
-                  1,
-                  guest.gridX,
-                  guest.gridY,
-                  DOOR_COORD.x,
-                  DOOR_COORD.y
-                );
-                guest.bubble = 'CASH';
-                guest.bubbleTimer = 2.5;
-                guest.stateTimer = 1.5;
-              }
-            } else if (guest.state === 'DESCENDING_STAIRS') {
-              guest.floor = 1;
-              guest.gridX = STAIRS_COORD.x;
-              guest.gridY = STAIRS_COORD.y + 1;
-              guest.state = 'LEAVING';
-              guest.path = findGridPath(
-                items,
-                1,
-                guest.gridX,
-                guest.gridY,
-                DOOR_COORD.x,
-                DOOR_COORD.y
-              );
-              guest.stateTimer = 1.5;
-            } else if (guest.state === 'LEAVING') {
-              // Remove guest after reaching exit so new guests spawn in queue
-              continue;
-            }
-          }
-
-          updated.push(guest);
+  const addXp = useCallback(
+    (amount: number) => {
+      setXp((prevXp) => {
+        const next = prevXp + amount;
+        const threshold = level * 150;
+        if (next >= threshold) {
+          setLevel((l) => l + 1);
+          setGems((g) => g + 2);
+          soundEngine.playUpgradeFanfare();
+          return next - threshold;
         }
-
-        // Spawn new guest in outside queue if below capacity
-        if (updated.length < metrics.maxGuests && Math.random() < 0.35) {
-          const isCeleb =
-            metrics.totalHype >= 130 && Math.random() < 0.22;
-          const namePool = isCeleb ? CELEBRITY_NAMES : GUEST_NAMES;
-          const queueWait = Math.max(1.2, 4.2 - bouncers * 0.9);
-          const bubbles: BubbleType[] = ['MUSIC', 'CHAT', 'SPARKLE'];
-          updated.push({
-            id: `guest_${Date.now()}_${Math.random()}`,
-            name: namePool[Math.floor(Math.random() * namePool.length)],
-            isCelebrity: isCeleb,
-            floor: 1,
-            targetFloor: 1,
-            gridX: 1.2,
-            gridY: 9.85,
-            path: [],
-            state: 'QUEUEING',
-            stateTimer: queueWait,
-            patience: 100,
-            hype: 75,
-            bubble: isCeleb
-              ? 'VIP_CROWN'
-              : bubbles[Math.floor(Math.random() * bubbles.length)],
-            bubbleTimer: 4,
-            shirtColor: isCeleb
-              ? '#facc15'
-              : SHIRT_COLORS[Math.floor(Math.random() * SHIRT_COLORS.length)],
-            hairColor: HAIR_COLORS[Math.floor(Math.random() * HAIR_COLORS.length)],
-            pantsColor: PANTS_COLORS[Math.floor(Math.random() * PANTS_COLORS.length)],
-            cashSpent: 0,
-          });
-        }
-
-        return updated;
+        return next;
       });
-    }, 250);
+    },
+    [level]
+  );
 
-    return () => clearInterval(interval);
-  }, [gameState]);
+  const handleEarnRevenue = useCallback(
+    (cashDelta: number, xpDelta: number) => {
+      if (cashDelta > 0) setCash((c) => c + cashDelta);
+      if (xpDelta > 0) addXp(xpDelta);
+    },
+    [addXp]
+  );
 
   // Subtle rhythmic club beat audio pulse when not muted
   useEffect(() => {
     if (gameState !== 'PLAYING' || isMuted) return;
-    const msPerBeat = Math.round((60 / selectedBpm) * 1000 * 2); // Every 2 beats for subtle groove
+    const msPerBeat = Math.round((60 / selectedBpm) * 1000 * 2);
     const id = setInterval(() => {
       soundEngine.playBeatPulse(clubMetrics.hypeSegments);
     }, msPerBeat);
     return () => clearInterval(id);
   }, [gameState, isMuted, selectedBpm, clubMetrics.hypeSegments]);
 
-  // Keyboard shortcuts (Space/Enter to start on Title Screen, R to rotate in Build Mode, Esc to close drawers)
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (gameState === 'TITLE' && (e.key === 'Enter' || e.key === ' ')) {
@@ -806,6 +577,8 @@ export default function App() {
           setActiveLeftModal(null);
           setIsBlueprintOpen(false);
           setIsRemoveMode(false);
+          setPlacementModeStaff(null);
+          setRelocatingStaffUid(null);
         }
       }
     };
@@ -813,17 +586,148 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameState]);
 
-  // Handle clicking on an isometric grid cell
+  const spawnStaffMemberAtGrid = (
+    staffCat: StaffCatalogItem,
+    floor: 1 | 2,
+    gridX: number,
+    gridY: number
+  ) => {
+    if (cash < staffCat.hireCostCash) {
+      soundEngine.playError();
+      floatingTextsRef.current.push({
+        id: `staff_err_${performance.now()}`,
+        text: `NEED $${staffCat.hireCostCash} TO HIRE!`,
+        floor,
+        gridX,
+        gridY,
+        color: '#f87171',
+        age: 0,
+      });
+      return false;
+    }
+
+    const rolePool = STAFF_FIRST_NAMES[staffCat.role];
+    const roleCount = staffMembers.filter((s) => s.role === staffCat.role).length;
+    const firstName = rolePool[roleCount % rolePool.length];
+    const roleLabel =
+      staffCat.role === 'BARTENDER'
+        ? 'Mixologist'
+        : staffCat.role === 'BOUNCER'
+        ? 'Security'
+        : 'Server';
+
+    const newStaff: StaffMemberAgent = {
+      uid: `staff_${staffCat.role.toLowerCase()}_${Date.now()}_${Math.floor(Math.random() * 999)}`,
+      catalogId: staffCat.id,
+      role: staffCat.role,
+      name: `${firstName} (${roleLabel})`,
+      floor,
+      gridX,
+      gridY,
+      postGridX: gridX,
+      postGridY: gridY,
+      path: [],
+      taskState:
+        staffCat.role === 'BARTENDER'
+          ? 'MIXING_DRINK'
+          : staffCat.role === 'BOUNCER'
+          ? 'CHECKING_ID'
+          : 'SERVING_TABLE',
+      taskTimer: 1.5,
+      carryingDrinkColor: staffCat.role === 'WAITER' ? '#22d3ee' : null,
+      drinksServed: 0,
+      guestsCheckedIn: 0,
+      uniformColor: staffCat.uniformColor,
+      hairColor: roleCount % 2 === 0 ? '#1e1b4b' : '#581c87',
+      actionBubble:
+        staffCat.role === 'BARTENDER' ? '🍸' : staffCat.role === 'BOUNCER' ? '🛡️' : '🍾',
+      bubbleTimer: 3.5,
+    };
+
+    setCash((c) => c - staffCat.hireCostCash);
+    setStaffMembers((prev) => [...prev, newStaff]);
+    if (staffCat.role === 'BOUNCER') {
+      setParkingState((p) => ({ ...p, bouncerCount: Math.min(4, p.bouncerCount + 1) }));
+    }
+    addXp(55);
+    soundEngine.playPlaceItem();
+    floatingTextsRef.current.push({
+      id: `hire_${performance.now()}`,
+      text: `HIRED ${firstName.toUpperCase()}! +${staffCat.hypeBonus}⚡`,
+      floor,
+      gridX,
+      gridY,
+      color: '#38bdf8',
+      age: 0,
+    });
+    return true;
+  };
+
   const handleGridClick = (coord: { x: number; y: number }) => {
+    // 1. Relocating an existing Staff Member to a new Isometric Grid Tile
+    if (relocatingStaffUid) {
+      setStaffMembers((prev) =>
+        prev.map((s) => {
+          if (s.uid !== relocatingStaffUid) return s;
+          const newPath =
+            s.floor === activeFloor
+              ? findGridPath(
+                  placedItems,
+                  activeFloor,
+                  Math.round(s.gridX),
+                  Math.round(s.gridY),
+                  coord.x,
+                  coord.y
+                )
+              : [];
+          return {
+            ...s,
+            floor: activeFloor,
+            gridX: s.floor === activeFloor ? s.gridX : coord.x,
+            gridY: s.floor === activeFloor ? s.gridY : coord.y,
+            postGridX: coord.x,
+            postGridY: coord.y,
+            path: newPath,
+          };
+        })
+      );
+      soundEngine.playPlaceItem();
+      floatingTextsRef.current.push({
+        id: `reloc_${performance.now()}`,
+        text: `STATIONED AT (${coord.x}, ${coord.y})`,
+        floor: activeFloor,
+        gridX: coord.x,
+        gridY: coord.y,
+        color: '#38bdf8',
+        age: 0,
+      });
+      setRelocatingStaffUid(null);
+      return;
+    }
+
+    // 2. Hiring & Placing a new Staff Member on the Isometric Grid
+    if (placementModeStaff) {
+      const success = spawnStaffMemberAtGrid(placementModeStaff, activeFloor, coord.x, coord.y);
+      if (success) {
+        setPlacementModeStaff(null);
+      }
+      return;
+    }
+
+    // 3. Selling / Removing Furniture Item
     if (isRemoveMode) {
-      // Find item occupying (coord.x, coord.y) on activeFloor
       const target = placedItems.find((p) => {
         if (p.floor !== activeFloor) return false;
         const cat = getCatalogItem(p.catalogId);
         if (!cat) return false;
         const w = p.rotation === 90 || p.rotation === 270 ? cat.depth : cat.width;
         const d = p.rotation === 90 || p.rotation === 270 ? cat.width : cat.depth;
-        return coord.x >= p.gridX && coord.x < p.gridX + w && coord.y >= p.gridY && coord.y < p.gridY + d;
+        return (
+          coord.x >= p.gridX &&
+          coord.x < p.gridX + w &&
+          coord.y >= p.gridY &&
+          coord.y < p.gridY + d
+        );
       });
       if (target) {
         const cat = getCatalogItem(target.catalogId);
@@ -831,22 +735,20 @@ export default function App() {
         setPlacedItems((prev) => prev.filter((i) => i.uid !== target.uid));
         setCash((c) => c + refund);
         soundEngine.playCashRegister();
-        setFloatingTexts((fts) => [
-          ...fts,
-          {
-            id: `refund_${Date.now()}`,
-            text: `+$${refund} REFUND`,
-            floor: activeFloor,
-            gridX: coord.x,
-            gridY: coord.y,
-            color: '#fbbf24',
-            age: 0,
-          },
-        ]);
+        floatingTextsRef.current.push({
+          id: `refund_${performance.now()}`,
+          text: `+$${refund} REFUND`,
+          floor: activeFloor,
+          gridX: coord.x,
+          gridY: coord.y,
+          color: '#fbbf24',
+          age: 0,
+        });
       }
       return;
     }
 
+    // 4. Placing Furniture Item in Build Mode
     if (activeBottomTab === 'BUILD' && selectedCatalogItem) {
       const valid = canPlaceItem(
         placedItems,
@@ -862,22 +764,18 @@ export default function App() {
       }
       if (cash < selectedCatalogItem.costCash || gems < selectedCatalogItem.costGems) {
         soundEngine.playError();
-        setFloatingTexts((fts) => [
-          ...fts,
-          {
-            id: `err_${Date.now()}`,
-            text: 'NEED MORE FUNDS!',
-            floor: activeFloor,
-            gridX: coord.x,
-            gridY: coord.y,
-            color: '#f87171',
-            age: 0,
-          },
-        ]);
+        floatingTextsRef.current.push({
+          id: `err_${performance.now()}`,
+          text: 'NEED MORE FUNDS!',
+          floor: activeFloor,
+          gridX: coord.x,
+          gridY: coord.y,
+          color: '#f87171',
+          age: 0,
+        });
         return;
       }
 
-      // Deduct currency & place item
       setCash((c) => c - selectedCatalogItem.costCash);
       setGems((g) => g - selectedCatalogItem.costGems);
       const newItem: PlacedItem = {
@@ -891,29 +789,24 @@ export default function App() {
       setPlacedItems((prev) => [...prev, newItem]);
       addXp(35);
       soundEngine.playPlaceItem();
-      setFloatingTexts((fts) => [
-        ...fts,
-        {
-          id: `place_${Date.now()}`,
-          text: `+${selectedCatalogItem.hypeBonus} HYPE / +${selectedCatalogItem.vibeBonus} VIBE`,
-          floor: activeFloor,
-          gridX: coord.x,
-          gridY: coord.y,
-          color: '#22d3ee',
-          age: 0,
-        },
-      ]);
+      floatingTextsRef.current.push({
+        id: `place_${performance.now()}`,
+        text: `+${selectedCatalogItem.hypeBonus} HYPE / +${selectedCatalogItem.vibeBonus} VIBE`,
+        floor: activeFloor,
+        gridX: coord.x,
+        gridY: coord.y,
+        color: '#4ade80',
+        age: 0,
+      });
     }
   };
 
-  // Unlock or Toggle Floor 2 VIP Sky Lounge
   const handleFloor2Action = () => {
     if (unlockedFloors === 1) {
       if (cash >= 2500) {
         setCash((c) => c - 2500);
         setUnlockedFloors(2);
         setActiveFloor(2);
-        // Seed Floor 2 with an initial Neon Bar and 2x2 Dance Floor so guests immediately enjoy it
         setPlacedItems((prev) => [
           ...prev,
           { uid: `f2_bar_${Date.now()}`, catalogId: 'bar_neon', floor: 2, gridX: 1, gridY: 0, rotation: 0 },
@@ -925,18 +818,15 @@ export default function App() {
         soundEngine.playUpgradeFanfare();
       } else {
         soundEngine.playError();
-        setFloatingTexts((fts) => [
-          ...fts,
-          {
-            id: `f2_need_${Date.now()}`,
-            text: 'FLOOR 2 COSTS $2,500!',
-            floor: activeFloor,
-            gridX: 4,
-            gridY: 1,
-            color: '#f43f5e',
-            age: 0,
-          },
-        ]);
+        floatingTextsRef.current.push({
+          id: `f2_need_${performance.now()}`,
+          text: 'FLOOR 2 COSTS $2,500!',
+          floor: activeFloor,
+          gridX: 4,
+          gridY: 1,
+          color: '#f43f5e',
+          age: 0,
+        });
       }
     } else {
       setActiveFloor((f) => (f === 1 ? 2 : 1));
@@ -944,18 +834,21 @@ export default function App() {
     }
   };
 
-  // Instant Showcase Toggle: Load either Gritty Dive Bar (Level 1) or Multi-Floor VIP Hotspot (Level 20)
   const handleLoadPreset = (preset: 'DIVE' | 'VIP_MEGA') => {
+    setPlacementModeStaff(null);
+    setRelocatingStaffUid(null);
     if (preset === 'DIVE') {
       setLevel(1);
-      setXp(65);
+      setXp(48);
       setCash(1250);
       setGems(5);
       setUnlockedFloors(1);
       setActiveFloor(1);
       setPlacedItems(INITIAL_PLACED_ITEMS);
+      setStaffMembers(INITIAL_STAFF_MEMBERS.map((s) => ({ ...s, path: [] })));
       setActiveDrinkId('drink_draft_beer');
       setParkingState({ lotTier: 1, bouncerCount: 1, ropeTier: 1 });
+      guestsRef.current = INITIAL_GUESTS.map((g) => ({ ...g }));
       soundEngine.playClick();
     } else {
       setLevel(20);
@@ -965,6 +858,51 @@ export default function App() {
       setUnlockedFloors(2);
       setActiveFloor(1);
       setPlacedItems(VIP_HOTSPOT_ITEMS);
+      setStaffMembers([
+        ...INITIAL_STAFF_MEMBERS.map((s) => ({ ...s, path: [] })),
+        {
+          uid: 'staff_bartender_vip2',
+          catalogId: 'staff_bartender',
+          role: 'BARTENDER',
+          name: 'Jett (Mixologist)',
+          floor: 1,
+          gridX: 2,
+          gridY: 1,
+          postGridX: 2,
+          postGridY: 1,
+          path: [],
+          taskState: 'MIXING_DRINK',
+          taskTimer: 1.8,
+          carryingDrinkColor: '#fbbf24',
+          drinksServed: 28,
+          guestsCheckedIn: 0,
+          uniformColor: '#3b82f6',
+          hairColor: '#1e1b4b',
+          actionBubble: '🍸',
+          bubbleTimer: 3,
+        },
+        {
+          uid: 'staff_waiter_vip2',
+          catalogId: 'staff_waiter',
+          role: 'WAITER',
+          name: 'Nova (Server)',
+          floor: 1,
+          gridX: 7,
+          gridY: 7,
+          postGridX: 7,
+          postGridY: 7,
+          path: [],
+          taskState: 'SERVING_TABLE',
+          taskTimer: 2.1,
+          carryingDrinkColor: '#22d3ee',
+          drinksServed: 22,
+          guestsCheckedIn: 0,
+          uniformColor: '#db2777',
+          hairColor: '#581c87',
+          actionBubble: '🍾',
+          bubbleTimer: 3.5,
+        },
+      ]);
       setActiveDrinkId('drink_supernova_gold');
       setParkingState({ lotTier: 3, bouncerCount: 4, ropeTier: 3 });
       soundEngine.playUpgradeFanfare();
@@ -978,39 +916,72 @@ export default function App() {
 
   const unclaimedQuestCount = quests.filter((q) => q.currentValue >= q.targetValue && !q.claimed).length;
 
+  // Featured Build Mode Items matching the reference photo's green translucent box (Chair & Speaker)
+  const chairItem = useMemo(
+    () => CATALOG_ITEMS.find((i) => i.id === 'seat_bistro') || CATALOG_ITEMS[0],
+    []
+  );
+  const speakerItem = useMemo(
+    () => CATALOG_ITEMS.find((i) => i.id === 'dj_speaker_stack') || CATALOG_ITEMS[1],
+    []
+  );
+  const lightItem = useMemo(
+    () => CATALOG_ITEMS.find((i) => i.id === 'light_laser_rig') || CATALOG_ITEMS[2],
+    []
+  );
+  const danceTileItem = useMemo(
+    () => CATALOG_ITEMS.find((i) => i.id === 'dance_basic') || CATALOG_ITEMS[3],
+    []
+  );
+
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#090518] select-none">
-      {/* 1. LIVE 60FPS 2.5D ISOMETRIC NIGHTCLUB CANVAS (Always running behind Title & HUD) */}
+    <div className="relative w-full h-full overflow-hidden bg-[#090518] select-none">
+      {/* 1. 60FPS HAND-ILLUSTRATED 2.5D ISOMETRIC NIGHTCLUB CANVAS */}
       <IsometricClubCanvas
+        isPlaying={gameState === 'PLAYING'}
         activeFloor={activeFloor}
         unlockedFloors={unlockedFloors}
         playerLevel={level}
         placedItems={placedItems}
-        guests={guests}
-        floatingTexts={floatingTexts}
-        buildModeItem={activeBottomTab === 'BUILD' && !isRemoveMode ? selectedCatalogItem : null}
+        staffMembers={staffMembers}
+        guestsRef={guestsRef}
+        floatingTextsRef={floatingTextsRef}
+        buildModeItem={
+          activeBottomTab === 'BUILD' && !isRemoveMode && !placementModeStaff && !relocatingStaffUid
+            ? selectedCatalogItem
+            : null
+        }
+        placementModeStaff={placementModeStaff}
+        relocatingStaffUid={relocatingStaffUid}
         buildRotation={buildRotation}
-        hoveredGrid={hoveredGrid}
         activeDrink={activeDrink}
         parkingState={parkingState}
+        clubMetrics={clubMetrics}
         isRemoveMode={isRemoveMode}
-        onHoverGrid={setHoveredGrid}
+        cameraZoom={cameraZoom}
+        cameraResetTick={cameraResetTick}
+        dayNightOverrideHour={dayNightOverrideHour}
+        onCycleTimeReport={setDayNightReport}
+        onEarnRevenue={handleEarnRevenue}
+        onQueueCountChange={setQueueCount}
         onClickGrid={handleGridClick}
         onClickBuyFloor2={handleFloor2Action}
       />
+
+      {/* 1B. 60FPS SVG PARTICLE "HYPE BLAST" OVERLAY ON THE DANCE FLOOR */}
+      <HypeBlastOverlay blastEvent={hypeBlastEvent} />
 
       {/* =====================================================================
           TITLE SCREEN OVERLAY (Game Shell Rule: Bespoke SVG Lockup + Start CTA)
          ===================================================================== */}
       {gameState === 'TITLE' && (
-        <div className="fixed inset-0 z-40 flex items-center justify-between px-10 lg:px-20 bg-gradient-to-r from-[#090518]/95 via-[#090518]/75 to-transparent">
-          <div className="max-w-xl space-y-6">
-            {/* Bespoke Inline SVG Neon Nights Title Lockup */}
+        <div className="fixed inset-0 z-40 flex items-center justify-between px-6 sm:px-12 lg:px-20 bg-gradient-to-r from-[#090518]/95 via-[#090518]/80 to-transparent overflow-y-auto">
+          <div className="max-w-xl space-y-5 py-6">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-cyan-400">
-                <span>2.5D Isometric Nightclub Management Simulation</span>
+                <span>60FPS 2.5D Isometric Nightclub Sim</span>
                 <span>·</span>
-                <span>Android &amp; Web Engine</span>
+                <span>All Browsers &amp; Phones</span>
               </div>
 
               <svg
@@ -1050,20 +1021,19 @@ export default function App() {
               </svg>
             </div>
 
-            <p className="text-base text-purple-100/90 leading-relaxed">
-              Transform a gritty single-story basement dive with worn brick walls and a 3x3 disco floor into a multi-story VIP cyberpunk hotspot. Craft glowing cocktails, manage bouncer queues, place laser rigs, and inspect the complete Android Jetpack Compose &amp; Unity C# technical architecture.
+            <p className="text-sm sm:text-base text-purple-100/90 leading-relaxed">
+              Start with a gritty basement dive with exposed brick walls, warm Edison string lights, a 6x6 glowing pastel dance grid, and a wooden bar counter. Upgrade to a multi-story VIP nightclub with laser rigs, bottle service, and A* guest pathfinding.
             </p>
 
-            {/* Primary Start CTA & Preset Launchers */}
-            <div className="flex flex-wrap items-center gap-3.5 pt-2">
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 onClick={() => {
                   soundEngine.playUpgradeFanfare();
                   setGameState('PLAYING');
                 }}
-                className="px-7 py-4 rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-600 hover:from-emerald-300 hover:to-emerald-500 text-slate-950 font-extrabold text-lg shadow-[0_6px_0_#065f46] active:translate-y-0.5 transition-all cursor-pointer"
+                className="px-6 py-3.5 rounded-2xl bg-gradient-to-b from-lime-400 via-emerald-500 to-emerald-700 hover:from-lime-300 hover:to-emerald-600 text-white font-black text-base sm:text-lg border-2 border-lime-200 shadow-[0_5px_0_#064e3b] active:translate-y-0.5 transition-all cursor-pointer"
               >
-                Enter Club (Level 1 Dive)
+                Play Neon Nights (Level 1 Dive)
               </button>
 
               <button
@@ -1071,119 +1041,111 @@ export default function App() {
                   handleLoadPreset('VIP_MEGA');
                   setGameState('PLAYING');
                 }}
-                className="px-5 py-4 rounded-2xl bg-gradient-to-b from-fuchsia-500 to-purple-700 hover:from-fuchsia-400 hover:to-purple-600 text-white font-bold text-base border border-fuchsia-300/40 shadow-[0_6px_0_#4a044e] active:translate-y-0.5 transition-all cursor-pointer"
+                className="px-5 py-3.5 rounded-2xl bg-gradient-to-b from-fuchsia-500 to-purple-700 hover:from-fuchsia-400 hover:to-purple-600 text-white font-bold text-sm sm:text-base border-2 border-fuchsia-300/60 shadow-[0_5px_0_#4a044e] active:translate-y-0.5 transition-all cursor-pointer"
               >
                 Preview Level 20 VIP Mega-Club
               </button>
 
               <button
                 onClick={() => setIsBlueprintOpen(true)}
-                className="px-4 py-4 rounded-2xl bg-purple-950/80 hover:bg-purple-900 border border-cyan-400/50 text-cyan-300 font-bold text-sm flex items-center gap-2 cursor-pointer transition-colors"
+                className="px-4 py-3.5 rounded-2xl bg-purple-950/85 hover:bg-purple-900 border-2 border-cyan-400/50 text-cyan-300 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition-colors"
               >
                 <Code2 className="w-4 h-4" />
-                <span>Kotlin / C# Architecture</span>
+                <span>Kotlin / C# Code</span>
               </button>
             </div>
 
-            {/* Single Flat Control-Hint Line */}
-            <div className="text-xs font-mono text-purple-300/75 pt-2">
-              Click Isometric Tiles to Place Items · R Key Rotate Furniture · Click Staircase for Floor 2 · Esc Close Menus
+            <div className="text-xs font-mono text-purple-300/75 pt-1">
+              Tap or Click Tiles to Place Gear · Drag to Pan Camera · R Key Rotate · Esc Close Menus
             </div>
           </div>
         </div>
       )}
 
       {/* =====================================================================
-          PLAYING HUD ARCHITECTURE (Matched to Reference Image IMG_1503_71984622.jpeg)
-          Uses pointer-events-none on wrapper so >85% of isometric canvas stays interactive
+          PLAYING HUD ARCHITECTURE (MATCHED TO REFERENCE PHOTO IMG_1503.jpeg)
          ===================================================================== */}
       {gameState === 'PLAYING' && (
-        <div className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-3.5 sm:p-5">
+        <div className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-2 sm:p-4">
           {/* -----------------------------------------------------------------
-              TOP BAR: TOP-LEFT LEVEL STAR & XP + TOP-RIGHT CURRENCIES & METERS
+              TOP BAR: TOP-LEFT 5-POINT STAR LEVEL BADGE & XP + TOP-RIGHT CURRENCIES & METERS
              ----------------------------------------------------------------- */}
-          <div className="flex items-start justify-between gap-4">
-            {/* TOP-LEFT: Gold Star Level Badge + XP Bar + Preset Switcher */}
-            <div className="flex items-center gap-3 pointer-events-auto">
+          <div className="flex items-start justify-between gap-2">
+            {/* TOP-LEFT: Custom 5-Point Golden Star Level Badge + Dark XP Bar */}
+            <div className="flex items-center gap-2 sm:gap-3 pointer-events-auto">
               <div className="relative flex items-center">
-                {/* Gold Star Level Badge */}
-                <div className="relative z-10 w-16 h-16 flex flex-col items-center justify-center bg-gradient-to-b from-amber-300 via-amber-400 to-orange-500 rounded-2xl border-2 border-amber-100 shadow-[0_4px_0_#92400e] -rotate-3">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-950 leading-none">
-                    Level
-                  </span>
-                  <span className="text-2xl font-black text-amber-950 font-mono tabular-nums leading-tight">
-                    {level}
-                  </span>
-                </div>
-
-                {/* XP Progress Bar */}
-                <div className="-ml-3 pl-5 pr-4 py-2 bg-[#16102c]/95 border-2 border-purple-400/40 rounded-r-2xl shadow-lg min-w-[180px] sm:min-w-[230px]">
-                  <div className="flex items-center justify-between text-xs font-bold text-purple-200 mb-1">
-                    <span>XP</span>
-                    <span className="font-mono tabular-nums text-cyan-300">
-                      {xp} / {xpToNextLevel}
+                {/* 5-Point Gold Star SVG with "Level 1" */}
+                <div className="relative z-10 w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center shrink-0 drop-shadow-[0_4px_4px_rgba(0,0,0,0.65)]">
+                  <svg viewBox="0 0 100 100" className="w-full h-full">
+                    <defs>
+                      <linearGradient id="goldStarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#fde047" />
+                        <stop offset="55%" stopColor="#f59e0b" />
+                        <stop offset="100%" stopColor="#d97706" />
+                      </linearGradient>
+                    </defs>
+                    <polygon
+                      points="50,4 64,32 95,36 72,58 78,90 50,75 22,90 28,58 5,36 36,32"
+                      fill="url(#goldStarGrad)"
+                      stroke="#1e1b4b"
+                      strokeWidth="5"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pt-1">
+                    <span className="text-[9px] sm:text-[11px] font-black text-slate-950 leading-none">
+                      Level
+                    </span>
+                    <span className="text-lg sm:text-2xl font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.9)] leading-none mt-0.5">
+                      {level}
                     </span>
                   </div>
-                  <div className="w-full h-3 bg-purple-950 rounded-full overflow-hidden border border-purple-700/50">
+                </div>
+
+                {/* Dark Rounded XP Bar attached to Star */}
+                <div className="-ml-4 pl-6 pr-3 py-1.5 sm:py-2 bg-[#1b1630]/95 border-[2.5px] border-[#4c3f78] rounded-2xl shadow-xl min-w-[135px] sm:min-w-[230px]">
+                  <div className="relative w-full h-5 sm:h-6 bg-[#131024] rounded-xl overflow-hidden border border-[#2e264e] flex items-center">
                     <div
-                      className="h-full bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-400 transition-all duration-300"
+                      className="h-full bg-gradient-to-r from-indigo-600 via-purple-500 to-fuchsia-500 transition-all duration-300"
                       style={{ width: `${Math.min(100, (xp / xpToNextLevel) * 100)}%` }}
                     />
+                    <span className="absolute left-3 text-xs sm:text-sm font-bold text-slate-300 tracking-wide drop-shadow">
+                      XP
+                    </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Instant Dive vs VIP Stage Switcher & Android Code Button */}
-              <div className="hidden xl:flex items-center gap-2 bg-[#16102c]/90 border border-purple-500/40 rounded-xl p-1.5">
-                <button
-                  onClick={() => handleLoadPreset('DIVE')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                    level < 10
-                      ? 'bg-amber-400 text-slate-950'
-                      : 'text-purple-200 hover:bg-purple-800/50'
-                  }`}
-                >
-                  Lvl 1 Dive Stage
-                </button>
-                <button
-                  onClick={() => handleLoadPreset('VIP_MEGA')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                    level >= 10
-                      ? 'bg-fuchsia-500 text-white'
-                      : 'text-purple-200 hover:bg-purple-800/50'
-                  }`}
-                >
-                  Lvl 20 VIP Hotspot
-                </button>
-                <button
-                  onClick={() => setIsBlueprintOpen(true)}
-                  className="px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 hover:bg-cyan-500/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Code2 className="w-3.5 h-3.5" />
-                  <span>Kotlin / C# Code</span>
-                </button>
               </div>
             </div>
 
-            {/* TOP-RIGHT: Cash ($), Gems (+), Hype Lightning Meter, Vibe Flame Meter, Floor Switcher */}
-            <div className="flex flex-col items-end gap-2 pointer-events-auto">
-              <div className="flex flex-wrap items-center justify-end gap-2.5">
-                {/* Soft Currency: Cash ($) */}
-                <div className="flex items-center gap-2.5 bg-[#16102c]/95 border-2 border-purple-400/40 rounded-full px-3.5 py-1.5 shadow-lg">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 border border-amber-100 flex items-center justify-center font-black text-amber-950 text-sm shadow">
+            {/* TOP-RIGHT: Cash Pill ($1,250), Gem Pill (5 +), Hype Lightning & Vibe Flame 3-Box Meters */}
+            <div className="flex flex-col items-end gap-1.5 pointer-events-auto">
+              <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2.5">
+                {/* Soft Currency: Gold Coin ($) + $1,250 Pill */}
+                <div className="flex items-center gap-2 sm:gap-3 bg-[#1b1630]/95 border-[2.5px] border-[#3d3363] rounded-full pl-1.5 pr-3.5 py-1 shadow-xl">
+                  <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-gradient-to-b from-amber-300 via-amber-400 to-amber-600 border-2 border-[#1e1b4b] flex items-center justify-center font-black text-amber-950 text-base sm:text-lg shadow-inner">
                     $
                   </div>
-                  <span className="text-lg font-extrabold text-white font-mono tabular-nums">
+                  <span className="text-base sm:text-2xl font-black text-white tracking-tight tabular-nums drop-shadow">
                     ${cash.toLocaleString()}
                   </span>
                 </div>
 
-                {/* Hard Currency: Gems / Diamonds with + button */}
-                <div className="flex items-center gap-2.5 bg-[#16102c]/95 border-2 border-purple-400/40 rounded-full pl-3 pr-2 py-1.5 shadow-lg">
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-fuchsia-400 to-purple-600 rotate-45 flex items-center justify-center shadow">
-                    <div className="w-2.5 h-2.5 bg-fuchsia-200 rounded-xs" />
-                  </div>
-                  <span className="text-lg font-extrabold text-white font-mono tabular-nums px-1">
+                {/* Hard Currency: Faceted Pink Diamond + Count + Teal '+' Button */}
+                <div className="flex items-center gap-2 sm:gap-3 bg-[#1b1630]/95 border-[2.5px] border-[#3d3363] rounded-full pl-2 pr-1.5 py-1 shadow-xl">
+                  {/* Faceted Pink Diamond SVG */}
+                  <svg viewBox="0 0 36 32" className="w-6 h-6 sm:w-8 sm:h-7 shrink-0 drop-shadow">
+                    <polygon
+                      points="10,2 26,2 34,11 18,30 2,11"
+                      fill="#e879f9"
+                      stroke="#1e1b4b"
+                      strokeWidth="2.5"
+                      strokeLinejoin="round"
+                    />
+                    <polygon points="10,2 26,2 22,11 14,11" fill="#f5d0fe" />
+                    <polygon points="2,11 14,11 18,30" fill="#c026d3" />
+                    <polygon points="22,11 34,11 18,30" fill="#a21caf" />
+                  </svg>
+                  <span className="text-base sm:text-2xl font-black text-white tabular-nums px-0.5 sm:px-1">
                     {gems}
                   </span>
                   <button
@@ -1191,209 +1153,361 @@ export default function App() {
                       setGems((g) => g + 5);
                       soundEngine.playCashRegister();
                     }}
-                    title="Claim +5 Free Designer Gems"
-                    className="w-7 h-7 rounded-full bg-gradient-to-b from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 text-slate-950 flex items-center justify-center font-black shadow cursor-pointer"
+                    title="Add +5 Gems"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-b from-teal-300 via-teal-400 to-emerald-600 border-2 border-[#1e1b4b] text-white flex items-center justify-center font-black shadow cursor-pointer active:scale-95"
                   >
-                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3.5]" />
                   </button>
                 </div>
 
-                {/* Hype & Vibe 3-Segment Star Meters Stack */}
-                <div className="flex flex-col gap-1.5">
-                  {/* Hype Rating (Lightning Bolt + 3 Segments) */}
-                  <div
-                    className="flex items-center gap-1.5 bg-[#16102c]/95 border-2 border-purple-400/40 rounded-full px-2.5 py-1 shadow"
-                    title={`Club Hype Score: ${clubMetrics.totalHype}`}
-                  >
-                    <Zap className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
+                {/* Hype Lightning & Vibe Flame 3-Box Star Meters Stack (Tap to trigger Hype Blast preview) */}
+                <button
+                  onClick={() => {
+                    soundEngine.playUpgradeFanfare();
+                    triggerHypeBlast(25, clubMetrics.totalHype, clubMetrics.tipBonus);
+                  }}
+                  title="Tap to trigger Dance Floor Hype Blast!"
+                  className="hidden sm:flex flex-col gap-1.5 cursor-pointer active:scale-95 transition-transform"
+                >
+                  {/* Top Row: Yellow Lightning Bolt + 3 Dark Recessed Boxes + Star */}
+                  <div className="flex items-center gap-1.5 bg-[#1b1630]/95 border-[2.5px] border-[#3d3363] hover:border-amber-400 rounded-full pl-1.5 pr-2.5 py-1 shadow-xl">
+                    <svg viewBox="0 0 28 32" className="w-6 h-6 -ml-1 shrink-0 drop-shadow">
+                      <polygon
+                        points="16,1 3,18 13,18 10,31 25,13 15,13"
+                        fill="#facc15"
+                        stroke="#1e1b4b"
+                        strokeWidth="2.5"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                     <div className="flex items-center gap-1">
                       {[1, 2, 3].map((seg) => (
                         <div
                           key={seg}
-                          className={`w-5 h-3 rounded-xs border ${
+                          className={`w-5 h-4 rounded-sm border border-[#0f0b1e] ${
                             clubMetrics.hypeSegments >= seg
-                              ? 'bg-gradient-to-r from-amber-400 to-yellow-300 border-amber-200'
-                              : 'bg-purple-950/90 border-purple-700/50'
+                              ? 'bg-gradient-to-b from-amber-300 to-amber-500'
+                              : 'bg-[#110e20]'
                           }`}
                         />
                       ))}
                     </div>
-                    <span className="text-[11px] font-mono font-bold text-amber-300 tabular-nums ml-1">
-                      {clubMetrics.totalHype}
-                    </span>
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#4a4269] fill-current ml-0.5">
+                      <polygon points="12,2 15,9 22,9.5 17,14.5 18.5,22 12,18 5.5,22 7,14.5 2,9.5 9,9" />
+                    </svg>
                   </div>
 
-                  {/* Vibe Multiplier (Flame Icon + 3 Segments) */}
-                  <div
-                    className="flex items-center gap-1.5 bg-[#16102c]/95 border-2 border-purple-400/40 rounded-full px-2.5 py-1 shadow"
-                    title={`Club Vibe Score: ${clubMetrics.totalVibe}`}
-                  >
-                    <Flame className="w-4 h-4 text-orange-400 fill-orange-500 shrink-0" />
+                  {/* Bottom Row: Orange Flame Crown Icon + 3 Dark Recessed Boxes + Star */}
+                  <div className="flex items-center gap-1.5 bg-[#1b1630]/95 border-[2.5px] border-[#3d3363] hover:border-orange-400 rounded-full pl-1.5 pr-2.5 py-1 shadow-xl">
+                    <svg viewBox="0 0 28 28" className="w-6 h-6 -ml-1 shrink-0 drop-shadow">
+                      <path
+                        d="M14,2 C18,8 25,9 24,18 C23,24 18,26 14,26 C10,26 5,24 4,18 C3,9 10,8 14,2 Z"
+                        fill="#f97316"
+                        stroke="#1e1b4b"
+                        strokeWidth="2.5"
+                      />
+                      <circle cx="10" cy="17" r="1.8" fill="#1e1b4b" />
+                      <circle cx="18" cy="17" r="1.8" fill="#1e1b4b" />
+                    </svg>
                     <div className="flex items-center gap-1">
                       {[1, 2, 3].map((seg) => (
                         <div
                           key={seg}
-                          className={`w-5 h-3 rounded-xs border ${
+                          className={`w-5 h-4 rounded-sm border border-[#0f0b1e] ${
                             clubMetrics.vibeSegments >= seg
-                              ? 'bg-gradient-to-r from-orange-500 to-rose-400 border-orange-200'
-                              : 'bg-purple-950/90 border-purple-700/50'
+                              ? 'bg-gradient-to-b from-orange-400 to-rose-500'
+                              : 'bg-[#110e20]'
                           }`}
                         />
                       ))}
                     </div>
-                    <span className="text-[11px] font-mono font-bold text-orange-300 tabular-nums ml-1">
-                      {(1 + clubMetrics.tipBonus).toFixed(2)}x
-                    </span>
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#4a4269] fill-current ml-0.5">
+                      <polygon points="12,2 15,9 22,9.5 17,14.5 18.5,22 12,18 5.5,22 7,14.5 2,9.5 9,9" />
+                    </svg>
                   </div>
+                </button>
+              </div>
+
+              {/* Compact Utility Row: Day/Night Cycle Clock, Stage Switcher, Zoom, Floor 2 & Audio */}
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                {/* Interactive Day/Night Cycle & Neon Emissive Intensity Pill */}
+                <button
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setDayNightOverrideHour((prev) => {
+                      if (prev === null) return 16.5; // Golden Sunset
+                      if (prev === 16.5) return 20.5; // Twilight Dusk
+                      if (prev === 20.5) return 0.75; // Midnight Neon Peak
+                      if (prev === 0.75) return 3.5; // Afterhours Glow
+                      return null; // Resume Auto Day/Night Cycle
+                    });
+                  }}
+                  title="Tap to cycle Day/Night Phase (Auto -> Sunset -> Dusk -> Midnight Neon Peak -> Afterhours)"
+                  className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-amber-400/60 hover:border-cyan-300 text-amber-200 text-[11px] font-extrabold flex items-center gap-1.5 cursor-pointer shadow"
+                >
+                  <span className="font-mono text-cyan-300">{dayNightReport.formattedTime}</span>
+                  <span className="hidden md:inline text-purple-200">·</span>
+                  <span className="hidden md:inline text-[10px] tracking-wide text-pink-300">
+                    {dayNightReport.phaseLabel}
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 border border-cyan-400/50 text-[10px] font-mono text-cyan-200">
+                    {dayNightReport.emissiveMultiplier.toFixed(2)}x NEON
+                    {dayNightOverrideHour !== null ? ' (LOCKED)' : ''}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => handleLoadPreset(level < 10 ? 'VIP_MEGA' : 'DIVE')}
+                  className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-fuchsia-400/60 text-fuchsia-200 hover:bg-fuchsia-950 text-[11px] font-extrabold cursor-pointer shadow"
+                >
+                  {level < 10 ? 'Preview Lvl 20 VIP Club' : 'Reset to Lvl 1 Dive'}
+                </button>
+
+                <button
+                  onClick={handleFloor2Action}
+                  className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-cyan-400/60 text-cyan-300 hover:bg-cyan-950 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
+                >
+                  <ArrowUpCircle className="w-3.5 h-3.5" />
+                  <span>
+                    {unlockedFloors === 1
+                      ? 'Unlock Floor 2 ($2,500)'
+                      : `Floor ${activeFloor} (Switch)`}
+                  </span>
+                </button>
+
+                <div className="flex items-center bg-[#1b1630]/95 border border-purple-400/40 rounded-xl overflow-hidden shadow">
+                  <button
+                    onClick={() => setCameraZoom((z) => Math.max(0.7, +(z - 0.15).toFixed(2)))}
+                    className="p-1.5 text-purple-200 hover:text-white cursor-pointer"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCameraZoom(1.0);
+                      setCameraResetTick((t) => t + 1);
+                    }}
+                    className="px-1.5 text-[10px] font-mono font-bold text-cyan-300 cursor-pointer"
+                    title="Reset Camera View"
+                  >
+                    {Math.round(cameraZoom * 100)}%
+                  </button>
+                  <button
+                    onClick={() => setCameraZoom((z) => Math.min(1.5, +(z + 0.15).toFixed(2)))}
+                    className="p-1.5 text-purple-200 hover:text-white cursor-pointer"
+                    title="Zoom In"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
-                {/* Sound Mute Toggle */}
                 <button
                   onClick={() => {
                     const next = !isMuted;
                     setIsMuted(next);
                     soundEngine.isMuted = next;
                   }}
-                  className="w-10 h-10 rounded-full bg-[#16102c]/95 border-2 border-purple-400/40 flex items-center justify-center text-purple-200 hover:text-white cursor-pointer"
-                  aria-label={isMuted ? 'Unmute Audio' : 'Mute Audio'}
+                  className="p-1.5 rounded-xl bg-[#1b1630]/95 border border-purple-400/40 text-purple-200 hover:text-white cursor-pointer shadow"
+                  aria-label="Toggle Sound"
                 >
-                  {isMuted ? <VolumeX className="w-5 h-5 text-rose-400" /> : <Volume2 className="w-5 h-5 text-cyan-300" />}
-                </button>
-              </div>
-
-              {/* Vertical Expansion / Floor Camera Selector Pill */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleFloor2Action}
-                  className={`px-3.5 py-1.5 rounded-xl border-2 font-extrabold text-xs flex items-center gap-1.5 shadow-lg transition-all cursor-pointer ${
-                    unlockedFloors === 2
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 border-cyan-200 text-white'
-                      : 'bg-[#16102c]/95 border-cyan-400/60 text-cyan-300 hover:bg-cyan-950/80'
-                  }`}
-                >
-                  <ArrowUpCircle className="w-4 h-4" />
-                  {unlockedFloors === 1 ? (
-                    <span>Unlock Floor 2 VIP ($2,500)</span>
+                  {isMuted ? (
+                    <VolumeX className="w-4 h-4 text-rose-400" />
                   ) : (
-                    <span>Viewing Floor {activeFloor} · Switch to Floor {activeFloor === 1 ? 2 : 1}</span>
+                    <Volume2 className="w-4 h-4 text-cyan-300" />
                   )}
+                </button>
+
+                <button
+                  onClick={() => setIsBlueprintOpen(true)}
+                  className="px-2.5 py-1 rounded-xl bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 hover:bg-cyan-900 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
+                >
+                  <Code2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Kotlin/C#</span>
                 </button>
               </div>
             </div>
           </div>
 
           {/* -----------------------------------------------------------------
-              MIDDLE ZONE: LEFT VERTICAL SIDEBAR + BUILD MODE OVERLAY + LIVE EVENT BOX
+              MIDDLE ZONE: LEFT SIDEBAR SQUIRCLES + GREEN BUILD MODE BOX + LIVE EVENT BOX
              ----------------------------------------------------------------- */}
-          <div className="flex-1 flex items-center justify-between relative my-2">
-            {/* LEFT SIDEBAR: Quests, DJ Booth, Playlists (Locked early), Celebs (Locked early) */}
-            <div className="flex flex-col gap-3 pointer-events-auto">
-              {/* 1. Quests Button */}
+          <div className="flex-1 flex items-center justify-between relative my-1">
+            {/* LEFT SIDEBAR: 4 Illustrated Squircle Buttons matching IMG_1503.jpeg */}
+            <div className="flex flex-col gap-2.5 sm:gap-3.5 pointer-events-auto">
+              {/* 1. Quests (Clipboard with checkmarks + Red '!' badge) */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setActiveLeftModal((m) => (m === 'QUESTS' ? null : 'QUESTS'));
                 }}
-                className={`relative w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 shadow-xl transition-transform active:scale-95 cursor-pointer ${
-                  activeLeftModal === 'QUESTS'
-                    ? 'bg-purple-700 border-cyan-300 text-white'
-                    : 'bg-[#221742]/95 border-purple-400/50 text-purple-100 hover:bg-[#2c1e54]'
-                }`}
+                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#493875] to-[#2b204a] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
               >
-                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-500 border-2 border-white text-white text-xs font-black flex items-center justify-center shadow">
+                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-xs font-black flex items-center justify-center shadow">
                   {unclaimedQuestCount > 0 ? unclaimedQuestCount : '!'}
                 </span>
-                <ClipboardList className="w-7 h-7 text-amber-300" />
-                <span className="text-xs font-extrabold tracking-tight">Quests</span>
+                {/* Illustrated Clipboard SVG */}
+                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
+                  <rect
+                    x="10"
+                    y="8"
+                    width="28"
+                    height="34"
+                    rx="4"
+                    fill="#d97706"
+                    stroke="#150d2a"
+                    strokeWidth="2.5"
+                  />
+                  <rect x="14" y="12" width="20" height="26" fill="#fef3c7" />
+                  <rect
+                    x="17"
+                    y="5"
+                    width="14"
+                    height="6"
+                    rx="2"
+                    fill="#94a3b8"
+                    stroke="#150d2a"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M17 19 L20 22 L25 16 M17 27 L20 30 L25 24"
+                    stroke="#16a34a"
+                    strokeWidth="2.5"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
+                  Quests
+                </span>
               </button>
 
-              {/* 2. DJ Booth Button */}
+              {/* 2. DJ Booth (Female DJ Avatar with Pink Headphones & Turntable) */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setActiveLeftModal((m) => (m === 'DJ_BOOTH' ? null : 'DJ_BOOTH'));
                 }}
-                className={`relative w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 shadow-xl transition-transform active:scale-95 cursor-pointer ${
-                  activeLeftModal === 'DJ_BOOTH'
-                    ? 'bg-purple-700 border-cyan-300 text-white'
-                    : 'bg-[#221742]/95 border-purple-400/50 text-purple-100 hover:bg-[#2c1e54]'
-                }`}
+                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#493875] to-[#2b204a] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
               >
-                <Disc3 className="w-7 h-7 text-fuchsia-400 animate-spin" style={{ animationDuration: '6s' }} />
-                <span className="text-xs font-extrabold tracking-tight">DJ Booth</span>
+                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
+                  {/* Headphones */}
+                  <path
+                    d="M13 22 A11 11 0 0 1 35 22"
+                    stroke="#ec4899"
+                    strokeWidth="4"
+                    fill="none"
+                  />
+                  <circle cx="13" cy="22" r="4" fill="#ec4899" stroke="#150d2a" strokeWidth="1.8" />
+                  <circle cx="35" cy="22" r="4" fill="#ec4899" stroke="#150d2a" strokeWidth="1.8" />
+                  {/* Head & Hair */}
+                  <circle cx="24" cy="21" r="8" fill="#fcd34d" stroke="#150d2a" strokeWidth="2.2" />
+                  <path d="M16 19 A8 8 0 0 1 32 19 Z" fill="#a21caf" />
+                  {/* Deck */}
+                  <rect
+                    x="10"
+                    y="31"
+                    width="28"
+                    height="9"
+                    rx="3"
+                    fill="#38bdf8"
+                    stroke="#150d2a"
+                    strokeWidth="2.2"
+                  />
+                  <circle cx="18" cy="35.5" r="3" fill="#1e1b4b" />
+                  <circle cx="30" cy="35.5" r="3" fill="#1e1b4b" />
+                </svg>
+                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] whitespace-nowrap">
+                  DJ Booth
+                </span>
               </button>
 
-              {/* 3. Playlists (Locked at Level 1, Unlocks at Level 3) */}
+              {/* 3. Locked Vinyl Record (Playlists) with Padlock + Red Badge */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setActiveLeftModal((m) => (m === 'PLAYLISTS' ? null : 'PLAYLISTS'));
                 }}
-                className={`relative w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 shadow-xl transition-transform active:scale-95 cursor-pointer ${
-                  activeLeftModal === 'PLAYLISTS'
-                    ? 'bg-purple-700 border-cyan-300 text-white'
-                    : 'bg-[#1a1233]/95 border-purple-500/40 text-purple-200/80 hover:bg-[#251a47]'
-                }`}
+                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#352a54] to-[#211936] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
               >
-                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-600 border-2 border-white text-white text-[11px] font-black flex items-center justify-center shadow">
-                  {level < 3 ? <Lock className="w-3 h-3" /> : '!'}
+                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-[10px] font-black flex items-center justify-center shadow">
+                  <Lock className="w-3 h-3" />
                 </span>
-                {level < 3 ? (
-                  <>
-                    <Lock className="w-7 h-7 text-slate-300" />
-                    <span className="text-xs font-extrabold">Locked</span>
-                  </>
-                ) : (
-                  <>
-                    <Music className="w-7 h-7 text-cyan-300" />
-                    <span className="text-xs font-extrabold">Playlists</span>
-                  </>
-                )}
+                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
+                  <circle cx="24" cy="23" r="14" fill="#1e293b" stroke="#150d2a" strokeWidth="2.5" />
+                  <circle cx="24" cy="23" r="6" fill="#2dd4bf" />
+                  {/* Grey Padlock overlay */}
+                  <path
+                    d="M19 21 V17 A5 5 0 0 1 29 17 V21"
+                    stroke="#cbd5e1"
+                    strokeWidth="3"
+                    fill="none"
+                  />
+                  <rect
+                    x="16"
+                    y="21"
+                    width="16"
+                    height="13"
+                    rx="3"
+                    fill="#94a3b8"
+                    stroke="#150d2a"
+                    strokeWidth="2.2"
+                  />
+                  <circle cx="24" cy="27" r="2" fill="#150d2a" />
+                </svg>
+                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
+                  {level < 3 ? 'Locked' : 'Playlists'}
+                </span>
               </button>
 
-              {/* 4. Celebs VIP Lounge (Locked at Level 1, Unlocks at Level 5) */}
+              {/* 4. Locked VIP Silhouette (Celebs) with Padlock + Red '!' Badge */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setActiveLeftModal((m) => (m === 'CELEBS' ? null : 'CELEBS'));
                 }}
-                className={`relative w-20 h-20 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 shadow-xl transition-transform active:scale-95 cursor-pointer ${
-                  activeLeftModal === 'CELEBS'
-                    ? 'bg-purple-700 border-cyan-300 text-white'
-                    : 'bg-[#1a1233]/95 border-purple-500/40 text-purple-200/80 hover:bg-[#251a47]'
-                }`}
+                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#352a54] to-[#211936] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
               >
-                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-600 border-2 border-white text-white text-xs font-black flex items-center justify-center shadow">
+                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-xs font-black flex items-center justify-center shadow">
                   !
                 </span>
-                {level < 5 ? (
-                  <>
-                    <Lock className="w-7 h-7 text-slate-300" />
-                    <span className="text-xs font-extrabold">Locked</span>
-                  </>
-                ) : (
-                  <>
-                    <Crown className="w-7 h-7 text-amber-300" />
-                    <span className="text-xs font-extrabold">Celebs</span>
-                  </>
-                )}
-              </button>
-
-              {/* 5. Technical Architecture Blueprint Button (Visible on all screen sizes) */}
-              <button
-                onClick={() => setIsBlueprintOpen(true)}
-                className="w-20 py-2 rounded-xl bg-cyan-950/90 border border-cyan-400/50 text-cyan-300 hover:bg-cyan-900 flex flex-col items-center justify-center gap-0.5 shadow-lg cursor-pointer"
-              >
-                <Code2 className="w-4 h-4" />
-                <span className="text-[10px] font-bold">Android Spec</span>
+                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
+                  <circle cx="24" cy="17" r="8" fill="#4c1d95" stroke="#150d2a" strokeWidth="2" />
+                  <path
+                    d="M12 36 C12 28 36 28 36 36 Z"
+                    fill="#4c1d95"
+                    stroke="#150d2a"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M19 22 V18 A5 5 0 0 1 29 18 V22"
+                    stroke="#cbd5e1"
+                    strokeWidth="3"
+                    fill="none"
+                  />
+                  <rect
+                    x="16"
+                    y="22"
+                    width="16"
+                    height="13"
+                    rx="3"
+                    fill="#94a3b8"
+                    stroke="#150d2a"
+                    strokeWidth="2.2"
+                  />
+                  <circle cx="24" cy="28" r="2" fill="#150d2a" />
+                </svg>
+                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
+                  {level < 5 ? 'Locked' : 'Celebs'}
+                </span>
               </button>
             </div>
 
-            {/* LEFT SIDEBAR POPUP DRAWER (Quests, DJ Booth, Playlists, Celebs) */}
+            {/* LEFT SIDEBAR POPUP DRAWER */}
             {activeLeftModal && (
-              <div className="absolute left-24 top-0 z-30 w-80 sm:w-96 bg-[#181030]/98 border-2 border-purple-400/60 rounded-2xl shadow-2xl p-4 pointer-events-auto text-white">
+              <div className="absolute left-20 sm:left-24 top-0 z-30 w-72 sm:w-96 bg-[#181030]/98 border-2 border-purple-400/60 rounded-2xl shadow-2xl p-4 pointer-events-auto text-white">
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-purple-500/30">
-                  <h3 className="text-base font-extrabold tracking-tight flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-extrabold tracking-tight">
                     {activeLeftModal === 'QUESTS' && 'Club Progression Quests'}
                     {activeLeftModal === 'DJ_BOOTH' && 'DJ Booth & Sound System'}
                     {activeLeftModal === 'PLAYLISTS' && 'Nightclub Playlists (Lvl 3+)'}
@@ -1408,7 +1522,7 @@ export default function App() {
                 </div>
 
                 {activeLeftModal === 'QUESTS' && (
-                  <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                     {quests.map((q) => {
                       const isDone = q.currentValue >= q.targetValue;
                       return (
@@ -1419,7 +1533,9 @@ export default function App() {
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <div className="text-sm font-bold text-white">{q.title}</div>
-                              <p className="text-xs text-purple-200/75 leading-snug">{q.description}</p>
+                              <p className="text-xs text-purple-200/75 leading-snug">
+                                {q.description}
+                              </p>
                             </div>
                             <span className="text-xs font-mono font-bold text-cyan-300 shrink-0">
                               {q.currentValue}/{q.targetValue}
@@ -1427,7 +1543,7 @@ export default function App() {
                           </div>
                           <div className="flex items-center justify-between pt-1">
                             <span className="text-xs font-mono text-amber-300">
-                              Reward: +${q.rewardCash} · +{q.rewardGems} Gems · +{q.rewardXp} XP
+                              +${q.rewardCash} · +{q.rewardGems} Gems
                             </span>
                             {q.claimed ? (
                               <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
@@ -1464,14 +1580,14 @@ export default function App() {
                 )}
 
                 {activeLeftModal === 'DJ_BOOTH' && (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="p-3 rounded-xl bg-purple-950/60 border border-purple-500/30">
                       <div className="text-xs text-purple-300 mb-1">Active Tempo &amp; Beat Drop</div>
                       <div className="flex items-center justify-between">
-                        <span className="text-lg font-extrabold font-mono text-cyan-300">
+                        <span className="text-base font-extrabold font-mono text-cyan-300">
                           {selectedBpm} BPM
                         </span>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           {[118, 124, 132, 140].map((bpm) => (
                             <button
                               key={bpm}
@@ -1480,10 +1596,10 @@ export default function App() {
                                 soundEngine.setBpm(bpm);
                                 soundEngine.playClick();
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold cursor-pointer ${
+                              className={`px-2 py-1 rounded-lg text-xs font-mono font-bold cursor-pointer ${
                                 selectedBpm === bpm
                                   ? 'bg-fuchsia-500 text-white'
-                                  : 'bg-purple-900/60 text-purple-200 hover:bg-purple-800'
+                                  : 'bg-purple-900/60 text-purple-200'
                               }`}
                             >
                               {bpm}
@@ -1499,37 +1615,28 @@ export default function App() {
                           soundEngine.playError();
                           return;
                         }
-                        setCash((c) => c - 150);
+                        setCash((c) => c + 170);
                         addXp(45);
                         soundEngine.playUpgradeFanfare();
-                        setFloatingTexts((fts) => [
-                          ...fts,
-                          {
-                            id: `hype_drop_${Date.now()}`,
-                            text: 'MEGA BASS DROP! +$320 TIPS',
-                            floor: activeFloor,
-                            gridX: 4,
-                            gridY: 4,
-                            color: '#f472b6',
-                            age: 0,
-                          },
-                        ]);
-                        setCash((c) => c + 320);
+                        floatingTextsRef.current.push({
+                          id: `hype_drop_${performance.now()}`,
+                          text: 'MEGA BASS DROP! +$320 TIPS',
+                          floor: activeFloor,
+                          gridX: 4,
+                          gridY: 4,
+                          color: '#f472b6',
+                          age: 0,
+                        });
                       }}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-500 to-cyan-500 text-slate-950 font-extrabold text-sm shadow cursor-pointer"
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-500 to-cyan-500 text-slate-950 font-extrabold text-xs sm:text-sm shadow cursor-pointer"
                     >
-                      Trigger Laser Bass Drop ($150 → +$320 Crowd Tips)
+                      Trigger Laser Bass Drop ($150 → +$320 Tips)
                     </button>
                   </div>
                 )}
 
                 {activeLeftModal === 'PLAYLISTS' && (
-                  <div className="space-y-2.5">
-                    {level < 3 && (
-                      <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs text-rose-200">
-                        Reach Level 3 (or click &ldquo;Lvl 20 VIP Hotspot&rdquo; in top bar) to unlock custom genre multipliers.
-                      </div>
-                    )}
+                  <div className="space-y-2">
                     {[
                       { name: 'Synthwave Midnight', bonus: '+10% Drink Speed', minLvl: 1 },
                       { name: 'Cyberpunk Bassline', bonus: '+25% Dancer Hype Drop', minLvl: 3 },
@@ -1544,17 +1651,17 @@ export default function App() {
                             setActivePlaylist(pl.name);
                             soundEngine.playClick();
                           }}
-                          className={`w-full p-3 rounded-xl border text-left flex items-center justify-between cursor-pointer ${
+                          className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between cursor-pointer ${
                             activePlaylist === pl.name
                               ? 'bg-cyan-500/20 border-cyan-400 text-white'
                               : locked
                               ? 'bg-purple-950/40 border-purple-800/30 text-purple-400 cursor-not-allowed'
-                              : 'bg-purple-950/70 border-purple-500/30 text-purple-100 hover:bg-purple-900/50'
+                              : 'bg-purple-950/70 border-purple-500/30 text-purple-100'
                           }`}
                         >
                           <div>
-                            <div className="text-sm font-bold">{pl.name}</div>
-                            <div className="text-xs text-cyan-300">{pl.bonus}</div>
+                            <div className="text-xs font-bold">{pl.name}</div>
+                            <div className="text-[11px] text-cyan-300">{pl.bonus}</div>
                           </div>
                           <span className="text-xs font-mono">
                             {locked ? `Lvl ${pl.minLvl}` : activePlaylist === pl.name ? 'ACTIVE' : 'Select'}
@@ -1566,21 +1673,18 @@ export default function App() {
                 )}
 
                 {activeLeftModal === 'CELEBS' && (
-                  <div className="space-y-2.5">
-                    <p className="text-xs text-purple-200/80">
-                      Celebrities visit automatically when Club Hype exceeds 130, or invite a VIP entourage directly for an instant cash and hype surge.
-                    </p>
+                  <div className="space-y-2">
                     {CELEBRITY_NAMES.map((cName, idx) => (
                       <div
                         key={cName}
                         className="p-2.5 rounded-xl bg-purple-950/70 border border-amber-400/30 flex items-center justify-between"
                       >
                         <div>
-                          <div className="text-sm font-bold text-amber-300 flex items-center gap-1.5">
-                            <Crown className="w-4 h-4" />
+                          <div className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                            <Crown className="w-3.5 h-3.5" />
                             <span>{cName}</span>
                           </div>
-                          <div className="text-xs text-purple-200/75">3.0x Drink &amp; Lounge Booth Tips</div>
+                          <div className="text-[11px] text-purple-200/75">3.0x Drink &amp; Booth Tips</div>
                         </div>
                         <button
                           onClick={() => {
@@ -1592,31 +1696,28 @@ export default function App() {
                             setCash((c) => c + 650);
                             addXp(90);
                             soundEngine.playUpgradeFanfare();
-                            setGuests((prev) => [
-                              ...prev,
-                              {
-                                id: `celeb_${Date.now()}_${idx}`,
-                                name: cName,
-                                isCelebrity: true,
-                                floor: activeFloor,
-                                targetFloor: activeFloor,
-                                gridX: 4,
-                                gridY: 4,
-                                path: [],
-                                state: 'DANCING',
-                                stateTimer: 9,
-                                patience: 100,
-                                hype: 100,
-                                bubble: 'VIP_CROWN',
-                                bubbleTimer: 8,
-                                shirtColor: '#facc15',
-                                hairColor: '#1e1b4b',
-                                pantsColor: '#311042',
-                                cashSpent: 650,
-                              },
-                            ]);
+                            guestsRef.current.push({
+                              id: `celeb_${Date.now()}_${idx}`,
+                              name: cName,
+                              isCelebrity: true,
+                              floor: activeFloor,
+                              targetFloor: activeFloor,
+                              gridX: 4,
+                              gridY: 4,
+                              path: [],
+                              state: 'DANCING',
+                              stateTimer: 10,
+                              patience: 100,
+                              hype: 100,
+                              bubble: 'VIP_CROWN',
+                              bubbleTimer: 8,
+                              shirtColor: '#facc15',
+                              hairColor: '#1e1b4b',
+                              pantsColor: '#311042',
+                              cashSpent: 650,
+                            });
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs cursor-pointer"
                         >
                           Invite (2 Gems)
                         </button>
@@ -1628,86 +1729,289 @@ export default function App() {
             )}
 
             {/* ---------------------------------------------------------------
-                BOTTOM-CENTER GHOSTED GREEN "BUILD MODE" BOX
-                (Matched directly to the green translucent Build Mode panel in IMG_1503_71984622.jpeg)
+                BOTTOM-CENTER TRANSLUCENT GREEN "Build Mode" OVERLAY BOX
+                (Exact visual match to the green Build Mode box in IMG_1503.jpeg with Chair & Speaker icons)
                --------------------------------------------------------------- */}
             {activeBottomTab && (
               <div className="mx-auto mt-auto mb-1 pointer-events-auto">
-                {activeBottomTab === 'BUILD' && (
-                  <div className="w-[360px] sm:w-[540px] md:w-[660px] bg-emerald-500/80 border-2 border-emerald-200 rounded-2xl p-3.5 shadow-[0_12px_32px_rgba(16,185,129,0.35)] text-slate-950">
-                    {/* Build Mode Header Bar */}
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]">
-                          Build Mode (Floor {activeFloor})
-                        </h3>
-                        <span className="text-xs font-bold text-emerald-950 bg-emerald-200/90 px-2 py-0.5 rounded-md">
-                          Click tile on grid to place
+                {activeBottomTab === 'BUILD' && !showFullCatalog && (
+                  <div className="relative w-[290px] sm:w-[370px] bg-[#6ee777]/75 border-[2.5px] border-[#a7f3d0] rounded-2xl px-4 pt-2 pb-3 shadow-[0_10px_28px_rgba(34,197,94,0.45)]">
+                    {/* Top-Center "Build Mode" Header with Bold Black Outline */}
+                    <div className="text-center -mt-4 mb-1">
+                      <span className="text-lg sm:text-xl font-black text-white tracking-wide drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
+                        Build Mode
+                      </span>
+                    </div>
+
+                    {/* Top-Right Grey 'X' Close Button */}
+                    <button
+                      onClick={() => setActiveBottomTab(null)}
+                      className="absolute top-2 right-2.5 w-6 h-6 rounded-md bg-slate-800/80 border border-slate-950 text-slate-200 hover:text-white flex items-center justify-center cursor-pointer"
+                      aria-label="Close Build Mode"
+                    >
+                      <X className="w-4 h-4 stroke-[3]" />
+                    </button>
+
+                    {/* Center Illustrated Isometric Wooden Chair & Subwoofer Speaker Box */}
+                    <div className="flex items-center justify-center gap-5 sm:gap-7 my-1">
+                      {/* 1. Isometric Wooden Chair Button */}
+                      <button
+                        onClick={() => {
+                          setIsRemoveMode(false);
+                          setSelectedCatalogItem(chairItem);
+                          soundEngine.playClick();
+                        }}
+                        className={`group flex flex-col items-center p-2 rounded-xl transition-transform cursor-pointer ${
+                          selectedCatalogItem?.id === chairItem.id && !isRemoveMode
+                            ? 'bg-emerald-950/35 ring-2 ring-white scale-105'
+                            : 'hover:bg-emerald-950/20'
+                        }`}
+                        title={`Place ${chairItem.name} ($${chairItem.costCash})`}
+                      >
+                        <svg viewBox="0 0 64 72" className="w-14 h-16 sm:w-16 sm:h-18 drop-shadow">
+                          {/* Chair Backrest */}
+                          <polygon
+                            points="18,10 38,4 38,34 18,40"
+                            fill="#528265"
+                            stroke="#1e293b"
+                            strokeWidth="2.5"
+                            strokeLinejoin="round"
+                          />
+                          {/* Chair Seat */}
+                          <polygon
+                            points="18,38 38,32 54,40 34,46"
+                            fill="#659c7a"
+                            stroke="#1e293b"
+                            strokeWidth="2.5"
+                            strokeLinejoin="round"
+                          />
+                          {/* Chair Legs */}
+                          <path
+                            d="M19,40 V60 M34,46 V66 M53,40 V60 M38,34 V52"
+                            stroke="#2e4f3b"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <span className="text-[11px] font-black text-slate-950 bg-white/80 px-2 py-0.5 rounded-full mt-0.5">
+                          Chair (${chairItem.costCash})
                         </span>
+                      </button>
+
+                      {/* 2. Isometric Black Subwoofer Speaker Box Button */}
+                      <button
+                        onClick={() => {
+                          setIsRemoveMode(false);
+                          setSelectedCatalogItem(speakerItem);
+                          soundEngine.playClick();
+                        }}
+                        className={`group flex flex-col items-center p-2 rounded-xl transition-transform cursor-pointer ${
+                          selectedCatalogItem?.id === speakerItem.id && !isRemoveMode
+                            ? 'bg-emerald-950/35 ring-2 ring-white scale-105'
+                            : 'hover:bg-emerald-950/20'
+                        }`}
+                        title={`Place ${speakerItem.name} ($${speakerItem.costCash})`}
+                      >
+                        <svg viewBox="0 0 64 72" className="w-14 h-16 sm:w-16 sm:h-18 drop-shadow">
+                          {/* Top Face */}
+                          <polygon
+                            points="32,12 52,20 34,28 14,20"
+                            fill="#475569"
+                            stroke="#0f172a"
+                            strokeWidth="2.5"
+                            strokeLinejoin="round"
+                          />
+                          {/* Left Front Speaker Face */}
+                          <polygon
+                            points="14,20 34,28 34,62 14,54"
+                            fill="#334155"
+                            stroke="#0f172a"
+                            strokeWidth="2.5"
+                            strokeLinejoin="round"
+                          />
+                          {/* Right Side Face */}
+                          <polygon
+                            points="34,28 52,20 52,54 34,62"
+                            fill="#1e293b"
+                            stroke="#0f172a"
+                            strokeWidth="2.5"
+                            strokeLinejoin="round"
+                          />
+                          {/* Top Tweeter Cone */}
+                          <ellipse
+                            cx="24"
+                            cy="33"
+                            rx="4.5"
+                            ry="5.5"
+                            fill="#0f172a"
+                            stroke="#64748b"
+                            strokeWidth="1.5"
+                          />
+                          {/* Bottom Woofer Cone */}
+                          <ellipse
+                            cx="24"
+                            cy="48"
+                            rx="6.5"
+                            ry="7.5"
+                            fill="#0f172a"
+                            stroke="#64748b"
+                            strokeWidth="1.8"
+                          />
+                          <circle cx="24" cy="48" r="2.5" fill="#475569" />
+                        </svg>
+                        <span className="text-[11px] font-black text-slate-950 bg-white/80 px-2 py-0.5 rounded-full mt-0.5">
+                          Speaker (${speakerItem.costCash})
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Quick Action Bar at bottom of green Build Mode box */}
+                    <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-emerald-900/25">
+                      <button
+                        onClick={() => {
+                          setIsRemoveMode(false);
+                          setSelectedCatalogItem(lightItem);
+                          soundEngine.playClick();
+                        }}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-black cursor-pointer ${
+                          selectedCatalogItem?.id === lightItem.id
+                            ? 'bg-slate-950 text-cyan-300'
+                            : 'bg-emerald-950/70 text-white hover:bg-emerald-950'
+                        }`}
+                      >
+                        +Laser (${lightItem.costCash})
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          soundEngine.playClick();
+                          setActiveBottomTab('FRIENDS');
+                        }}
+                        className="px-2 py-1 rounded-lg bg-cyan-950/90 text-cyan-300 hover:bg-cyan-900 text-[11px] font-black cursor-pointer"
+                        title="Hire & Place Bartenders, Bouncers, and Waiters on the Grid"
+                      >
+                        +Staff ({staffMembers.length})
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setBuildRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270);
+                          soundEngine.playClick();
+                        }}
+                        className="p-1 rounded-lg bg-slate-900/80 text-white hover:bg-slate-950 cursor-pointer"
+                        title="Rotate Item"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => setShowFullCatalog(true)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-950 text-amber-300 hover:bg-slate-900 text-[11px] font-black cursor-pointer"
+                      >
+                        All 16 Items ▸
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ACTIVE STAFF GRID PLACEMENT / RELOCATION FLOATING BANNER */}
+                {(placementModeStaff || relocatingStaffUid) && (
+                  <div className="mb-2 w-[320px] sm:w-[480px] bg-cyan-950/95 border-2 border-cyan-300 rounded-2xl px-3.5 py-2.5 shadow-2xl text-white flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300 font-bold">
+                        {placementModeStaff
+                          ? `Hiring ${placementModeStaff.name} ($${placementModeStaff.hireCostCash})`
+                          : 'Relocating Staff Station'}
+                      </div>
+                      <div className="text-xs sm:text-sm font-extrabold text-white">
+                        Tap any isometric tile on Floor {activeFloor} to station staff!
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setPlacementModeStaff(null);
+                        setRelocatingStaffUid(null);
+                        soundEngine.playClick();
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold cursor-pointer shrink-0"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                {/* EXPANDED FULL 16-ITEM BUILD CATALOG */}
+                {activeBottomTab === 'BUILD' && showFullCatalog && (
+                  <div className="w-[330px] sm:w-[560px] bg-[#34d399]/90 border-[2.5px] border-emerald-100 rounded-2xl p-3 shadow-2xl text-slate-950">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowFullCatalog(false)}
+                          className="px-2 py-0.5 rounded-lg bg-slate-950 text-emerald-300 text-xs font-bold cursor-pointer"
+                        >
+                          ◂ Compact View
+                        </button>
+                        <h3 className="text-sm sm:text-base font-black text-white drop-shadow">
+                          Full Catalog (Floor {activeFloor})
+                        </h3>
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {/* Rotate Furniture Button */}
+                        <button
+                          onClick={() => {
+                            soundEngine.playClick();
+                            setActiveBottomTab('FRIENDS');
+                          }}
+                          className="px-2 py-1 rounded-lg bg-cyan-950 text-cyan-300 text-xs font-bold cursor-pointer"
+                        >
+                          Hire Staff ({staffMembers.length})
+                        </button>
                         <button
                           onClick={() => {
                             setBuildRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270);
                             soundEngine.playClick();
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-slate-900/85 text-white hover:bg-slate-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                          title="Rotate Item (Shortcut: R)"
+                          className="px-2 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
                         >
                           <RotateCw className="w-3.5 h-3.5" />
                           <span>{buildRotation}°</span>
                         </button>
-
-                        {/* Sell / Bulldoze Toggle */}
                         <button
-                          onClick={() => {
-                            setIsRemoveMode((prev) => !prev);
-                            soundEngine.playClick();
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer ${
-                            isRemoveMode
-                              ? 'bg-rose-600 text-white'
-                              : 'bg-slate-900/85 text-rose-300 hover:bg-slate-800'
+                          onClick={() => setIsRemoveMode((p) => !p)}
+                          className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer ${
+                            isRemoveMode ? 'bg-rose-600 text-white' : 'bg-slate-900 text-rose-300'
                           }`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          <span>{isRemoveMode ? 'Selling ON' : 'Sell'}</span>
+                          <span>{isRemoveMode ? 'Selling' : 'Sell'}</span>
                         </button>
-
-                        {/* Close Build Mode X */}
                         <button
-                          onClick={() => {
-                            setActiveBottomTab(null);
-                            setIsRemoveMode(false);
-                          }}
-                          className="w-7 h-7 rounded-lg bg-slate-900/75 text-white hover:bg-slate-900 flex items-center justify-center cursor-pointer"
+                          onClick={() => setActiveBottomTab(null)}
+                          className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center cursor-pointer"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
 
-                    {/* Category Filter Row */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2">
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1.5 mb-2">
                       {(
                         [
-                          { id: 'ALL', label: 'All Gear' },
-                          { id: 'SEATING', label: 'Chairs & Booths' },
-                          { id: 'LIGHTING', label: 'Lights & Lasers' },
-                          { id: 'DANCE_TILE', label: 'Dance Tiles' },
-                          { id: 'BAR_UNIT', label: 'Disco Bars' },
-                          { id: 'DJ_BOOTH', label: 'DJ & Speakers' },
+                          { id: 'ALL', label: 'All' },
+                          { id: 'SEATING', label: 'Seating' },
+                          { id: 'LIGHTING', label: 'Lights' },
+                          { id: 'DANCE_TILE', label: 'Dance Grid' },
+                          { id: 'BAR_UNIT', label: 'Bars' },
+                          { id: 'DJ_BOOTH', label: 'DJ Gear' },
                         ] as const
                       ).map((cat) => (
                         <button
                           key={cat.id}
                           onClick={() => setBuildCategory(cat.id)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer ${
                             buildCategory === cat.id
-                              ? 'bg-slate-950 text-emerald-300 shadow'
-                              : 'bg-emerald-700/60 text-white hover:bg-emerald-800/70'
+                              ? 'bg-slate-950 text-emerald-300'
+                              : 'bg-emerald-800/70 text-white'
                           }`}
                         >
                           {cat.label}
@@ -1715,8 +2019,7 @@ export default function App() {
                       ))}
                     </div>
 
-                    {/* Horizontal Scrollable Item Cards */}
-                    <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
                       {filteredCatalog.map((item) => {
                         const isSelected = selectedCatalogItem?.id === item.id && !isRemoveMode;
                         const canAfford = cash >= item.costCash && gems >= item.costGems;
@@ -1728,25 +2031,25 @@ export default function App() {
                               setSelectedCatalogItem(item);
                               soundEngine.playClick();
                             }}
-                            className={`w-36 shrink-0 p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                            className={`w-32 shrink-0 p-2 rounded-xl border-2 text-left cursor-pointer ${
                               isSelected
-                                ? 'bg-slate-950/95 border-white text-white shadow-lg scale-[1.02]'
-                                : 'bg-emerald-950/75 border-emerald-300/50 text-emerald-50 hover:bg-emerald-950/90'
+                                ? 'bg-slate-950 border-white text-white'
+                                : 'bg-emerald-950/80 border-emerald-300/40 text-emerald-50'
                             }`}
                           >
-                            <div className="flex items-center justify-between text-[10px] font-mono mb-1">
-                              <span className="text-emerald-300 font-bold">
-                                Tier {item.tier} · {item.width}x{item.depth}
+                            <div className="flex items-center justify-between text-[10px] font-mono">
+                              <span className="text-emerald-300">
+                                T{item.tier} · {item.width}x{item.depth}
                               </span>
-                              <span className="text-amber-300 font-bold">+{item.hypeBonus}⚡</span>
+                              <span className="text-amber-300">+{item.hypeBonus}⚡</span>
                             </div>
-                            <div className="text-xs font-extrabold truncate">{item.name}</div>
-                            <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-emerald-500/30 text-xs font-mono font-bold">
+                            <div className="text-xs font-extrabold truncate mt-0.5">{item.name}</div>
+                            <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-emerald-500/30 text-xs font-mono font-bold">
                               <span className={canAfford ? 'text-emerald-300' : 'text-rose-400'}>
                                 ${item.costCash}
                               </span>
                               {item.costGems > 0 && (
-                                <span className="text-fuchsia-300">{item.costGems} Gems</span>
+                                <span className="text-fuchsia-300">{item.costGems}G</span>
                               )}
                             </div>
                           </button>
@@ -1758,15 +2061,12 @@ export default function App() {
 
                 {/* DRINK MIXES DRAWER */}
                 {activeBottomTab === 'DRINKS' && (
-                  <div className="w-[360px] sm:w-[560px] bg-[#2a1245]/95 border-2 border-fuchsia-400 rounded-2xl p-4 shadow-2xl text-white">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="w-[330px] sm:w-[540px] bg-[#2a1245]/95 border-2 border-fuchsia-400 rounded-2xl p-3.5 shadow-2xl text-white">
+                    <div className="flex items-center justify-between mb-2.5">
                       <div>
-                        <h3 className="text-base font-extrabold text-fuchsia-200">
-                          Drink Crafting &amp; Tiered Mixology Menu
+                        <h3 className="text-sm sm:text-base font-extrabold text-fuchsia-200">
+                          Drink Crafting &amp; Mixology Menu (Bar Tier {clubMetrics.maxBarTier})
                         </h3>
-                        <p className="text-xs text-purple-200/75">
-                          Current Bar Tier: Tier {clubMetrics.maxBarTier} · Higher-tier bars unlock Neon Cosmos &amp; Bottle Service
-                        </p>
                       </div>
                       <button
                         onClick={() => setActiveBottomTab(null)}
@@ -1776,7 +2076,7 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {DRINK_MIXES.map((drink) => {
                         const isCurrent = drink.id === activeDrinkId;
                         const barUnlocked = clubMetrics.maxBarTier >= drink.requiredBarTier;
@@ -1791,33 +2091,30 @@ export default function App() {
                               setActiveDrinkId(drink.id);
                               soundEngine.playCashRegister();
                             }}
-                            className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                            className={`p-2.5 rounded-xl border-2 text-left cursor-pointer ${
                               isCurrent
                                 ? 'bg-fuchsia-600/35 border-cyan-300'
                                 : barUnlocked
-                                ? 'bg-purple-950/75 border-purple-500/40 hover:border-fuchsia-400'
+                                ? 'bg-purple-950/75 border-purple-500/40'
                                 : 'bg-purple-950/40 border-purple-800/30 opacity-65'
                             }`}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-extrabold" style={{ color: drink.color }}>
+                              <span className="text-xs sm:text-sm font-extrabold" style={{ color: drink.color }}>
                                 {drink.name}
                               </span>
                               <span className="text-xs font-mono font-bold text-emerald-300">
-                                +${drink.sellPrice}/guest
+                                +${drink.sellPrice}
                               </span>
                             </div>
-                            <p className="text-xs text-purple-200/75 mt-1 line-clamp-1">
-                              {drink.description}
-                            </p>
-                            <div className="flex items-center justify-between mt-2 text-[11px] font-mono">
-                              <span className="text-amber-300">+{drink.hypeBoost} Hype Boost</span>
+                            <div className="flex items-center justify-between mt-1 text-[11px] font-mono">
+                              <span className="text-amber-300">+{drink.hypeBoost} Hype</span>
                               <span className="font-bold text-cyan-300">
                                 {!barUnlocked
-                                  ? `Requires Tier ${drink.requiredBarTier} Bar`
+                                  ? `Need Tier ${drink.requiredBarTier} Bar`
                                   : isCurrent
-                                  ? '✓ SERVING NOW'
-                                  : 'Tap to Serve'}
+                                  ? '✓ SERVING'
+                                  : 'Serve'}
                               </span>
                             </div>
                           </button>
@@ -1827,18 +2124,13 @@ export default function App() {
                   </div>
                 )}
 
-                {/* PARKING / LINE / BOUNCERS DRAWER */}
+                {/* PARKING / LINE DRAWER */}
                 {activeBottomTab === 'PARKING' && (
-                  <div className="w-[360px] sm:w-[560px] bg-[#22133d]/95 border-2 border-purple-400 rounded-2xl p-4 shadow-2xl text-white">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <h3 className="text-base font-extrabold text-purple-200">
-                          Outside Parking Lot, Velvet Ropes &amp; Bouncer Line
-                        </h3>
-                        <p className="text-xs text-purple-300/80">
-                          Expand capacity from a 2-car gravel patch into a VIP Valet Plaza
-                        </p>
-                      </div>
+                  <div className="w-[330px] sm:w-[540px] bg-[#22133d]/95 border-2 border-purple-400 rounded-2xl p-3.5 shadow-2xl text-white">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <h3 className="text-sm sm:text-base font-extrabold text-purple-200">
+                        Parking Lot, Velvet Ropes &amp; Security Bouncers
+                      </h3>
                       <button
                         onClick={() => setActiveBottomTab(null)}
                         className="w-7 h-7 rounded-lg bg-purple-900/80 flex items-center justify-center cursor-pointer"
@@ -1847,23 +2139,13 @@ export default function App() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      {/* Upgrade Parking Lot */}
-                      <div className="p-3 rounded-xl bg-purple-950/80 border border-purple-500/40 flex flex-col justify-between">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/40 flex flex-col justify-between">
                         <div>
-                          <div className="text-xs font-mono text-cyan-300">
-                            Tier {parkingState.lotTier}/3
+                          <div className="text-[10px] font-mono text-cyan-300">
+                            Lot Tier {parkingState.lotTier}/3
                           </div>
-                          <div className="text-sm font-extrabold mt-0.5">
-                            {parkingState.lotTier === 1
-                              ? 'Gravel Patch'
-                              : parkingState.lotTier === 2
-                              ? 'Neon Street Lot'
-                              : 'VIP Valet Plaza'}
-                          </div>
-                          <p className="text-xs text-purple-200/75 mt-1">
-                            Increases max club guest capacity &amp; sports cars outside.
-                          </p>
+                          <div className="text-xs font-extrabold mt-0.5">Parking Lot</div>
                         </div>
                         <button
                           disabled={parkingState.lotTier >= 3}
@@ -1881,65 +2163,38 @@ export default function App() {
                             addXp(70);
                             soundEngine.playUpgradeFanfare();
                           }}
-                          className="mt-3 w-full py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:bg-purple-900 disabled:text-purple-400 text-slate-950 font-extrabold text-xs cursor-pointer"
+                          className="mt-2 w-full py-1.5 rounded-lg bg-emerald-400 disabled:bg-purple-900 disabled:text-purple-400 text-slate-950 font-extrabold text-[11px] cursor-pointer"
                         >
-                          {parkingState.lotTier >= 3
-                            ? 'MAXED'
-                            : `Upgrade ($${parkingState.lotTier * 600})`}
+                          {parkingState.lotTier >= 3 ? 'MAX' : `$${parkingState.lotTier * 600}`}
                         </button>
                       </div>
 
-                      {/* Hire Bouncers */}
-                      <div className="p-3 rounded-xl bg-purple-950/80 border border-purple-500/40 flex flex-col justify-between">
+                      <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/40 flex flex-col justify-between">
                         <div>
-                          <div className="text-xs font-mono text-cyan-300">
-                            {parkingState.bouncerCount}/4 Bouncers
+                          <div className="text-[10px] font-mono text-cyan-300">
+                            {staffMembers.filter((s) => s.role === 'BOUNCER').length} On Grid
                           </div>
-                          <div className="text-sm font-extrabold mt-0.5">Door Security</div>
-                          <p className="text-xs text-purple-200/75 mt-1">
-                            Admits queued guests faster so lines never get impatient.
-                          </p>
+                          <div className="text-xs font-extrabold mt-0.5">Place Bouncer</div>
                         </div>
                         <button
-                          disabled={parkingState.bouncerCount >= 4}
                           onClick={() => {
-                            const cost = parkingState.bouncerCount * 400;
-                            if (cash < cost) {
-                              soundEngine.playError();
-                              return;
-                            }
-                            setCash((c) => c - cost);
-                            setParkingState((p) => ({
-                              ...p,
-                              bouncerCount: Math.min(4, p.bouncerCount + 1),
-                            }));
-                            addXp(50);
-                            soundEngine.playUpgradeFanfare();
+                            const bouncerCat = STAFF_CATALOG.find((s) => s.role === 'BOUNCER')!;
+                            setPlacementModeStaff(bouncerCat);
+                            setActiveBottomTab(null);
+                            soundEngine.playClick();
                           }}
-                          className="mt-3 w-full py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:bg-purple-900 disabled:text-purple-400 text-slate-950 font-extrabold text-xs cursor-pointer"
+                          className="mt-2 w-full py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-[11px] cursor-pointer"
                         >
-                          {parkingState.bouncerCount >= 4
-                            ? 'MAXED'
-                            : `Hire ($${parkingState.bouncerCount * 400})`}
+                          Place ($350)
                         </button>
                       </div>
 
-                      {/* Upgrade Velvet Rope */}
-                      <div className="p-3 rounded-xl bg-purple-950/80 border border-purple-500/40 flex flex-col justify-between">
+                      <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/40 flex flex-col justify-between">
                         <div>
-                          <div className="text-xs font-mono text-cyan-300">
-                            Tier {parkingState.ropeTier}/3
+                          <div className="text-[10px] font-mono text-cyan-300">
+                            Rope Tier {parkingState.ropeTier}/3
                           </div>
-                          <div className="text-sm font-extrabold mt-0.5">
-                            {parkingState.ropeTier === 1
-                              ? 'Basic Queue Rope'
-                              : parkingState.ropeTier === 2
-                              ? 'Magenta Velvet Rope'
-                              : '24K Gold VIP Gate'}
-                          </div>
-                          <p className="text-xs text-purple-200/75 mt-1">
-                            Boosts entryway Vibe multiplier &amp; celebrity arrival rate.
-                          </p>
+                          <div className="text-xs font-extrabold mt-0.5">Velvet Rope</div>
                         </div>
                         <button
                           disabled={parkingState.ropeTier >= 3}
@@ -1957,27 +2212,25 @@ export default function App() {
                             addXp(55);
                             soundEngine.playUpgradeFanfare();
                           }}
-                          className="mt-3 w-full py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:bg-purple-900 disabled:text-purple-400 text-slate-950 font-extrabold text-xs cursor-pointer"
+                          className="mt-2 w-full py-1.5 rounded-lg bg-emerald-400 disabled:bg-purple-900 disabled:text-purple-400 text-slate-950 font-extrabold text-[11px] cursor-pointer"
                         >
-                          {parkingState.ropeTier >= 3
-                            ? 'MAXED'
-                            : `Upgrade ($${parkingState.ropeTier * 450})`}
+                          {parkingState.ropeTier >= 3 ? 'MAX' : `$${parkingState.ropeTier * 450}`}
                         </button>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* INVITE FRIENDS SOCIAL CREW DRAWER */}
+                {/* STAFF MANAGEMENT SYSTEM & INVITE FRIENDS DRAWER */}
                 {activeBottomTab === 'FRIENDS' && (
-                  <div className="w-[360px] sm:w-[520px] bg-[#301136]/95 border-2 border-pink-400 rounded-2xl p-4 shadow-2xl text-white">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="w-[340px] sm:w-[580px] bg-[#241033]/96 border-2 border-pink-400 rounded-2xl p-3.5 shadow-2xl text-white">
+                    <div className="flex items-center justify-between mb-2">
                       <div>
-                        <h3 className="text-base font-extrabold text-pink-200">
-                          Social Entourage &amp; Friend Staff Crew
+                        <h3 className="text-sm sm:text-base font-extrabold text-pink-200">
+                          Club Staff Management &amp; Grid Automation ({staffMembers.length} Active)
                         </h3>
-                        <p className="text-xs text-pink-200/75">
-                          Send VIP Guest Passes to friends for an instant floor flash-mob &amp; cash bonus
+                        <p className="text-[11px] text-purple-200/80">
+                          Hire Bartenders, Bouncers &amp; Waiters and place them on any isometric tile
                         </p>
                       </div>
                       <button
@@ -1987,40 +2240,159 @@ export default function App() {
                         <X className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-pink-950/60 border border-pink-500/30">
-                      <div>
-                        <div className="text-sm font-bold">Launch Flash-Mob Party Bus</div>
-                        <div className="text-xs text-pink-200/80">
-                          Spawns 4 hyped dancers immediately &amp; awards +$400 Cover Charge
+
+                    {/* 1. HIRE & PLACE STAFF CATALOG (Bartender, Bouncer, Waiter) */}
+                    <div className="grid grid-cols-3 gap-2 mb-2.5">
+                      {STAFF_CATALOG.map((staffCat) => {
+                        const canAfford = cash >= staffCat.hireCostCash;
+                        const roleCount = staffMembers.filter((s) => s.role === staffCat.role).length;
+                        return (
+                          <div
+                            key={staffCat.id}
+                            className="p-2 rounded-xl bg-purple-950/85 border border-pink-400/40 flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] font-mono">
+                                <span
+                                  className="px-1.5 py-0.2 rounded font-black text-slate-950"
+                                  style={{ backgroundColor: staffCat.accentColor }}
+                                >
+                                  {staffCat.role}
+                                </span>
+                                <span className="text-amber-300">+{staffCat.hypeBonus}⚡</span>
+                              </div>
+                              <div className="text-xs font-extrabold mt-1 text-white truncate">
+                                {staffCat.name}
+                              </div>
+                              <div className="text-[10px] text-purple-200/80 leading-tight mt-0.5 line-clamp-2">
+                                {staffCat.title}
+                              </div>
+                            </div>
+
+                            <div className="mt-2 pt-1.5 border-t border-purple-700/40 flex flex-col gap-1">
+                              <button
+                                onClick={() => {
+                                  if (!canAfford) {
+                                    soundEngine.playError();
+                                    return;
+                                  }
+                                  setPlacementModeStaff(staffCat);
+                                  setRelocatingStaffUid(null);
+                                  setActiveBottomTab(null);
+                                  soundEngine.playClick();
+                                }}
+                                className={`w-full py-1 rounded-lg font-extrabold text-[11px] cursor-pointer ${
+                                  canAfford
+                                    ? 'bg-gradient-to-r from-cyan-400 to-sky-400 text-slate-950 hover:from-cyan-300 hover:to-sky-300'
+                                    : 'bg-purple-900/60 text-rose-300'
+                                }`}
+                              >
+                                Place on Grid (${staffCat.hireCostCash})
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const defaultCoord =
+                                    staffCat.role === 'BARTENDER'
+                                      ? { x: Math.min(7, 1 + roleCount), y: 1 }
+                                      : staffCat.role === 'BOUNCER'
+                                      ? { x: Math.min(3, 1 + roleCount), y: 9 }
+                                      : { x: 6, y: Math.min(8, 5 + roleCount) };
+                                  spawnStaffMemberAtGrid(
+                                    staffCat,
+                                    activeFloor,
+                                    defaultCoord.x,
+                                    defaultCoord.y
+                                  );
+                                }}
+                                className="w-full py-0.5 rounded bg-purple-900/80 hover:bg-purple-800 text-[10px] font-bold text-cyan-200 cursor-pointer"
+                              >
+                                Quick Auto-Station
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 2. ACTIVE STAFF ROSTER ON THE ISOMETRIC GRID */}
+                    <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 mb-2">
+                      {staffMembers.map((member) => (
+                        <div
+                          key={member.uid}
+                          className="px-2.5 py-1.5 rounded-xl bg-purple-950/75 border border-purple-500/35 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: member.uniformColor }}
+                            />
+                            <div className="truncate">
+                              <div className="text-xs font-extrabold text-white truncate">
+                                {member.name}
+                              </div>
+                              <div className="text-[10px] font-mono text-cyan-300">
+                                Floor {member.floor} · Tile ({member.postGridX},{member.postGridY}) ·{' '}
+                                {member.role === 'BOUNCER'
+                                  ? `${member.guestsCheckedIn} IDs Checked`
+                                  : `${member.drinksServed} Drinks Automated`}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => {
+                                setActiveFloor(member.floor);
+                                setRelocatingStaffUid(member.uid);
+                                setPlacementModeStaff(null);
+                                setActiveBottomTab(null);
+                                soundEngine.playClick();
+                              }}
+                              className="px-2 py-1 rounded-lg bg-cyan-500/25 border border-cyan-400/60 hover:bg-cyan-500/40 text-cyan-200 text-[10px] font-extrabold cursor-pointer"
+                            >
+                              Move Post
+                            </button>
+                            <button
+                              onClick={() => {
+                                setStaffMembers((prev) => prev.filter((s) => s.uid !== member.uid));
+                                soundEngine.playClick();
+                              }}
+                              className="p-1 rounded-lg bg-rose-950/80 border border-rose-500/40 text-rose-300 hover:bg-rose-900 cursor-pointer"
+                              title="Dismiss Staff Member"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
+                      ))}
+                    </div>
+
+                    {/* 3. SOCIAL PARTY BUS BONUS */}
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-pink-950/60 border border-pink-500/30">
+                      <div className="text-xs text-pink-100">
+                        VIP Entourage Party Bus (+$400 Cover Bonus!)
                       </div>
                       <button
                         onClick={() => {
                           setCash((c) => c + 400);
                           addXp(60);
                           soundEngine.playUpgradeFanfare();
-                          setActiveBottomTab(null);
                         }}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-b from-pink-400 to-rose-600 text-white font-extrabold text-xs cursor-pointer shrink-0"
+                        className="px-3 py-1 rounded-xl bg-gradient-to-b from-pink-400 to-rose-600 text-white font-extrabold text-xs cursor-pointer shrink-0"
                       >
-                        Invite All (+$400)
+                        Invite Entourage (+$400)
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* WORLD MAP NIGHTLIFE DISTRICTS DRAWER */}
+                {/* WORLD MAP DRAWER */}
                 {activeBottomTab === 'WORLD_MAP' && (
-                  <div className="w-[360px] sm:w-[560px] bg-[#0e2238]/95 border-2 border-cyan-400 rounded-2xl p-4 shadow-2xl text-white">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <h3 className="text-base font-extrabold text-cyan-200">
-                          Neon City Nightlife Districts Map
-                        </h3>
-                        <p className="text-xs text-cyan-200/75">
-                          Switch between your Basement Dive starting stage and the Level 20 Skyline Penthouse
-                        </p>
-                      </div>
+                  <div className="w-[330px] sm:w-[500px] bg-[#0e2238]/95 border-2 border-cyan-400 rounded-2xl p-3.5 shadow-2xl text-white">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <h3 className="text-sm sm:text-base font-extrabold text-cyan-200">
+                        Neon City Nightlife Districts Map
+                      </h3>
                       <button
                         onClick={() => setActiveBottomTab(null)}
                         className="w-7 h-7 rounded-lg bg-cyan-950/80 flex items-center justify-center cursor-pointer"
@@ -2028,45 +2400,27 @@ export default function App() {
                         <X className="w-4 h-4" />
                       </button>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 rounded-xl bg-cyan-950/70 border border-cyan-400/40 flex flex-col justify-between">
-                        <div>
-                          <div className="text-xs font-mono text-amber-300">DISTRICT 01 · STARTER</div>
-                          <div className="text-sm font-extrabold mt-0.5">Brick Alley Dive Bar</div>
-                          <p className="text-xs text-cyan-100/75 mt-1">
-                            Single-story brick basement, 3x3 retro dance floor, draft pints.
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            handleLoadPreset('DIVE');
-                            setActiveBottomTab(null);
-                          }}
-                          className="mt-3 w-full py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-xs cursor-pointer"
-                        >
-                          Load Dive Bar Stage
-                        </button>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-purple-950/70 border border-fuchsia-400/50 flex flex-col justify-between">
-                        <div>
-                          <div className="text-xs font-mono text-fuchsia-300">DISTRICT 02 · VIP SKYLINE</div>
-                          <div className="text-sm font-extrabold mt-0.5">Supernova 2-Story Mega-Club</div>
-                          <p className="text-xs text-purple-100/75 mt-1">
-                            2-Floor laser sanctuary, wraparound gold bar, hologram DJ &amp; bottle service.
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            handleLoadPreset('VIP_MEGA');
-                            setActiveBottomTab(null);
-                          }}
-                          className="mt-3 w-full py-1.5 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-400 text-white font-extrabold text-xs cursor-pointer"
-                        >
-                          Load VIP Mega-Club Stage
-                        </button>
-                      </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        onClick={() => {
+                          handleLoadPreset('DIVE');
+                          setActiveBottomTab(null);
+                        }}
+                        className="p-2.5 rounded-xl bg-cyan-950/80 border border-cyan-400/50 text-left hover:bg-cyan-900/70 cursor-pointer"
+                      >
+                        <div className="text-[10px] font-mono text-amber-300">LEVEL 1 STAGE</div>
+                        <div className="text-xs sm:text-sm font-extrabold">Brick Alley Dive Bar</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleLoadPreset('VIP_MEGA');
+                          setActiveBottomTab(null);
+                        }}
+                        className="p-2.5 rounded-xl bg-purple-950/80 border border-fuchsia-400/60 text-left hover:bg-purple-900/70 cursor-pointer"
+                      >
+                        <div className="text-[10px] font-mono text-fuchsia-300">LEVEL 20 STAGE</div>
+                        <div className="text-xs sm:text-sm font-extrabold">2-Floor VIP Mega-Club</div>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -2074,50 +2428,74 @@ export default function App() {
             )}
 
             {/* ---------------------------------------------------------------
-                BOTTOM-RIGHT: LIVE EVENT ALERT BOX
-                (Matched directly to the blue-header white-body Live event box in IMG_1503_71984622.jpeg)
+                BOTTOM-RIGHT: "Live event" BOX
+                (Exact match to the blue-header white-body Live event box in IMG_1503.jpeg)
                --------------------------------------------------------------- */}
             {showLiveEvents && (
-              <div className="mt-auto ml-auto w-64 sm:w-72 rounded-2xl overflow-hidden border-2 border-indigo-400/80 shadow-2xl bg-slate-100 text-slate-900 pointer-events-auto">
-                {/* Blue Header */}
-                <div className="bg-gradient-to-r from-blue-700 to-indigo-700 px-3 py-1.5 flex items-center justify-between text-white">
-                  <div className="flex items-center gap-1.5 text-xs font-extrabold">
-                    <Info className="w-4 h-4 text-cyan-300" />
-                    <span>Live event</span>
+              <div className="hidden sm:block mt-auto ml-auto w-64 md:w-72 rounded-2xl overflow-hidden border-[2.5px] border-[#1e1b4b] shadow-2xl bg-[#f1f5f9] text-slate-900 pointer-events-auto">
+                {/* Blue Header with 'i' icon & 'Live event' */}
+                <div className="bg-gradient-to-r from-[#2563eb] to-[#3b82f6] px-3 py-1.5 flex items-center justify-between text-white border-b-2 border-[#1e1b4b]">
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black tracking-tight">
+                    <div className="w-4 h-4 rounded-full bg-sky-300 text-blue-950 flex items-center justify-center font-black text-[11px]">
+                      i
+                    </div>
+                    <span className="drop-shadow">Live event</span>
                   </div>
                   <button
                     onClick={() => setShowLiveEvents(false)}
-                    className="text-blue-200 hover:text-white cursor-pointer"
+                    className="w-5 h-5 rounded bg-blue-900/60 text-blue-100 hover:text-white flex items-center justify-center cursor-pointer"
                     aria-label="Dismiss Live Events"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-3.5 h-3.5 stroke-[3]" />
                   </button>
                 </div>
 
-                {/* Alert Rows */}
-                <div className="divide-y divide-slate-200">
-                  {liveAlerts.map((alert) => (
+                {/* Two Alert Rows: Red Circle '!' and Yellow Triangle '!' */}
+                <div className="divide-y divide-slate-300">
+                  {liveAlerts.map((alert, idx) => (
                     <button
                       key={alert.id}
                       onClick={() => {
                         if (alert.actionTab === 'BUILD') {
                           setActiveBottomTab('BUILD');
-                          setBuildCategory('LIGHTING');
+                          setSelectedCatalogItem(lightItem);
                         } else if (alert.actionTab === 'PARKING') {
                           setActiveBottomTab('PARKING');
+                        } else if (alert.actionTab === 'DRINKS') {
+                          setActiveBottomTab('DRINKS');
                         }
                         soundEngine.playClick();
                       }}
-                      className="w-full px-3 py-2 flex items-center gap-2.5 text-left hover:bg-blue-50 transition-colors cursor-pointer"
+                      className={`w-full px-3 py-2 flex items-center gap-2.5 text-left transition-colors cursor-pointer ${
+                        idx === 0 ? 'bg-white hover:bg-blue-50' : 'bg-sky-50/80 hover:bg-sky-100/80'
+                      }`}
                     >
-                      {alert.severity === 'CRITICAL' ? (
-                        <div className="w-6 h-6 rounded-full bg-rose-600 text-white flex items-center justify-center font-black text-xs shrink-0">
+                      {idx === 0 ? (
+                        <div className="w-7 h-7 rounded-full bg-[#ef4444] border-2 border-[#1e1b4b] text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
                           !
                         </div>
                       ) : (
-                        <AlertTriangle className="w-6 h-6 text-amber-500 fill-amber-400 text-slate-950 shrink-0" />
+                        <svg viewBox="0 0 28 26" className="w-7 h-7 shrink-0">
+                          <polygon
+                            points="14,2 26,24 2,24"
+                            fill="#f59e0b"
+                            stroke="#1e1b4b"
+                            strokeWidth="2.2"
+                            strokeLinejoin="round"
+                          />
+                          <text
+                            x="14"
+                            y="21"
+                            textAnchor="middle"
+                            fill="#1e1b4b"
+                            fontWeight="900"
+                            fontSize="14"
+                          >
+                            !
+                          </text>
+                        </svg>
                       )}
-                      <span className="text-xs font-bold text-slate-800 leading-tight">
+                      <span className="text-xs font-bold text-slate-900 leading-tight">
                         {alert.message}
                       </span>
                     </button>
@@ -2128,29 +2506,71 @@ export default function App() {
           </div>
 
           {/* -----------------------------------------------------------------
-              BOTTOM NAVIGATION BAR: 5 COMMAND BUTTONS
-              1. Build/Decorate (Green + UPGRADE)
-              2. Drink Mixes (Magenta + UPGRADE)
-              3. Parking/Line (Purple + UPGRADE)
-              4. Invite Friends (Pink + !)
-              5. World Map (Cyan)
+              BOTTOM NAVIGATION BAR: 5 GLOSSY COMMAND BUTTONS WITH BESPOKE ILLUSTRATED ICONS
+              1. Build/Decorate (Green + Crossed Hammer/Wrench + UPGRADE)
+              2. Drink Mixes (Magenta + Cocktail Glass with Straw & Lime + UPGRADE)
+              3. Parking/Line (Purple + Purple Car & Cones + UPGRADE)
+              4. Invite Friends (Pink + 3 Friends Silhouettes + !)
+              5. World Map (Cyan + Folded Green/Blue Map)
              ----------------------------------------------------------------- */}
-          <div className="grid grid-cols-5 gap-2 sm:gap-3.5 pt-1 pointer-events-auto">
+          <div className="grid grid-cols-5 gap-1.5 sm:gap-3 pt-2 pointer-events-auto">
             {/* 1. Build/Decorate (Green) */}
             <button
               onClick={() => {
                 soundEngine.playClick();
                 setActiveBottomTab((t) => (t === 'BUILD' ? null : 'BUILD'));
               }}
-              className={`relative py-2.5 sm:py-3.5 px-2 rounded-2xl border-2 bg-gradient-to-b from-lime-400 via-emerald-500 to-emerald-700 hover:from-lime-300 hover:to-emerald-600 text-white shadow-[0_5px_0_#064e3b] active:translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                activeBottomTab === 'BUILD' ? 'border-white ring-2 ring-emerald-300' : 'border-lime-200/80'
+              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#a3e635] via-[#4ade80] to-[#15803d] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                activeBottomTab === 'BUILD' ? 'ring-2 ring-white' : ''
               }`}
             >
-              <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-lime-500 border-2 border-slate-900 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow">
+              {/* Overlapping Illustrated Crossed Wrench & Hammer Icon */}
+              <svg
+                viewBox="0 0 56 48"
+                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              >
+                {/* Hammer Handle & Head */}
+                <line
+                  x1="14"
+                  y1="38"
+                  x2="38"
+                  y2="14"
+                  stroke="#b45309"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M32 8 L45 21 L40 25 L28 13 Z"
+                  fill="#94a3b8"
+                  stroke="#150d2a"
+                  strokeWidth="2.5"
+                />
+                {/* Wrench */}
+                <line
+                  x1="40"
+                  y1="38"
+                  x2="18"
+                  y2="16"
+                  stroke="#cbd5e1"
+                  strokeWidth="5.5"
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx="15"
+                  cy="13"
+                  r="6"
+                  fill="#94a3b8"
+                  stroke="#150d2a"
+                  strokeWidth="2.5"
+                />
+              </svg>
+
+              {/* Green UPGRADE Badge */}
+              <span className="absolute -top-2 right-1 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
                 UPGRADE
               </span>
-              <Hammer className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
-              <span className="text-xs sm:text-sm font-black tracking-tight drop-shadow whitespace-nowrap">
+
+              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
                 Build/Decorate
               </span>
             </button>
@@ -2161,15 +2581,57 @@ export default function App() {
                 soundEngine.playClick();
                 setActiveBottomTab((t) => (t === 'DRINKS' ? null : 'DRINKS'));
               }}
-              className={`relative py-2.5 sm:py-3.5 px-2 rounded-2xl border-2 bg-gradient-to-b from-fuchsia-400 via-fuchsia-600 to-purple-800 hover:from-fuchsia-300 hover:to-purple-700 text-white shadow-[0_5px_0_#4a044e] active:translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                activeBottomTab === 'DRINKS' ? 'border-white ring-2 ring-fuchsia-300' : 'border-fuchsia-200/80'
+              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#e879f9] via-[#c026d3] to-[#701a75] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                activeBottomTab === 'DRINKS' ? 'ring-2 ring-white' : ''
               }`}
             >
-              <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-lime-500 border-2 border-slate-900 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow">
+              {/* Overlapping Illustrated Martini Glass with Lime & Straw */}
+              <svg
+                viewBox="0 0 56 52"
+                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              >
+                {/* Lime Wheel */}
+                <circle
+                  cx="17"
+                  cy="14"
+                  r="7"
+                  fill="#facc15"
+                  stroke="#150d2a"
+                  strokeWidth="2.2"
+                />
+                {/* Straw */}
+                <path
+                  d="M28 18 L36 6 L42 6"
+                  stroke="#ef4444"
+                  strokeWidth="3"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+                {/* Martini Bowl */}
+                <polygon
+                  points="14,15 42,15 28,31"
+                  fill="#fb7185"
+                  stroke="#150d2a"
+                  strokeWidth="2.5"
+                  strokeLinejoin="round"
+                />
+                <line x1="28" y1="31" x2="28" y2="43" stroke="#bae6fd" strokeWidth="3.5" />
+                <ellipse
+                  cx="28"
+                  cy="44"
+                  rx="9"
+                  ry="2.5"
+                  fill="#38bdf8"
+                  stroke="#150d2a"
+                  strokeWidth="2"
+                />
+              </svg>
+
+              <span className="absolute -top-2 right-1 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
                 UPGRADE
               </span>
-              <GlassWater className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
-              <span className="text-xs sm:text-sm font-black tracking-tight drop-shadow whitespace-nowrap">
+
+              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
                 Drink Mixes
               </span>
             </button>
@@ -2180,50 +2642,146 @@ export default function App() {
                 soundEngine.playClick();
                 setActiveBottomTab((t) => (t === 'PARKING' ? null : 'PARKING'));
               }}
-              className={`relative py-2.5 sm:py-3.5 px-2 rounded-2xl border-2 bg-gradient-to-b from-purple-500 via-purple-700 to-indigo-950 hover:from-purple-400 hover:to-indigo-900 text-white shadow-[0_5px_0_#1e1b4b] active:translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                activeBottomTab === 'PARKING' ? 'border-white ring-2 ring-purple-300' : 'border-purple-300/70'
+              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#9333ea] via-[#6b21a8] to-[#3b0764] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                activeBottomTab === 'PARKING' ? 'ring-2 ring-white' : ''
               }`}
             >
-              <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-lime-500 border-2 border-slate-900 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow">
+              {/* Overlapping Illustrated Purple Sports Car & Striped Barrier Post */}
+              <svg
+                viewBox="0 0 60 48"
+                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              >
+                {/* Yellow/Black Striped Parking Post */}
+                <rect
+                  x="41"
+                  y="8"
+                  width="7"
+                  height="28"
+                  rx="2"
+                  fill="#facc15"
+                  stroke="#150d2a"
+                  strokeWidth="2"
+                />
+                <line x1="41" y1="15" x2="48" y2="15" stroke="#150d2a" strokeWidth="3" />
+                <line x1="41" y1="23" x2="48" y2="23" stroke="#150d2a" strokeWidth="3" />
+                {/* Car Cabin & Body */}
+                <path
+                  d="M14 24 L20 14 L36 14 L41 24 Z"
+                  fill="#a855f7"
+                  stroke="#150d2a"
+                  strokeWidth="2.2"
+                />
+                <rect
+                  x="9"
+                  y="23"
+                  width="38"
+                  height="13"
+                  rx="5"
+                  fill="#7e22ce"
+                  stroke="#150d2a"
+                  strokeWidth="2.5"
+                />
+                <circle cx="15" cy="30" r="3" fill="#fde047" />
+                <circle cx="41" cy="30" r="3" fill="#fde047" />
+              </svg>
+
+              <span className="absolute -top-2 right-1 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
                 UPGRADE
               </span>
-              <Car className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
-              <span className="text-xs sm:text-sm font-black tracking-tight drop-shadow whitespace-nowrap">
+
+              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
                 Parking/Line
               </span>
             </button>
 
-            {/* 4. Invite Friends (Pink) */}
+            {/* 4. Invite Friends (Pink/Rose) */}
             <button
               onClick={() => {
                 soundEngine.playClick();
                 setActiveBottomTab((t) => (t === 'FRIENDS' ? null : 'FRIENDS'));
               }}
-              className={`relative py-2.5 sm:py-3.5 px-2 rounded-2xl border-2 bg-gradient-to-b from-pink-400 via-rose-500 to-rose-800 hover:from-pink-300 hover:to-rose-700 text-white shadow-[0_5px_0_#881337] active:translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                activeBottomTab === 'FRIENDS' ? 'border-white ring-2 ring-pink-300' : 'border-pink-200/80'
+              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#f472b6] via-[#db2777] to-[#831843] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                activeBottomTab === 'FRIENDS' ? 'ring-2 ring-white' : ''
               }`}
             >
-              <span className="absolute -top-2.5 right-2 w-6 h-6 rounded-full bg-rose-600 border-2 border-white text-xs font-black text-white flex items-center justify-center shadow">
+              {/* Overlapping Illustrated 3-Avatar Group Icon */}
+              <svg
+                viewBox="0 0 60 48"
+                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              >
+                {/* Left & Right Avatars */}
+                <circle cx="17" cy="18" r="6" fill="#c084fc" stroke="#150d2a" strokeWidth="2.2" />
+                <path
+                  d="M8 34 C8 26 26 26 26 34 Z"
+                  fill="#a855f7"
+                  stroke="#150d2a"
+                  strokeWidth="2.2"
+                />
+                <circle cx="43" cy="18" r="6" fill="#fb923c" stroke="#150d2a" strokeWidth="2.2" />
+                <path
+                  d="M34 34 C34 26 52 26 52 34 Z"
+                  fill="#f97316"
+                  stroke="#150d2a"
+                  strokeWidth="2.2"
+                />
+                {/* Center Cyan Avatar */}
+                <circle cx="30" cy="16" r="7" fill="#38bdf8" stroke="#150d2a" strokeWidth="2.5" />
+                <path
+                  d="M18 36 C18 26 42 26 42 36 Z"
+                  fill="#06b6d4"
+                  stroke="#150d2a"
+                  strokeWidth="2.5"
+                />
+              </svg>
+
+              <span className="absolute -top-2.5 right-1.5 sm:right-2.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-xs sm:text-sm font-black text-white flex items-center justify-center shadow">
                 !
               </span>
-              <Users className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
-              <span className="text-xs sm:text-sm font-black tracking-tight drop-shadow whitespace-nowrap">
+
+              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
                 Invite Friends
               </span>
             </button>
 
-            {/* 5. World Map (Cyan) */}
+            {/* 5. World Map (Cyan/Blue) */}
             <button
               onClick={() => {
                 soundEngine.playClick();
                 setActiveBottomTab((t) => (t === 'WORLD_MAP' ? null : 'WORLD_MAP'));
               }}
-              className={`relative py-2.5 sm:py-3.5 px-2 rounded-2xl border-2 bg-gradient-to-b from-cyan-300 via-sky-500 to-blue-700 hover:from-cyan-200 hover:to-blue-600 text-white shadow-[0_5px_0_#1e3a8a] active:translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                activeBottomTab === 'WORLD_MAP' ? 'border-white ring-2 ring-cyan-200' : 'border-cyan-100/80'
+              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#38bdf8] via-[#0284c7] to-[#1e3a8a] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                activeBottomTab === 'WORLD_MAP' ? 'ring-2 ring-white' : ''
               }`}
             >
-              <Compass className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
-              <span className="text-xs sm:text-sm font-black tracking-tight drop-shadow whitespace-nowrap">
+              {/* Overlapping Illustrated Folded Green/Blue World Map */}
+              <svg
+                viewBox="0 0 56 48"
+                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              >
+                <polygon
+                  points="10,12 22,8 22,34 10,38"
+                  fill="#22c55e"
+                  stroke="#150d2a"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <polygon
+                  points="22,8 34,13 34,39 22,34"
+                  fill="#38bdf8"
+                  stroke="#150d2a"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+                <polygon
+                  points="34,13 46,9 46,35 34,39"
+                  fill="#4ade80"
+                  stroke="#150d2a"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+
+              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
                 World Map
               </span>
             </button>

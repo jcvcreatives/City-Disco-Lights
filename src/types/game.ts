@@ -522,13 +522,14 @@ export const DRINK_MIXES: DrinkMix[] = [
   },
 ];
 
-// Initial Dive Bar Layout matching uploaded reference image (IMG_1503_71984622.jpeg)
+// Initial Dive Bar Layout matching uploaded reference image (IMG_1503.jpeg)
 export const INITIAL_PLACED_ITEMS: PlacedItem[] = [
-  // Top-left bar along back wall
-  { uid: 'init_bar_1', catalogId: 'bar_dive', floor: 1, gridX: 1, gridY: 0, rotation: 0 },
-  // Top-right DJ booth on riser
+  // L-shaped wooden bar along top-left back wall + return corner
+  { uid: 'init_bar_1', catalogId: 'bar_dive', floor: 1, gridX: 0, gridY: 1, rotation: 90 },
+  { uid: 'init_bar_2', catalogId: 'bar_dive', floor: 1, gridX: 1, gridY: 0, rotation: 0 },
+  // Top-right DJ booth on dark concrete riser
   { uid: 'init_dj_1', catalogId: 'dj_turntable', floor: 1, gridX: 6, gridY: 0, rotation: 0 },
-  // 3x3 colorful dance floor in center (X: 3..5, Y: 3..5)
+  // 3x3 dance floor in center (each tile renders 2x2 glowing squares = 6x6 pastel grid)
   { uid: 'init_df_1', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 3, rotation: 0 },
   { uid: 'init_df_2', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 3, rotation: 0 },
   { uid: 'init_df_3', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 3, rotation: 0 },
@@ -538,15 +539,15 @@ export const INITIAL_PLACED_ITEMS: PlacedItem[] = [
   { uid: 'init_df_7', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 5, rotation: 0 },
   { uid: 'init_df_8', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 5, rotation: 0 },
   { uid: 'init_df_9', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 5, rotation: 0 },
-  // Worn couches along left & right walls
-  { uid: 'init_couch_left', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 3, rotation: 90 },
-  { uid: 'init_couch_right1', catalogId: 'seat_worn_couch', floor: 1, gridX: 8, gridY: 2, rotation: 0 },
-  { uid: 'init_couch_right2', catalogId: 'seat_worn_couch', floor: 1, gridX: 8, gridY: 4, rotation: 0 },
-  // Round wood tables in bottom-right lounge
-  { uid: 'init_table_1', catalogId: 'seat_bistro', floor: 1, gridX: 7, gridY: 6, rotation: 0 },
-  { uid: 'init_table_2', catalogId: 'seat_bistro', floor: 1, gridX: 8, gridY: 7, rotation: 0 },
-  // Basic string light pillar
-  { uid: 'init_light_1', catalogId: 'light_string', floor: 1, gridX: 0, gridY: 1, rotation: 0 },
+  // Worn patched couch on left brick wall + two brown couches on right brick wall
+  { uid: 'init_couch_left', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 5, rotation: 90 },
+  { uid: 'init_couch_right1', catalogId: 'seat_worn_couch', floor: 1, gridX: 8, gridY: 2, rotation: 90 },
+  { uid: 'init_couch_right2', catalogId: 'seat_worn_couch', floor: 1, gridX: 8, gridY: 5, rotation: 90 },
+  // Round wooden bistro tables & chairs in right lounge
+  { uid: 'init_table_1', catalogId: 'seat_bistro', floor: 1, gridX: 6, gridY: 6, rotation: 0 },
+  { uid: 'init_table_2', catalogId: 'seat_bistro', floor: 1, gridX: 7, gridY: 7, rotation: 0 },
+  // Bottom corner purple lounge booth
+  { uid: 'init_booth_bottom', catalogId: 'seat_velvet_booth', floor: 1, gridX: 6, gridY: 8, rotation: 0 },
 ];
 
 // Preset VIP Hotspot Showcase layout for Floor 1 & Floor 2
@@ -624,3 +625,169 @@ export const INITIAL_QUESTS: QuestTask[] = [
     claimed: false,
   },
 ];
+
+export type StaffRole = 'BARTENDER' | 'BOUNCER' | 'WAITER';
+
+export type StaffTaskState =
+  | 'IDLE_STATION'
+  | 'MIXING_DRINK'
+  | 'CHECKING_ID'
+  | 'PICKING_UP_TRAY'
+  | 'WALKING_TO_TABLE'
+  | 'SERVING_TABLE'
+  | 'RETURNING_TO_BAR';
+
+export interface StaffCatalogItem {
+  id: string;
+  role: StaffRole;
+  name: string;
+  title: string;
+  hireCostCash: number;
+  hireCostGems: number;
+  speedBonus: number;
+  hypeBonus: number;
+  vibeBonus: number;
+  description: string;
+  uniformColor: string;
+  accentColor: string;
+}
+
+export interface StaffMemberAgent {
+  uid: string;
+  catalogId: string;
+  role: StaffRole;
+  name: string;
+  floor: 1 | 2;
+  postGridX: number; // Assigned isometric tile X
+  postGridY: number; // Assigned isometric tile Y
+  gridX: number; // Live interpolated X
+  gridY: number; // Live interpolated Y
+  path: Array<{ x: number; y: number }>;
+  taskState: StaffTaskState;
+  taskTimer: number;
+  carryingDrinkColor: string | null;
+  drinksServed: number;
+  guestsCheckedIn: number;
+  uniformColor: string;
+  hairColor: string;
+  actionBubble: string | null;
+  bubbleTimer: number;
+}
+
+export const STAFF_CATALOG: StaffCatalogItem[] = [
+  {
+    id: 'staff_bartender',
+    role: 'BARTENDER',
+    name: 'Flair Bartender',
+    title: 'Automated Bar Mixologist',
+    hireCostCash: 300,
+    hireCostGems: 0,
+    speedBonus: 0.45,
+    hypeBonus: 14,
+    vibeBonus: 10,
+    description:
+      'Station near any Bar Unit to automate drink pouring, cut guest bar wait time by 45%, and trigger flair tip bonuses.',
+    uniformColor: '#3b82f6',
+    accentColor: '#38bdf8',
+  },
+  {
+    id: 'staff_bouncer',
+    role: 'BOUNCER',
+    name: 'VIP Security Bouncer',
+    title: 'Automated Queue & Crowd Guard',
+    hireCostCash: 350,
+    hireCostGems: 0,
+    speedBonus: 0.5,
+    hypeBonus: 12,
+    vibeBonus: 18,
+    description:
+      'Station at the Entrance Door or dance floor perimeter to automate VIP check-in, prevent queue impatience, and award security cover bonuses.',
+    uniformColor: '#1e1b4b',
+    accentColor: '#facc15',
+  },
+  {
+    id: 'staff_waiter',
+    role: 'WAITER',
+    name: 'Neon Table Server',
+    title: 'Automated Booth & Lounge Waiter',
+    hireCostCash: 400,
+    hireCostGems: 0,
+    speedBonus: 0.55,
+    hypeBonus: 18,
+    vibeBonus: 16,
+    description:
+      'Patrols dynamically using A* between the Bar Counter and occupied Lounge Tables/VIP Booths to deliver tray drinks and collect automated table tips.',
+    uniformColor: '#db2777',
+    accentColor: '#f472b6',
+  },
+];
+
+export const INITIAL_STAFF_MEMBERS: StaffMemberAgent[] = [
+  // Starter Bartender stationed behind the top-left wooden bar counter
+  {
+    uid: 'staff_init_bartender_1',
+    catalogId: 'staff_bartender',
+    role: 'BARTENDER',
+    name: 'Roxy (Mixologist)',
+    floor: 1,
+    postGridX: 1,
+    postGridY: 1,
+    gridX: 1.1,
+    gridY: 0.55,
+    path: [],
+    taskState: 'MIXING_DRINK',
+    taskTimer: 2.5,
+    carryingDrinkColor: '#fbbf24',
+    drinksServed: 14,
+    guestsCheckedIn: 0,
+    uniformColor: '#3b82f6',
+    hairColor: '#1e1b4b',
+    actionBubble: '🍸',
+    bubbleTimer: 3,
+  },
+  // Starter Bouncer stationed near the front entrance door (2, 9)
+  {
+    uid: 'staff_init_bouncer_1',
+    catalogId: 'staff_bouncer',
+    role: 'BOUNCER',
+    name: 'Marcus (Security)',
+    floor: 1,
+    postGridX: 1,
+    postGridY: 9,
+    gridX: 1.15,
+    gridY: 9.05,
+    path: [],
+    taskState: 'CHECKING_ID',
+    taskTimer: 3.0,
+    carryingDrinkColor: null,
+    drinksServed: 0,
+    guestsCheckedIn: 19,
+    uniformColor: '#1e1b4b',
+    hairColor: '#451a03',
+    actionBubble: '🛡️',
+    bubbleTimer: 3.5,
+  },
+  // Starter Waiter patrolling between the bar and right-side lounge tables
+  {
+    uid: 'staff_init_waiter_1',
+    catalogId: 'staff_waiter',
+    role: 'WAITER',
+    name: 'Skye (Table Server)',
+    floor: 1,
+    postGridX: 6,
+    postGridY: 5,
+    gridX: 5.8,
+    gridY: 5.5,
+    path: [],
+    taskState: 'SERVING_TABLE',
+    taskTimer: 2.2,
+    carryingDrinkColor: '#22d3ee',
+    drinksServed: 9,
+    guestsCheckedIn: 0,
+    uniformColor: '#db2777',
+    hairColor: '#7c2d12',
+    actionBubble: '🍾',
+    bubbleTimer: 4,
+  },
+];
+
