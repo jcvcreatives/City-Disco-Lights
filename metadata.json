@@ -1,0 +1,6 @@
+{
+  "name": "Neon Nights: Nightclub Tycoon",
+  "description": "Isometric 2.5D social nightclub-management simulation game with multi-floor vertical expansion, tiered mixology, responsive neon dance grids, and A* guest AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
