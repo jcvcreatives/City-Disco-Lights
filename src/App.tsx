@@ -46,7 +46,13 @@ import {
   StaffMemberAgent,
   VIP_HOTSPOT_ITEMS,
 } from './types/game';
-import { canPlaceItem, findGridPath, getCatalogItem } from './utils/pathfinding';
+import {
+  buildStaffStationPath,
+  canPlaceItem,
+  DOOR_COORD,
+  getCatalogItem,
+  STAIRS_COORD,
+} from './utils/pathfinding';
 
 type GameScreenState = 'TITLE' | 'PLAYING';
 type BottomDrawerTab = 'BUILD' | 'DRINKS' | 'PARKING' | 'FRIENDS' | 'WORLD_MAP' | null;
@@ -624,17 +630,23 @@ export default function App() {
         ? 'Security'
         : 'Server';
 
+    // Spawn newly hired staff at the club front entrance (or Floor 2 staircase landing)
+    // and smoothly walk them along A* waypoints to their assigned station (gridX, gridY)
+    const entryX = floor === 1 ? DOOR_COORD.x : STAIRS_COORD.x;
+    const entryY = floor === 1 ? DOOR_COORD.y : STAIRS_COORD.y + 1;
+    const entryPath = buildStaffStationPath(placedItems, floor, entryX, entryY, gridX, gridY);
+
     const newStaff: StaffMemberAgent = {
       uid: `staff_${staffCat.role.toLowerCase()}_${Date.now()}_${Math.floor(Math.random() * 999)}`,
       catalogId: staffCat.id,
       role: staffCat.role,
       name: `${firstName} (${roleLabel})`,
       floor,
-      gridX,
-      gridY,
+      gridX: entryX,
+      gridY: entryY,
       postGridX: gridX,
       postGridY: gridY,
-      path: [],
+      path: entryPath,
       taskState:
         staffCat.role === 'BARTENDER'
           ? 'MIXING_DRINK'
@@ -647,8 +659,7 @@ export default function App() {
       guestsCheckedIn: 0,
       uniformColor: staffCat.uniformColor,
       hairColor: roleCount % 2 === 0 ? '#1e1b4b' : '#581c87',
-      actionBubble:
-        staffCat.role === 'BARTENDER' ? '🍸' : staffCat.role === 'BOUNCER' ? '🛡️' : '🍾',
+      actionBubble: '🚶',
       bubbleTimer: 3.5,
     };
 
@@ -661,7 +672,7 @@ export default function App() {
     soundEngine.playPlaceItem();
     floatingTextsRef.current.push({
       id: `hire_${performance.now()}`,
-      text: `HIRED ${firstName.toUpperCase()}! +${staffCat.hypeBonus}⚡`,
+      text: `HIRED ${firstName.toUpperCase()}! WALKING TO POST +${staffCat.hypeBonus}⚡`,
       floor,
       gridX,
       gridY,
@@ -672,37 +683,38 @@ export default function App() {
   };
 
   const handleGridClick = (coord: { x: number; y: number }) => {
-    // 1. Relocating an existing Staff Member to a new Isometric Grid Tile
+    // 1. Relocating an existing Staff Member to a new Isometric Grid Tile with smooth walking transition
     if (relocatingStaffUid) {
       setStaffMembers((prev) =>
         prev.map((s) => {
           if (s.uid !== relocatingStaffUid) return s;
-          const newPath =
-            s.floor === activeFloor
-              ? findGridPath(
-                  placedItems,
-                  activeFloor,
-                  Math.round(s.gridX),
-                  Math.round(s.gridY),
-                  coord.x,
-                  coord.y
-                )
-              : [];
+          const startX = s.floor === activeFloor ? s.gridX : STAIRS_COORD.x;
+          const startY = s.floor === activeFloor ? s.gridY : STAIRS_COORD.y + 1;
+          const newPath = buildStaffStationPath(
+            placedItems,
+            activeFloor,
+            startX,
+            startY,
+            coord.x,
+            coord.y
+          );
           return {
             ...s,
             floor: activeFloor,
-            gridX: s.floor === activeFloor ? s.gridX : coord.x,
-            gridY: s.floor === activeFloor ? s.gridY : coord.y,
+            gridX: startX,
+            gridY: startY,
             postGridX: coord.x,
             postGridY: coord.y,
             path: newPath,
+            actionBubble: '🚶',
+            bubbleTimer: 2.8,
           };
         })
       );
       soundEngine.playPlaceItem();
       floatingTextsRef.current.push({
         id: `reloc_${performance.now()}`,
-        text: `STATIONED AT (${coord.x}, ${coord.y})`,
+        text: `WALKING TO POST (${coord.x}, ${coord.y})`,
         floor: activeFloor,
         gridX: coord.x,
         gridY: coord.y,
@@ -2344,6 +2356,62 @@ export default function App() {
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => {
+                                // Smoothly walk staff member to their next role station on the grid
+                                const stationWaypoints =
+                                  member.role === 'BARTENDER'
+                                    ? [
+                                        { x: 1, y: 1 },
+                                        { x: 3, y: 1 },
+                                        { x: 1, y: 3 },
+                                      ]
+                                    : member.role === 'BOUNCER'
+                                    ? [
+                                        { x: 1, y: 9 },
+                                        { x: 3, y: 9 },
+                                        { x: 2, y: 7 },
+                                      ]
+                                    : [
+                                        { x: 6, y: 5 },
+                                        { x: 7, y: 7 },
+                                        { x: 2, y: 2 },
+                                      ];
+                                const nextTarget =
+                                  stationWaypoints.find(
+                                    (wp) =>
+                                      Math.hypot(
+                                        wp.x - member.postGridX,
+                                        wp.y - member.postGridY
+                                      ) > 0.8
+                                  ) || stationWaypoints[0];
+                                setStaffMembers((prev) =>
+                                  prev.map((s) => {
+                                    if (s.uid !== member.uid) return s;
+                                    return {
+                                      ...s,
+                                      postGridX: nextTarget.x,
+                                      postGridY: nextTarget.y,
+                                      path: buildStaffStationPath(
+                                        placedItems,
+                                        s.floor,
+                                        s.gridX,
+                                        s.gridY,
+                                        nextTarget.x,
+                                        nextTarget.y
+                                      ),
+                                      actionBubble: '🚶',
+                                      bubbleTimer: 2.8,
+                                    };
+                                  })
+                                );
+                                soundEngine.playPlaceItem();
+                              }}
+                              className="px-2 py-1 rounded-lg bg-emerald-500/25 border border-emerald-400/60 hover:bg-emerald-500/40 text-emerald-200 text-[10px] font-extrabold cursor-pointer"
+                              title="Walk smoothly to next station on grid"
+                            >
+                              Walk Post
+                            </button>
                             <button
                               onClick={() => {
                                 setActiveFloor(member.floor);

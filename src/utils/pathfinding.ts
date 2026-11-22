@@ -224,3 +224,48 @@ export function findGridPath(
   // Direct fallback if boxed in
   return [{ x: gx, y: gy }];
 }
+
+/**
+ * Builds a guaranteed non-empty isometric waypoint path for a staff member
+ * walking from their current interpolated (startX, startY) to a destination station (goalX, goalY).
+ * Routes around obstacles via A* and always terminates smoothly at (goalX, goalY) without instant jumping.
+ */
+export function buildStaffStationPath(
+  placedItems: PlacedItem[],
+  floor: 1 | 2,
+  startX: number,
+  startY: number,
+  goalX: number,
+  goalY: number
+): Array<{ x: number; y: number }> {
+  const dist = Math.hypot(goalX - startX, goalY - startY);
+  if (dist < 0.04) {
+    return [];
+  }
+
+  const aStarPath = findGridPath(placedItems, floor, startX, startY, goalX, goalY);
+  const waypoints: Array<{ x: number; y: number }> = [...aStarPath];
+
+  const lastWp = waypoints.length > 0 ? waypoints[waypoints.length - 1] : { x: startX, y: startY };
+  if (Math.hypot(goalX - lastWp.x, goalY - lastWp.y) > 0.05) {
+    waypoints.push({ x: goalX, y: goalY });
+  }
+
+  // If start and goal were adjacent or on non-walkable counter tiles where A* returned a single jump,
+  // subdivide long segments so the staff member visibly walks across each isometric tile transition.
+  if (waypoints.length === 1 && dist > 1.25) {
+    const steps = Math.min(8, Math.max(2, Math.ceil(dist)));
+    const smoothWaypoints: Array<{ x: number; y: number }> = [];
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      smoothWaypoints.push({
+        x: Number((startX + (goalX - startX) * t).toFixed(2)),
+        y: Number((startY + (goalY - startY) * t).toFixed(2)),
+      });
+    }
+    return smoothWaypoints;
+  }
+
+  return waypoints;
+}
+

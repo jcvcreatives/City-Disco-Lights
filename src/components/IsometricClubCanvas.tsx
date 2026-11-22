@@ -11,6 +11,7 @@ import {
   StaffMemberAgent,
 } from '../types/game';
 import {
+  buildStaffStationPath,
   canPlaceItem,
   DOOR_COORD,
   findGridPath,
@@ -570,13 +571,18 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           if (staff.bubbleTimer <= 0) staff.actionBubble = null;
         }
 
-        // Smooth 60fps interpolation along A* waypoints for patrolling Waiters / reassigned staff
+        // Smooth 60fps walking transition along A* waypoints between stations
         if (staff.path.length > 0) {
           const nextWp = staff.path[0];
           const dx = nextWp.x - staff.gridX;
           const dy = nextWp.y - staff.gridY;
           const dist = Math.hypot(dx, dy);
-          const speed = 2.65 * dt;
+          const speed = 2.35 * dt;
+          staff.walkCycle = (staff.walkCycle ?? 0) + dt * 14.5;
+          if (dist > 0.001) {
+            staff.facingX = dx / dist;
+            staff.facingY = dy / dist;
+          }
           if (dist <= speed) {
             staff.gridX = nextWp.x;
             staff.gridY = nextWp.y;
@@ -588,7 +594,25 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           continue;
         }
 
-        // Role-specific automated tasks when timer completes
+        // Guarantee zero instant jumping: if a staff member is away from their assigned post
+        // (and not a Waiter mid-delivery), smoothly pathfind back to (postGridX, postGridY)
+        if (
+          staff.role !== 'WAITER' &&
+          Math.hypot(staff.postGridX - staff.gridX, staff.postGridY - staff.gridY) > 0.12 &&
+          staff.taskTimer <= 0.35
+        ) {
+          staff.path = buildStaffStationPath(
+            items,
+            staff.floor,
+            staff.gridX,
+            staff.gridY,
+            staff.postGridX,
+            staff.postGridY
+          );
+          if (staff.path.length > 0) continue;
+        }
+
+        // Role-specific automated tasks & station-to-station patrol walks when timer completes
         if (staff.taskTimer <= 0) {
           if (staff.role === 'BARTENDER') {
             // Speed up any guest currently ordering a drink on this floor & generate automated flair mix bonus
@@ -606,8 +630,41 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             staff.actionBubble = '🍸';
             staff.bubbleTimer = 2.2;
             staff.taskState = 'MIXING_DRINK';
-            staff.taskTimer = 3.6 + Math.random() * 1.6;
+            staff.taskTimer = 3.2 + Math.random() * 1.4;
             props.onStaffTaskComplete?.(staff.uid, 'SERVED_DRINK');
+
+            // Smooth station transition along the bar counter between pours
+            const floorBars = items.filter(
+              (it) =>
+                it.floor === staff.floor &&
+                getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
+            );
+            const atAssignedPost =
+              Math.hypot(staff.postGridX - staff.gridX, staff.postGridY - staff.gridY) < 0.25;
+            if (atAssignedPost && floorBars.length > 0) {
+              const barUnit = floorBars[staff.drinksServed % floorBars.length];
+              const patrolX = Math.max(0, Math.min(GRID_SIZE - 1, barUnit.gridX + 1));
+              const patrolY = Math.max(0, Math.min(GRID_SIZE - 1, barUnit.gridY + 1));
+              if (Math.hypot(patrolX - staff.gridX, patrolY - staff.gridY) > 0.4) {
+                staff.path = buildStaffStationPath(
+                  items,
+                  staff.floor,
+                  staff.gridX,
+                  staff.gridY,
+                  patrolX,
+                  patrolY
+                );
+              }
+            } else if (!atAssignedPost) {
+              staff.path = buildStaffStationPath(
+                items,
+                staff.floor,
+                staff.gridX,
+                staff.gridY,
+                staff.postGridX,
+                staff.postGridY
+              );
+            }
 
             if (fts.length < 18) {
               fts.push({
@@ -634,8 +691,28 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             staff.actionBubble = '🛡️';
             staff.bubbleTimer = 2.4;
             staff.taskState = 'CHECKING_ID';
-            staff.taskTimer = 4.2 + Math.random() * 1.5;
+            staff.taskTimer = 3.6 + Math.random() * 1.4;
             props.onStaffTaskComplete?.(staff.uid, 'CHECKED_IN_GUEST');
+
+            // Smooth security patrol transition between assigned post and front rope entrance
+            const atPost =
+              Math.hypot(staff.postGridX - staff.gridX, staff.postGridY - staff.gridY) < 0.25;
+            const patrolTarget = atPost
+              ? {
+                  x: Math.max(0, Math.min(GRID_SIZE - 1, DOOR_COORD.x + (staff.guestsCheckedIn % 2 === 0 ? 1 : 0))),
+                  y: Math.max(0, Math.min(GRID_SIZE - 1, DOOR_COORD.y - (staff.guestsCheckedIn % 2 === 0 ? 0 : 1))),
+                }
+              : { x: staff.postGridX, y: staff.postGridY };
+            if (Math.hypot(patrolTarget.x - staff.gridX, patrolTarget.y - staff.gridY) > 0.35) {
+              staff.path = buildStaffStationPath(
+                items,
+                staff.floor,
+                staff.gridX,
+                staff.gridY,
+                patrolTarget.x,
+                patrolTarget.y
+              );
+            }
 
             if (fts.length < 18) {
               fts.push({
@@ -665,7 +742,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               staff.taskState === 'IDLE_STATION' ||
               staff.taskState === 'RETURNING_TO_BAR'
             ) {
-              // Pick up glowing drink tray from bar and A* pathfind to a Lounge Table or Dancing Guest
+              // Pick up glowing drink tray from bar and A* pathfind to a Lounge Table or assigned post
               staff.carryingDrinkColor = drink.color;
               staff.actionBubble = '🍸';
               staff.bubbleTimer = 2.5;
@@ -674,7 +751,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 floorSeats.length > 0
                   ? floorSeats[Math.floor(Math.random() * floorSeats.length)]
                   : { gridX: staff.postGridX, gridY: staff.postGridY };
-              staff.path = findGridPath(
+              staff.path = buildStaffStationPath(
                 items,
                 staff.floor,
                 staff.gridX,
@@ -717,7 +794,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                   ? floorBars[0]
                   : { gridX: 2, gridY: 1 };
               staff.taskState = 'RETURNING_TO_BAR';
-              staff.path = findGridPath(
+              staff.path = buildStaffStationPath(
                 items,
                 staff.floor,
                 staff.gridX,
@@ -3143,7 +3220,8 @@ function drawIllustratedStaff(
 
 /**
  * Draws an interactive hired Staff Member (Bartender, Bouncer, or Waiter) on the isometric grid
- * with role-specific uniform, cocktail shaker / sunglasses / drink tray, and station ring.
+ * with a 60fps multi-limb Chibi walking stride animation, glowing dashed waypoint path trail,
+ * target station beacon ring, and role-specific props (cocktail shaker, sunglasses, drink tray).
  */
 function drawHiredStaffAgent(
   ctx: CanvasRenderingContext2D,
@@ -3159,25 +3237,110 @@ function drawHiredStaffAgent(
   const px = originX + (staff.gridX - staff.gridY) * (tileW / 2);
   const py = originY + (staff.gridX + staff.gridY) * (tileH / 2);
   const isWalking = staff.path.length > 0;
+  const walkPhase = staff.walkCycle ?? t * 13 + (staff.gridX + staff.gridY) * 3.5;
+
+  // Stride cycle & vertical bounce
+  const strideSin = isWalking ? Math.sin(walkPhase) : 0;
+  const strideCos = isWalking ? Math.cos(walkPhase) : 0;
   const bounce =
     (isWalking
-      ? Math.abs(Math.sin(t * 9 + staff.gridX * 3)) * 3.5
-      : Math.sin(t * 4.5 + staff.gridX) * 1.4) * scale;
+      ? Math.abs(strideSin) * 4.2
+      : Math.sin(t * 4.5 + staff.gridX) * 1.3) * scale;
 
-  // 1. Glowing Role Station Halo under Staff Member
+  // Compute isometric screen-space movement direction for body lean & gaze offset
+  const fx = staff.facingX ?? 0;
+  const fy = staff.facingY ?? 1;
+  const isoDirX = fx - fy;
+  const leanX = isWalking ? Math.max(-2.6, Math.min(2.6, isoDirX * 1.8)) * scale : 0;
+
+  const roleAccent =
+    staff.role === 'BARTENDER'
+      ? '#38bdf8'
+      : staff.role === 'BOUNCER'
+      ? '#facc15'
+      : '#f472b6';
+
+  ctx.save();
+
+  // 0. Glowing Dashed Waypoint Trail & Destination Station Beacon while Walking
+  if (isWalking && staff.path.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = roleAccent;
+    ctx.lineWidth = 2 * scale;
+    ctx.setLineDash([4 * scale, 4 * scale]);
+    ctx.lineDashOffset = -t * 28 * scale;
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    for (let i = 0; i < staff.path.length; i++) {
+      const wp = staff.path[i];
+      const wx = originX + (wp.x - wp.y) * (tileW / 2);
+      const wy = originY + (wp.x + wp.y) * (tileH / 2);
+      ctx.lineTo(wx, wy);
+    }
+    ctx.stroke();
+
+    // Destination station beacon ring at the end of the path
+    const destWp = staff.path[staff.path.length - 1];
+    const destX = originX + (destWp.x - destWp.y) * (tileW / 2);
+    const destY = originY + (destWp.x + destWp.y) * (tileH / 2);
+    const pulseRadius = (8.5 + Math.sin(t * 7) * 2.2) * scale;
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.8;
+    ctx.strokeStyle = roleAccent;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.beginPath();
+    ctx.ellipse(destX, destY, pulseRadius, pulseRadius * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = roleAccent;
+    ctx.beginPath();
+    ctx.arc(destX, destY, 2.4 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Animated footstep dust/neon ripple puffs behind walking feet
+    const stepRipple = ((walkPhase % Math.PI) / Math.PI);
+    ctx.save();
+    ctx.strokeStyle = roleAccent;
+    ctx.globalAlpha = Math.max(0, 0.55 * (1 - stepRipple));
+    ctx.lineWidth = 1.3 * scale;
+    ctx.beginPath();
+    ctx.ellipse(
+      px - leanX * 0.8,
+      py + 1 * scale,
+      (4 + stepRipple * 8) * scale,
+      (2 + stepRipple * 4) * scale,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 1. Glowing Role Station Halo & Dynamic Ground Shadow under Staff Member
   const ringColor =
     isRelocating
       ? '#22d3ee'
       : staff.role === 'BARTENDER'
-      ? 'rgba(56, 189, 248, 0.55)'
+      ? 'rgba(56, 189, 248, 0.58)'
       : staff.role === 'BOUNCER'
-      ? 'rgba(250, 204, 21, 0.55)'
-      : 'rgba(244, 114, 182, 0.55)';
+      ? 'rgba(250, 204, 21, 0.58)'
+      : 'rgba(244, 114, 182, 0.58)';
 
-  ctx.save();
-  ctx.fillStyle = 'rgba(15, 10, 30, 0.45)';
+  const shadowScale = isWalking ? 1 - Math.abs(strideSin) * 0.16 : 1;
+  ctx.fillStyle = 'rgba(15, 10, 30, 0.48)';
   ctx.beginPath();
-  ctx.ellipse(px, py, 10.5 * scale, 5.2 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(
+    px,
+    py,
+    10.5 * scale * shadowScale,
+    5.2 * scale * shadowScale,
+    0,
+    0,
+    Math.PI * 2
+  );
   ctx.fill();
 
   ctx.strokeStyle = ringColor;
@@ -3186,74 +3349,205 @@ function drawHiredStaffAgent(
   ctx.ellipse(px, py, 11.5 * scale, 5.8 * scale, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // 2. Legs & Shoes
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 3.6 * scale;
+  // 2. Animated Multi-Limb Walking Stride (Left & Right Legs + Sneakers)
+  const leftStrideX = strideSin * 4.6 * scale;
+  const rightStrideX = -strideSin * 4.6 * scale;
+  const leftFootLift = isWalking ? Math.max(0, strideCos) * 3.8 * scale : 0;
+  const rightFootLift = isWalking ? Math.max(0, -strideCos) * 3.8 * scale : 0;
+
+  const hipY = py - 12.5 * scale - bounce;
+  const leftFootX = px - 3.4 * scale + leftStrideX;
+  const leftFootY = py - 1.2 * scale - leftFootLift;
+  const rightFootX = px + 3.4 * scale + rightStrideX;
+  const rightFootY = py - 1.2 * scale - rightFootLift;
+
+  // Thick Cel-Shaded Dark Outline Legs
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4.6 * scale;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(px - 3.2 * scale, py - 13 * scale - bounce);
-  ctx.lineTo(px - 3.6 * scale, py - 1 * scale);
-  ctx.moveTo(px + 3.2 * scale, py - 13 * scale - bounce);
-  ctx.lineTo(px + 3.6 * scale, py - 1 * scale);
+  ctx.moveTo(px - 3.1 * scale + leanX * 0.4, hipY);
+  ctx.lineTo(leftFootX, leftFootY);
+  ctx.moveTo(px + 3.1 * scale + leanX * 0.4, hipY);
+  ctx.lineTo(rightFootX, rightFootY);
   ctx.stroke();
 
-  // 3. Role-Specific Torso / Uniform
+  // Inner Pant Fill
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 2.6 * scale;
+  ctx.beginPath();
+  ctx.moveTo(px - 3.1 * scale + leanX * 0.4, hipY);
+  ctx.lineTo(leftFootX, leftFootY);
+  ctx.moveTo(px + 3.1 * scale + leanX * 0.4, hipY);
+  ctx.lineTo(rightFootX, rightFootY);
+  ctx.stroke();
+
+  // Stylized Chibi Sneakers at Each Foot
+  for (const foot of [
+    { x: leftFootX, y: leftFootY },
+    { x: rightFootX, y: rightFootY },
+  ]) {
+    fillStrokeRoundedRect(
+      ctx,
+      foot.x - 2.6 * scale,
+      foot.y - 1.8 * scale,
+      5.2 * scale,
+      3.2 * scale,
+      1.3 * scale,
+      '#f8fafc',
+      INK,
+      1.3 * scale
+    );
+  }
+
+  // 3. Role-Specific Chibi Torso / Uniform with Directional Walking Lean
   const torsoW = (staff.role === 'BOUNCER' ? 16.5 : 14.5) * scale;
+  const torsoX = px - torsoW / 2 + leanX;
+  const torsoY = py - 26.5 * scale - bounce;
   fillStrokeRoundedRect(
     ctx,
-    px - torsoW / 2,
-    py - 28.5 * scale - bounce,
+    torsoX,
+    torsoY,
     torsoW,
-    16.5 * scale,
+    15 * scale,
     4.5 * scale,
     staff.uniformColor,
     INK,
-    1.7 * scale
+    2.0 * scale
   );
+
+  // Opposite Arm Swing during Walking + Stylized Blocky Chibi Hands
+  const armSwing = isWalking ? -strideSin * 4.2 * scale : 0;
 
   // Role uniform accents (Vest lapels / Gold security badge / Waiter apron)
   if (staff.role === 'BARTENDER') {
-    // Bartender dark apron & shaker arm motion
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(px - 4.5 * scale, py - 21 * scale - bounce, 9 * scale, 8.5 * scale);
-    // Silver Cocktail Shaker in hand
-    const shakeOffset = Math.sin(t * 14) * 2.5 * scale;
+    // Bartender dark apron
     fillStrokeRoundedRect(
       ctx,
-      px + 8 * scale,
-      py - 26 * scale - bounce + shakeOffset,
+      px - 4.5 * scale + leanX,
+      py - 20 * scale - bounce,
+      9 * scale,
+      7.5 * scale,
+      1.5 * scale,
+      '#1e293b',
+      INK,
+      1.2 * scale
+    );
+    // Left swinging arm + blocky hand
+    const leftHandX = px - 9 * scale + leanX + armSwing;
+    const leftHandY = py - 17 * scale - bounce;
+    ctx.strokeStyle = staff.uniformColor;
+    ctx.lineWidth = 3 * scale;
+    ctx.beginPath();
+    ctx.moveTo(px - 6.5 * scale + leanX, py - 23 * scale - bounce);
+    ctx.lineTo(leftHandX, leftHandY);
+    ctx.stroke();
+    fillStrokeRoundedRect(
+      ctx,
+      leftHandX - 2 * scale,
+      leftHandY - 2 * scale,
+      4 * scale,
+      4 * scale,
+      1.2 * scale,
+      '#f5cba7',
+      INK,
+      1.3 * scale
+    );
+
+    // Right arm holding Silver Cocktail Shaker
+    const shakeOffset = (isWalking ? strideCos * 2.2 : Math.sin(t * 14) * 2.5) * scale;
+    fillStrokeRoundedRect(
+      ctx,
+      px + 7.5 * scale + leanX - armSwing * 0.4,
+      py - 25.5 * scale - bounce + shakeOffset,
       4.5 * scale,
       8.5 * scale,
       2 * scale,
       '#e2e8f0',
       INK,
-      1.2 * scale
+      1.4 * scale
     );
   } else if (staff.role === 'BOUNCER') {
-    // Gold Security Shield Pin & VIP Earpiece cord
+    // Gold Security Shield Pin
     ctx.fillStyle = '#facc15';
     ctx.beginPath();
-    ctx.arc(px + 3.8 * scale, py - 23.5 * scale - bounce, 2.2 * scale, 0, Math.PI * 2);
+    ctx.arc(px + 3.8 * scale + leanX, py - 22.5 * scale - bounce, 2.2 * scale, 0, Math.PI * 2);
     ctx.fill();
-    // Crossed muscular arms
-    ctx.strokeStyle = '#1e1b4b';
-    ctx.lineWidth = 3.6 * scale;
-    ctx.beginPath();
-    ctx.moveTo(px - 7 * scale, py - 21 * scale - bounce);
-    ctx.lineTo(px + 7 * scale, py - 20 * scale - bounce);
-    ctx.stroke();
-  } else if (staff.role === 'WAITER') {
-    // Waiter white bistro apron + Raised Silver Serving Tray with Glowing Neon Drink
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(px - 4.5 * scale, py - 19.5 * scale - bounce, 9 * scale, 7 * scale);
 
-    // Extended Serving Arm + Silver Tray
-    const trayX = px + 11.5 * scale;
-    const trayY = py - 25.5 * scale - bounce;
+    if (isWalking) {
+      // Dynamic security patrol swinging arms with blocky Chibi hands
+      for (const side of [-1, 1]) {
+        const handX = px + side * 9.5 * scale + leanX + side * armSwing;
+        const handY = py - 16.5 * scale - bounce - side * armSwing * 0.25;
+        ctx.strokeStyle = '#1e1b4b';
+        ctx.lineWidth = 3.6 * scale;
+        ctx.beginPath();
+        ctx.moveTo(px + side * 7.2 * scale + leanX, py - 23 * scale - bounce);
+        ctx.lineTo(handX, handY);
+        ctx.stroke();
+        fillStrokeRoundedRect(
+          ctx,
+          handX - 2.2 * scale,
+          handY - 2.2 * scale,
+          4.4 * scale,
+          4.4 * scale,
+          1.3 * scale,
+          '#f5cba7',
+          INK,
+          1.3 * scale
+        );
+      }
+    } else {
+      // Crossed muscular arms at station
+      ctx.strokeStyle = '#1e1b4b';
+      ctx.lineWidth = 3.8 * scale;
+      ctx.beginPath();
+      ctx.moveTo(px - 7 * scale, py - 20.5 * scale - bounce);
+      ctx.lineTo(px + 7 * scale, py - 19.5 * scale - bounce);
+      ctx.stroke();
+    }
+  } else if (staff.role === 'WAITER') {
+    // Waiter white bistro apron
+    fillStrokeRoundedRect(
+      ctx,
+      px - 4.5 * scale + leanX,
+      py - 19 * scale - bounce,
+      9 * scale,
+      6.8 * scale,
+      1.5 * scale,
+      '#f8fafc',
+      INK,
+      1.2 * scale
+    );
+
+    // Left counter-balancing arm + blocky Chibi hand while walking
+    const leftHandX = px - 8.5 * scale + leanX + armSwing;
+    const leftHandY = py - 17 * scale - bounce;
     ctx.strokeStyle = staff.uniformColor;
     ctx.lineWidth = 2.8 * scale;
     ctx.beginPath();
-    ctx.moveTo(px + 6 * scale, py - 22 * scale - bounce);
+    ctx.moveTo(px - 6 * scale + leanX, py - 22.5 * scale - bounce);
+    ctx.lineTo(leftHandX, leftHandY);
+    ctx.stroke();
+    fillStrokeRoundedRect(
+      ctx,
+      leftHandX - 1.9 * scale,
+      leftHandY - 1.9 * scale,
+      3.8 * scale,
+      3.8 * scale,
+      1.2 * scale,
+      '#f5cba7',
+      INK,
+      1.2 * scale
+    );
+
+    // Extended Serving Arm + Stabilized Silver Tray
+    const trayX = px + 11.5 * scale + leanX - armSwing * 0.25;
+    const trayY = py - 25 * scale - bounce * 0.75;
+    ctx.strokeStyle = staff.uniformColor;
+    ctx.lineWidth = 2.8 * scale;
+    ctx.beginPath();
+    ctx.moveTo(px + 6 * scale + leanX, py - 21.5 * scale - bounce);
     ctx.lineTo(trayX, trayY + 2 * scale);
     ctx.stroke();
 
@@ -3262,11 +3556,10 @@ function drawHiredStaffAgent(
     ctx.ellipse(trayX, trayY, 6.5 * scale, 3 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.2 * scale;
+    ctx.lineWidth = 1.3 * scale;
     ctx.stroke();
 
     // Glowing Drink Glass on Waiter's Tray
-    ctx.fillStyle = staff.carryingDrinkColor || '#22d3ee';
     fillStrokeRoundedRect(
       ctx,
       trayX - 2.2 * scale,
@@ -3276,79 +3569,92 @@ function drawHiredStaffAgent(
       1.2 * scale,
       staff.carryingDrinkColor || '#22d3ee',
       INK,
-      1 * scale
+      1.1 * scale
     );
   }
 
-  // 4. Head & Face
+  // 4. Oversized Chibi Head & Expressive Face (1:1 Chibi head-to-torso ratio)
+  const headX = px + leanX * 1.15;
+  const headY = py - 35 * scale - bounce;
+  const headR = 8.4 * scale;
+
   ctx.fillStyle = '#f5cba7';
   ctx.beginPath();
-  ctx.arc(px, py - 35.5 * scale - bounce, 6.8 * scale, 0, Math.PI * 2);
+  ctx.arc(headX, headY, headR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.6 * scale;
+  ctx.lineWidth = 2.1 * scale;
   ctx.stroke();
 
+  const gazeShift = Math.max(-1.6, Math.min(1.6, isoDirX * 1.1)) * scale;
   if (staff.role === 'BOUNCER') {
     // Cool dark Bouncer Sunglasses
     fillStrokeRoundedRect(
       ctx,
-      px - 5.5 * scale,
-      py - 37.5 * scale - bounce,
-      11 * scale,
-      3.8 * scale,
-      1 * scale,
+      headX - 6.2 * scale + gazeShift * 0.5,
+      headY - 2 * scale,
+      12.4 * scale,
+      4.2 * scale,
+      1.2 * scale,
       '#090518',
       '#38bdf8',
-      1 * scale
+      1.2 * scale
     );
   } else {
-    // Expressive eyes
+    // Expressive round black Chibi eyes with white specular dot
     ctx.fillStyle = INK;
     ctx.beginPath();
-    ctx.arc(px - 2.2 * scale, py - 35.5 * scale - bounce, 1.1 * scale, 0, Math.PI * 2);
-    ctx.arc(px + 2.2 * scale, py - 35.5 * scale - bounce, 1.1 * scale, 0, Math.PI * 2);
+    ctx.arc(headX - 2.8 * scale + gazeShift, headY - 0.3 * scale, 1.6 * scale, 0, Math.PI * 2);
+    ctx.arc(headX + 2.8 * scale + gazeShift, headY - 0.3 * scale, 1.6 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(headX - 3.2 * scale + gazeShift, headY - 0.8 * scale, 0.55 * scale, 0, Math.PI * 2);
+    ctx.arc(headX + 2.4 * scale + gazeShift, headY - 0.8 * scale, 0.55 * scale, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Hair
+  // Bold Outline-Rich Hair
   ctx.fillStyle = staff.hairColor;
   ctx.beginPath();
-  ctx.arc(px, py - 37.5 * scale - bounce, 7.1 * scale, Math.PI * 0.92, Math.PI * 0.08);
+  ctx.arc(headX, headY - 1.8 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.4 * scale;
+  ctx.lineWidth = 1.9 * scale;
   ctx.stroke();
 
-  // 5. Role Tag Pill & Task Bubble overhead
-  const roleTag =
-    staff.role === 'BARTENDER'
-      ? 'MIX'
-      : staff.role === 'BOUNCER'
-      ? 'SEC'
-      : 'WAIT';
-  const badgeColor =
-    staff.role === 'BARTENDER'
-      ? '#0284c7'
-      : staff.role === 'BOUNCER'
-      ? '#4c1d95'
-      : '#be185d';
+  // 5. Role Tag Pill & Walking Transition Status Indicator Overhead
+  const roleTag = isWalking
+    ? 'WALK'
+    : staff.role === 'BARTENDER'
+    ? 'MIX'
+    : staff.role === 'BOUNCER'
+    ? 'SEC'
+    : 'WAIT';
+  const badgeColor = isWalking
+    ? '#0d9488'
+    : staff.role === 'BARTENDER'
+    ? '#0284c7'
+    : staff.role === 'BOUNCER'
+    ? '#4c1d95'
+    : '#be185d';
 
   fillStrokeRoundedRect(
     ctx,
-    px - 12 * scale,
-    py - 51 * scale - bounce,
-    24 * scale,
-    10 * scale,
+    headX - 13.5 * scale,
+    headY - 19 * scale,
+    27 * scale,
+    10.5 * scale,
     3.5 * scale,
     badgeColor,
-    '#ffffff',
-    1.1 * scale
+    isWalking ? '#5eead4' : '#ffffff',
+    1.2 * scale
   );
   ctx.fillStyle = '#ffffff';
   ctx.font = `800 ${Math.max(7, Math.round(7.5 * scale))}px "JetBrains Mono", monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText(roleTag, px, py - 43.5 * scale - bounce);
+  ctx.fillText(roleTag, headX, headY - 11.5 * scale);
 
   ctx.restore();
 }

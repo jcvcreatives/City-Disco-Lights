@@ -672,6 +672,9 @@ export interface StaffMemberAgent {
   hairColor: string;
   actionBubble: string | null;
   bubbleTimer: number;
+  walkCycle?: number;
+  facingX?: number;
+  facingY?: number;
 }
 
 export const STAFF_CATALOG: StaffCatalogItem[] = [
