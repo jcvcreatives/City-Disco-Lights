@@ -7,6 +7,15 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     base: './',
+    build: {
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/app.bundle.js',
+          chunkFileNames: 'assets/[name].bundle.js',
+          assetFileNames: 'assets/app.bundle.[ext]',
+        },
+      },
+    },
     plugins: [
       react(),
       tailwindcss(),
@@ -25,6 +34,19 @@ export default defineConfig(() => {
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
+          }
+          // Copy built production bundle to /docs and /dist/assets -> /assets so GitHub Pages
+          // works out-of-the-box even when set to "Deploy from a branch (main / root or /docs)"!
+          if (fs.existsSync(distDir)) {
+            const docsDir = path.resolve(__dirname, 'docs');
+            fs.cpSync(distDir, docsDir, {recursive: true, force: true});
+            fs.writeFileSync(path.resolve(docsDir, '.nojekyll'), '');
+            fs.writeFileSync(path.resolve(distDir, '.nojekyll'), '');
+            const distAssetsBundle = path.resolve(distDir, 'assets');
+            const rootAssetsBundle = path.resolve(__dirname, 'assets');
+            if (fs.existsSync(distAssetsBundle)) {
+              fs.cpSync(distAssetsBundle, rootAssetsBundle, {recursive: true, force: true});
+            }
           }
         },
       },

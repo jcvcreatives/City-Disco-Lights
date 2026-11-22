@@ -19,6 +19,48 @@
   <body style="background-color: #090518; color: #f8fafc; margin: 0;">
     <div id="root"></div>
     <script type="module" src="./src/main.tsx"></script>
+    <script>
+      // Automatic GitHub Pages Branch-Deploy Loader:
+      // If GitHub Pages is configured to "Deploy from a branch (main / root)", browsers cannot
+      // execute raw ./src/main.tsx directly. This fallback automatically injects the pre-compiled
+      // production bundle from ./dist/assets/app.bundle.js & ./dist/assets/app.bundle.css!
+      (function () {
+        var isStaticHost =
+          window.location.hostname.indexOf('github.io') !== -1 ||
+          window.location.protocol === 'file:';
+        function injectPrebuiltBundle() {
+          if (document.getElementById('gh-pages-fallback-bundle')) return;
+          var scripts = document.getElementsByTagName('script');
+          for (var i = 0; i < scripts.length; i++) {
+            if (scripts[i].src && scripts[i].src.indexOf('app.bundle.js') !== -1) {
+              return;
+            }
+          }
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = './dist/assets/app.bundle.css';
+          document.head.appendChild(link);
+
+          var s = document.createElement('script');
+          s.id = 'gh-pages-fallback-bundle';
+          s.type = 'module';
+          s.src = './dist/assets/app.bundle.js';
+          document.body.appendChild(s);
+        }
+        if (isStaticHost) {
+          injectPrebuiltBundle();
+        } else {
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              var root = document.getElementById('root');
+              if (root && root.childNodes.length === 0) {
+                injectPrebuiltBundle();
+              }
+            }, 900);
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
 
