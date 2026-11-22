@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="theme-color" content="#090518" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Neon Nights: Nightclub Tycoon</title>
+    <meta name="description" content="Isometric 2.5D social nightclub-management simulation game with multi-floor vertical expansion, tiered mixology, responsive neon dance grids, and A* guest AI." />
+    <meta property="og:title" content="Neon Nights: Nightclub Tycoon" />
+    <meta property="og:description" content="Isometric 2.5D social nightclub-management simulation game with multi-floor vertical expansion, tiered mixology, responsive neon dance grids, and A* guest AI." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body style="background-color: #090518; color: #f8fafc; margin: 0;">
+    <div id="root"></div>
+    <script>
+      window.__NEON_NIGHTS_BUILD__ = '20261122-v5';
+      // Automatic GitHub Pages & Static Host Bundle Loader with Cache-Busting:
+      // In AI Studio dev server, Vite compiles ./src/main.tsx on the fly.
+      // When pushed to GitHub Pages (e.g. main / root or /docs), ./assets/app.bundle.js
+      // is always kept in sync with the latest build and loaded with a fresh cache-buster
+      // so GitHub Pages CDN and browsers never serve a stale cached game bundle.
+      (function () {
+        var isStaticHost =
+          window.location.hostname.indexOf('github.io') !== -1 ||
+          window.location.protocol === 'file:';
+
+        function loadPrebuiltBundle() {
+          if (document.getElementById('gh-pages-runtime-bundle')) return;
+          var existingScripts = document.getElementsByTagName('script');
+          for (var i = 0; i < existingScripts.length; i++) {
+            if (existingScripts[i].src && existingScripts[i].src.indexOf('app.bundle.js') !== -1) {
+              return;
+            }
+          }
+
+          var versionBust = (window.__NEON_NIGHTS_BUILD__ || 'latest') + '_' + Date.now();
+          var cssPaths = [
+            './assets/app.bundle.css?v=' + versionBust,
+            './docs/assets/app.bundle.css?v=' + versionBust,
+            './dist/assets/app.bundle.css?v=' + versionBust
+          ];
+          var jsPaths = [
+            './assets/app.bundle.js?v=' + versionBust,
+            './docs/assets/app.bundle.js?v=' + versionBust,
+            './dist/assets/app.bundle.js?v=' + versionBust
+          ];
+
+          function tryLoadCss(idx) {
+            if (idx >= cssPaths.length) return;
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = cssPaths[idx];
+            link.onerror = function () {
+              tryLoadCss(idx + 1);
+            };
+            document.head.appendChild(link);
+          }
+
+          function tryLoadJs(idx) {
+            if (idx >= jsPaths.length) return;
+            var s = document.createElement('script');
+            s.id = 'gh-pages-runtime-bundle';
+            s.type = 'module';
+            s.src = jsPaths[idx];
+            s.onerror = function () {
+              s.remove();
+              tryLoadJs(idx + 1);
+            };
+            document.body.appendChild(s);
+          }
+
+          tryLoadCss(0);
+          tryLoadJs(0);
+        }
+
+        if (isStaticHost) {
+          loadPrebuiltBundle();
+        } else {
+          // Dev server loads ./src/main.tsx; fallback if not running under Vite dev middleware
+          var devScript = document.createElement('script');
+          devScript.type = 'module';
+          devScript.src = './src/main.tsx';
+          devScript.onerror = function () {
+            loadPrebuiltBundle();
+          };
+          document.body.appendChild(devScript);
+
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              var root = document.getElementById('root');
+              if (root && root.childNodes.length === 0) {
+                loadPrebuiltBundle();
+              }
+            }, 900);
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
