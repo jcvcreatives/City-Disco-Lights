@@ -7,6 +7,7 @@ import {
   GitBranch,
   Info,
   Lock,
+  Palette,
   Plus,
   RotateCw,
   Trash2,
@@ -17,6 +18,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { soundEngine } from './audio/soundEngine';
+import { ArtStyleAssetStudioModal } from './components/ArtStyleAssetStudioModal';
 import { GitHubPublishModal } from './components/GitHubPublishModal';
 import { HypeBlastEvent, HypeBlastOverlay } from './components/HypeBlastOverlay';
 import {
@@ -305,9 +307,12 @@ export default function App() {
   const [cameraZoom, setCameraZoom] = useState<number>(1.0);
   const [cameraResetTick, setCameraResetTick] = useState<number>(0);
 
-  // Left Sidebar Modal, Technical Blueprint Modal & GitHub Publish Modal
+  // Left Sidebar Modal, Technical Blueprint Modal, Art Style Studio Modal & GitHub Publish Modal
   const [activeLeftModal, setActiveLeftModal] = useState<LeftModalTab>(null);
   const [isBlueprintOpen, setIsBlueprintOpen] = useState<boolean>(false);
+  const [isArtStudioOpen, setIsArtStudioOpen] = useState<boolean>(false);
+  const [classicHudMode, setClassicHudMode] = useState<boolean>(true);
+  const [isClubOpenStatus, setIsClubOpenStatus] = useState<boolean>(true);
   const [isGitHubModalOpen, setIsGitHubModalOpen] = useState<boolean>(false);
 
   // Quests, Live Alerts & Audio
@@ -1050,6 +1055,14 @@ export default function App() {
               </button>
 
               <button
+                onClick={() => setIsArtStudioOpen(true)}
+                className="px-4 py-3.5 rounded-2xl bg-gradient-to-b from-cyan-500 to-blue-700 hover:from-cyan-400 hover:to-blue-600 border-2 border-cyan-200 text-white font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-[0_5px_0_#1e3a8a] transition-all"
+              >
+                <Palette className="w-4 h-4" />
+                <span>2.5D Art &amp; Asset Studio</span>
+              </button>
+
+              <button
                 onClick={() => setIsBlueprintOpen(true)}
                 className="px-4 py-3.5 rounded-2xl bg-purple-950/85 hover:bg-purple-900 border-2 border-cyan-400/50 text-cyan-300 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition-colors"
               >
@@ -1113,17 +1126,33 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Dark Rounded XP Bar attached to Star */}
-                <div className="-ml-4 pl-6 pr-3 py-1.5 sm:py-2 bg-[#1b1630]/95 border-[2.5px] border-[#4c3f78] rounded-2xl shadow-xl min-w-[135px] sm:min-w-[230px]">
-                  <div className="relative w-full h-5 sm:h-6 bg-[#131024] rounded-xl overflow-hidden border border-[#2e264e] flex items-center">
+                {/* Dark Rounded XP Bar with Neon Cyan Border & Electric Blue Fill + Status "OPEN" Badge (image_5.png spec) */}
+                <div className="-ml-4 pl-6 pr-2.5 py-1.5 sm:py-2 bg-[#140e26]/95 border-2 border-cyan-400/80 rounded-2xl shadow-[0_4px_0_#150d2a,0_0_12px_rgba(34,211,238,0.25)] min-w-[175px] sm:min-w-[275px] flex items-center gap-2">
+                  <div className="relative flex-1 h-5 sm:h-6 bg-[#0d091a] rounded-xl overflow-hidden border border-cyan-500/40 flex items-center">
                     <div
-                      className="h-full bg-gradient-to-r from-indigo-600 via-purple-500 to-fuchsia-500 transition-all duration-300"
+                      className="h-full bg-gradient-to-r from-sky-600 via-cyan-400 to-blue-400 transition-all duration-300"
                       style={{ width: `${Math.min(100, (xp / xpToNextLevel) * 100)}%` }}
                     />
-                    <span className="absolute left-3 text-xs sm:text-sm font-bold text-slate-300 tracking-wide drop-shadow">
-                      XP
+                    <span className="absolute left-2.5 text-[11px] sm:text-xs font-black text-white tracking-wider drop-shadow-[0_1.5px_0_#150d2a]">
+                      XP {xp}/{xpToNextLevel}
                     </span>
                   </div>
+
+                  {/* Interactive Neon "OPEN" Status Badge (image_5.png Top HUD requirement) */}
+                  <button
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setIsClubOpenStatus((prev) => !prev);
+                    }}
+                    title="Toggle Club OPEN / VIP ONLY Status"
+                    className={`px-2 py-0.5 sm:py-1 rounded-lg border-2 border-[#150d2a] font-black text-[10px] sm:text-xs tracking-wider uppercase cursor-pointer shadow-[0_2px_0_#150d2a] transition-all ${
+                      isClubOpenStatus
+                        ? 'bg-gradient-to-b from-lime-400 to-emerald-600 text-slate-950 shadow-[0_0_10px_rgba(132,204,22,0.5)]'
+                        : 'bg-gradient-to-b from-pink-500 to-rose-700 text-white'
+                    }`}
+                  >
+                    {isClubOpenStatus ? 'OPEN' : 'VIP'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1268,6 +1297,15 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => setIsArtStudioOpen(true)}
+                  className="px-2.5 py-1 rounded-xl bg-[#140e26]/95 border-2 border-cyan-400/80 text-cyan-200 hover:bg-cyan-950 text-[11px] font-black flex items-center gap-1 cursor-pointer shadow-[0_3px_0_#150d2a]"
+                  title="Open 2.5D Art Direction, Chibi Asset Sheet & HUD Templates"
+                >
+                  <Palette className="w-3.5 h-3.5 text-fuchsia-400" />
+                  <span>Art &amp; Asset Studio</span>
+                </button>
+
+                <button
                   onClick={() => setIsGitHubModalOpen(true)}
                   className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-emerald-400/60 text-emerald-300 hover:bg-emerald-950 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
                   title="Publish Repo to GitHub Pages for Other Players"
@@ -1353,172 +1391,118 @@ export default function App() {
               MIDDLE ZONE: LEFT SIDEBAR SQUIRCLES + GREEN BUILD MODE BOX + LIVE EVENT BOX
              ----------------------------------------------------------------- */}
           <div className="flex-1 flex items-center justify-between relative my-1">
-            {/* LEFT SIDEBAR: 4 Illustrated Squircle Buttons matching IMG_1503.jpeg */}
-            <div className="flex flex-col gap-2.5 sm:gap-3.5 pointer-events-auto">
-              {/* 1. Quests (Clipboard with checkmarks + Red '!' badge) */}
-              <button
-                onClick={() => {
-                  soundEngine.playClick();
-                  setActiveLeftModal((m) => (m === 'QUESTS' ? null : 'QUESTS'));
-                }}
-                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#493875] to-[#2b204a] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
-              >
-                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-xs font-black flex items-center justify-center shadow">
-                  {unclaimedQuestCount > 0 ? unclaimedQuestCount : '!'}
-                </span>
-                {/* Illustrated Clipboard SVG */}
-                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
-                  <rect
-                    x="10"
-                    y="8"
-                    width="28"
-                    height="34"
-                    rx="4"
-                    fill="#d97706"
-                    stroke="#150d2a"
-                    strokeWidth="2.5"
-                  />
-                  <rect x="14" y="12" width="20" height="26" fill="#fef3c7" />
-                  <rect
-                    x="17"
-                    y="5"
-                    width="14"
-                    height="6"
-                    rx="2"
-                    fill="#94a3b8"
-                    stroke="#150d2a"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M17 19 L20 22 L25 16 M17 27 L20 30 L25 24"
-                    stroke="#16a34a"
-                    strokeWidth="2.5"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
-                  Quests
-                </span>
-              </button>
-
-              {/* 2. DJ Booth (Female DJ Avatar with Pink Headphones & Turntable) */}
-              <button
-                onClick={() => {
-                  soundEngine.playClick();
-                  setActiveLeftModal((m) => (m === 'DJ_BOOTH' ? null : 'DJ_BOOTH'));
-                }}
-                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#493875] to-[#2b204a] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
-              >
-                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
-                  {/* Headphones */}
-                  <path
-                    d="M13 22 A11 11 0 0 1 35 22"
-                    stroke="#ec4899"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <circle cx="13" cy="22" r="4" fill="#ec4899" stroke="#150d2a" strokeWidth="1.8" />
-                  <circle cx="35" cy="22" r="4" fill="#ec4899" stroke="#150d2a" strokeWidth="1.8" />
-                  {/* Head & Hair */}
-                  <circle cx="24" cy="21" r="8" fill="#fcd34d" stroke="#150d2a" strokeWidth="2.2" />
-                  <path d="M16 19 A8 8 0 0 1 32 19 Z" fill="#a21caf" />
-                  {/* Deck */}
-                  <rect
-                    x="10"
-                    y="31"
-                    width="28"
-                    height="9"
-                    rx="3"
-                    fill="#38bdf8"
-                    stroke="#150d2a"
-                    strokeWidth="2.2"
-                  />
-                  <circle cx="18" cy="35.5" r="3" fill="#1e1b4b" />
-                  <circle cx="30" cy="35.5" r="3" fill="#1e1b4b" />
-                </svg>
-                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] whitespace-nowrap">
-                  DJ Booth
-                </span>
-              </button>
-
-              {/* 3. Locked Vinyl Record (Playlists) with Padlock + Red Badge */}
+            {/* LEFT PANEL: Vertical array of action trackers (Genre, Bass, Dedicate + Quests) with colorful circular icons
+                and dark glossy rounded Playlist panel (matching image_5.png & IMG_1503.jpeg) */}
+            <div className="flex flex-col gap-2 pointer-events-auto">
+              {/* Dark Glossy Heavily Rounded Active Playlist Capsule (image_5.png Left Panel guideline) */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setActiveLeftModal((m) => (m === 'PLAYLISTS' ? null : 'PLAYLISTS'));
                 }}
-                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#352a54] to-[#211936] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
+                className="px-2.5 py-1.5 rounded-2xl bg-gradient-to-b from-[#241942]/95 to-[#120b24]/95 border-2 border-cyan-400/75 shadow-[0_4px_0_#150d2a,0_0_12px_rgba(34,211,238,0.25)] flex items-center gap-2 cursor-pointer text-left max-w-[155px] sm:max-w-[185px]"
               >
-                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-[10px] font-black flex items-center justify-center shadow">
-                  <Lock className="w-3 h-3" />
-                </span>
-                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
-                  <circle cx="24" cy="23" r="14" fill="#1e293b" stroke="#150d2a" strokeWidth="2.5" />
-                  <circle cx="24" cy="23" r="6" fill="#2dd4bf" />
-                  {/* Grey Padlock overlay */}
-                  <path
-                    d="M19 21 V17 A5 5 0 0 1 29 17 V21"
-                    stroke="#cbd5e1"
-                    strokeWidth="3"
-                    fill="none"
-                  />
-                  <rect
-                    x="16"
-                    y="21"
-                    width="16"
-                    height="13"
-                    rx="3"
-                    fill="#94a3b8"
-                    stroke="#150d2a"
-                    strokeWidth="2.2"
-                  />
-                  <circle cx="24" cy="27" r="2" fill="#150d2a" />
-                </svg>
-                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
-                  {level < 3 ? 'Locked' : 'Playlists'}
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-fuchsia-500 to-cyan-400 border-2 border-[#150d2a] flex items-center justify-center shrink-0 text-[11px] font-black text-white">
+                  ♫
+                </div>
+                <div className="truncate">
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-cyan-300 leading-none">
+                    NOW PLAYING
+                  </div>
+                  <div className="text-[11px] font-black text-white truncate drop-shadow-[0_1.5px_0_#150d2a]">
+                    {activePlaylist}
+                  </div>
+                </div>
+              </button>
+
+              {/* 1. GENRE (Colorful Circular Vinyl/Note Tracker) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveLeftModal((m) => (m === 'PLAYLISTS' ? null : 'PLAYLISTS'));
+                }}
+                className="group relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#140e26]/95 border-2 border-cyan-400/80 shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
+              >
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-b from-cyan-400 to-blue-600 border-2 border-[#150d2a] flex items-center justify-center shadow mb-0.5">
+                  <svg viewBox="0 0 32 32" className="w-6 h-6">
+                    <circle cx="16" cy="16" r="11" fill="#0f172a" stroke="#150d2a" strokeWidth="2" />
+                    <circle cx="16" cy="16" r="4.5" fill="#f43f5e" />
+                    <circle cx="16" cy="16" r="1.5" fill="#ffffff" />
+                  </svg>
+                </div>
+                <span className="text-[10px] sm:text-xs font-black text-white drop-shadow-[0_2px_0_#150d2a]">
+                  Genre
                 </span>
               </button>
 
-              {/* 4. Locked VIP Silhouette (Celebs) with Padlock + Red '!' Badge */}
+              {/* 2. BASS (Colorful Circular Subwoofer Woofer Cone Tracker) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveLeftModal((m) => (m === 'DJ_BOOTH' ? null : 'DJ_BOOTH'));
+                }}
+                className="group relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#140e26]/95 border-2 border-pink-400/80 shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
+              >
+                <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 rounded-full bg-amber-400 border-2 border-[#150d2a] text-slate-950 text-[9px] font-black shadow">
+                  {selectedBpm}
+                </span>
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-b from-fuchsia-400 to-purple-700 border-2 border-[#150d2a] flex items-center justify-center shadow mb-0.5">
+                  <svg viewBox="0 0 32 32" className="w-6 h-6">
+                    <circle cx="16" cy="16" r="10" fill="#1e1b4b" stroke="#150d2a" strokeWidth="2" />
+                    <circle cx="16" cy="16" r="6" fill="#38bdf8" stroke="#150d2a" strokeWidth="1.5" />
+                    <circle cx="16" cy="16" r="2.5" fill="#facc15" />
+                  </svg>
+                </div>
+                <span className="text-[10px] sm:text-xs font-black text-white drop-shadow-[0_2px_0_#150d2a]">
+                  Bass
+                </span>
+              </button>
+
+              {/* 3. DEDICATE (Colorful Circular Neon Heart/Dedication Tracker) */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setActiveLeftModal((m) => (m === 'CELEBS' ? null : 'CELEBS'));
                 }}
-                className="group relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#352a54] to-[#211936] border-[2.5px] border-[#150d2a] shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
+                className="group relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#140e26]/95 border-2 border-cyan-400/80 shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
               >
-                <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-xs font-black flex items-center justify-center shadow">
-                  !
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-[10px] font-black flex items-center justify-center shadow">
+                  ♥
                 </span>
-                <svg viewBox="0 0 48 48" className="w-9 h-9 sm:w-11 sm:h-11 -mb-1 drop-shadow">
-                  <circle cx="24" cy="17" r="8" fill="#4c1d95" stroke="#150d2a" strokeWidth="2" />
-                  <path
-                    d="M12 36 C12 28 36 28 36 36 Z"
-                    fill="#4c1d95"
-                    stroke="#150d2a"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M19 22 V18 A5 5 0 0 1 29 18 V22"
-                    stroke="#cbd5e1"
-                    strokeWidth="3"
-                    fill="none"
-                  />
-                  <rect
-                    x="16"
-                    y="22"
-                    width="16"
-                    height="13"
-                    rx="3"
-                    fill="#94a3b8"
-                    stroke="#150d2a"
-                    strokeWidth="2.2"
-                  />
-                  <circle cx="24" cy="28" r="2" fill="#150d2a" />
-                </svg>
-                <span className="text-[11px] sm:text-xs font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
-                  {level < 5 ? 'Locked' : 'Celebs'}
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-b from-rose-400 to-pink-600 border-2 border-[#150d2a] flex items-center justify-center shadow mb-0.5">
+                  <svg viewBox="0 0 32 32" className="w-5 h-5">
+                    <path
+                      d="M16 26 C16 26 5 18 5 11 C5 7 8.5 5 12 5 C14.2 5 16 6.8 16 6.8 C16 6.8 17.8 5 20 5 C23.5 5 27 7 27 11 C27 18 16 26 16 26 Z"
+                      fill="#fef08a"
+                      stroke="#150d2a"
+                      strokeWidth="2.2"
+                    />
+                  </svg>
+                </div>
+                <span className="text-[10px] sm:text-xs font-black text-white drop-shadow-[0_2px_0_#150d2a]">
+                  Dedicate
+                </span>
+              </button>
+
+              {/* 4. QUESTS (Clipboard + Reward Counter) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveLeftModal((m) => (m === 'QUESTS' ? null : 'QUESTS'));
+                }}
+                className="group relative w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#140e26]/95 border-2 border-pink-400/80 shadow-[0_4px_0_#150d2a] flex flex-col items-center justify-end pb-1.5 cursor-pointer active:translate-y-0.5"
+              >
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-white text-[10px] font-black flex items-center justify-center shadow">
+                  {unclaimedQuestCount > 0 ? unclaimedQuestCount : '!'}
+                </span>
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-b from-amber-300 to-orange-500 border-2 border-[#150d2a] flex items-center justify-center shadow mb-0.5">
+                  <svg viewBox="0 0 32 32" className="w-5 h-5">
+                    <rect x="8" y="6" width="16" height="20" rx="2" fill="#fef3c7" stroke="#150d2a" strokeWidth="2" />
+                    <path d="M11 14 L14 17 L20 11 M11 20 L14 23 L20 17" stroke="#16a34a" strokeWidth="2.2" fill="none" />
+                  </svg>
+                </div>
+                <span className="text-[10px] sm:text-xs font-black text-white drop-shadow-[0_2px_0_#150d2a]">
+                  Quests
                 </span>
               </button>
             </div>
@@ -2526,288 +2510,230 @@ export default function App() {
           </div>
 
           {/* -----------------------------------------------------------------
-              BOTTOM NAVIGATION BAR: 5 GLOSSY COMMAND BUTTONS WITH BESPOKE ILLUSTRATED ICONS
-              1. Build/Decorate (Green + Crossed Hammer/Wrench + UPGRADE)
-              2. Drink Mixes (Magenta + Cocktail Glass with Straw & Lime + UPGRADE)
-              3. Parking/Line (Purple + Purple Car & Cones + UPGRADE)
-              4. Invite Friends (Pink + 3 Friends Silhouettes + !)
-              5. World Map (Cyan + Folded Green/Blue Map)
+              BOTTOM NAVIGATION STRIP (image_5.png & IMG_1503.jpeg Spec):
+              - Left: Visiting Friends' Rounded Chibi Portrait Heads Dock
+              - Right: Square-like Docked Action Buttons with Cartoonish Icons
+                (Decorate [Couch/Tools], Staff [People], Mixology [Cocktail], Parking/Line [Taxi], Dressing/Style [Hanger])
              ----------------------------------------------------------------- */}
-          <div className="grid grid-cols-5 gap-1.5 sm:gap-3 pt-2 pointer-events-auto">
-            {/* 1. Build/Decorate (Green) */}
-            <button
-              onClick={() => {
-                soundEngine.playClick();
-                setActiveBottomTab((t) => (t === 'BUILD' ? null : 'BUILD'));
-              }}
-              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#a3e635] via-[#4ade80] to-[#15803d] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
-                activeBottomTab === 'BUILD' ? 'ring-2 ring-white' : ''
-              }`}
-            >
-              {/* Overlapping Illustrated Crossed Wrench & Hammer Icon */}
-              <svg
-                viewBox="0 0 56 48"
-                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+          <div className="flex items-end justify-between gap-2 pt-2 pointer-events-auto">
+            {/* Visiting Friends' Rounded Chibi Portrait Heads Strip (image_5.png Bottom Navigation Strip requirement) */}
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#140e26]/95 border-2 border-cyan-400/80 shadow-[0_5px_0_#150d2a]">
+              {[
+                { name: 'Roxy', lvl: 14, hair: '#ec4899', cap: '#22d3ee', bg: 'from-fuchsia-600 to-purple-900' },
+                { name: 'Jax', lvl: 19, hair: '#1e1b4b', cap: '#facc15', bg: 'from-cyan-500 to-blue-900' },
+                { name: 'Luna', lvl: 24, hair: '#451a03', cap: '#f43f5e', bg: 'from-lime-500 to-emerald-900' },
+              ].map((fr) => (
+                <button
+                  key={fr.name}
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setActiveBottomTab((t) => (t === 'FRIENDS' ? null : 'FRIENDS'));
+                  }}
+                  title={`Visit ${fr.name}'s Nightclub (Lvl ${fr.lvl})`}
+                  className="group relative flex flex-col items-center w-13 p-1 rounded-xl bg-[#1f1638] hover:bg-[#2d2050] border-2 border-[#150d2a] cursor-pointer transition-transform active:scale-95"
+                >
+                  <span className="absolute -top-1.5 -left-1 px-1 rounded bg-amber-400 border border-[#150d2a] text-[8px] font-black text-slate-950">
+                    {fr.lvl}
+                  </span>
+                  <div className={`w-9 h-9 rounded-full bg-gradient-to-b ${fr.bg} border-2 border-[#150d2a] flex items-center justify-center overflow-hidden`}>
+                    {/* Rounded Chibi Portrait Head SVG */}
+                    <svg viewBox="0 0 36 36" className="w-8 h-8">
+                      <circle cx="18" cy="20" r="10" fill="#f5cba7" stroke="#150d2a" strokeWidth="2.2" />
+                      <path d="M8,18 C8,8 28,8 28,18 Z" fill={fr.hair} stroke="#150d2a" strokeWidth="2" />
+                      <circle cx="14.5" cy="20" r="1.8" fill="#150d2a" />
+                      <circle cx="21.5" cy="20" r="1.8" fill="#150d2a" />
+                      <circle cx="25" cy="11" r="3" fill={fr.cap} stroke="#150d2a" strokeWidth="1.5" />
+                    </svg>
+                  </div>
+                  <span className="text-[9px] font-black text-white truncate max-w-full mt-0.5 drop-shadow-[0_1px_0_#150d2a]">
+                    {fr.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* 5 Docked Square-Like Cartoon Command Buttons */}
+            <div className="flex-1 grid grid-cols-5 gap-1.5 sm:gap-2.5">
+              {/* 1. Decorate / Build (Couch & Hammer Icon + Green UPGRADE) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveBottomTab((t) => (t === 'BUILD' ? null : 'BUILD'));
+                }}
+                className={`relative pt-4 pb-2 sm:py-2.5 px-1 sm:px-2 rounded-2xl border-2 border-cyan-300/90 bg-gradient-to-b from-[#a3e635] via-[#4ade80] to-[#15803d] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                  activeBottomTab === 'BUILD' ? 'ring-2 ring-white' : ''
+                }`}
               >
-                {/* Hammer Handle & Head */}
-                <line
-                  x1="14"
-                  y1="38"
-                  x2="38"
-                  y2="14"
-                  stroke="#b45309"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M32 8 L45 21 L40 25 L28 13 Z"
-                  fill="#94a3b8"
-                  stroke="#150d2a"
-                  strokeWidth="2.5"
-                />
-                {/* Wrench */}
-                <line
-                  x1="40"
-                  y1="38"
-                  x2="18"
-                  y2="16"
-                  stroke="#cbd5e1"
-                  strokeWidth="5.5"
-                  strokeLinecap="round"
-                />
-                <circle
-                  cx="15"
-                  cy="13"
-                  r="6"
-                  fill="#94a3b8"
-                  stroke="#150d2a"
-                  strokeWidth="2.5"
-                />
-              </svg>
+                {/* Cartoon Couch + Wrench Icon (matching image_5.png "couch for Decorate") */}
+                <svg
+                  viewBox="0 0 56 48"
+                  className="w-10 h-8 sm:w-12 sm:h-10 -mt-6 sm:-mt-7 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+                >
+                  {/* Plush Neon Couch Backrest & Cushions */}
+                  <rect x="10" y="14" width="36" height="16" rx="6" fill="#a855f7" stroke="#150d2a" strokeWidth="2.5" />
+                  <rect x="6" y="22" width="8" height="14" rx="3" fill="#ec4899" stroke="#150d2a" strokeWidth="2.4" />
+                  <rect x="42" y="22" width="8" height="14" rx="3" fill="#ec4899" stroke="#150d2a" strokeWidth="2.4" />
+                  <rect x="12" y="25" width="32" height="11" rx="4" fill="#d946ef" stroke="#150d2a" strokeWidth="2.5" />
+                </svg>
 
-              {/* Green UPGRADE Badge */}
-              <span className="absolute -top-2 right-1 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
-                UPGRADE
-              </span>
+                <span className="absolute -top-2 right-1 sm:right-2 px-1.5 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
+                  UPGRADE
+                </span>
 
-              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
-                Build/Decorate
-              </span>
-            </button>
+                <span className="text-[10px] sm:text-sm font-black tracking-tight text-white drop-shadow-[0_2px_0_#150d2a] truncate max-w-full">
+                  Decorate
+                </span>
+              </button>
 
-            {/* 2. Drink Mixes (Magenta) */}
-            <button
-              onClick={() => {
-                soundEngine.playClick();
-                setActiveBottomTab((t) => (t === 'DRINKS' ? null : 'DRINKS'));
-              }}
-              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#e879f9] via-[#c026d3] to-[#701a75] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
-                activeBottomTab === 'DRINKS' ? 'ring-2 ring-white' : ''
-              }`}
-            >
-              {/* Overlapping Illustrated Martini Glass with Lime & Straw */}
-              <svg
-                viewBox="0 0 56 52"
-                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              {/* 2. Staff / Friends (People Icon for Staff Management & Friends) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveBottomTab((t) => (t === 'FRIENDS' ? null : 'FRIENDS'));
+                }}
+                className={`relative pt-4 pb-2 sm:py-2.5 px-1 sm:px-2 rounded-2xl border-2 border-pink-300/90 bg-gradient-to-b from-[#f472b6] via-[#db2777] to-[#831843] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                  activeBottomTab === 'FRIENDS' ? 'ring-2 ring-white' : ''
+                }`}
               >
-                {/* Lime Wheel */}
-                <circle
-                  cx="17"
-                  cy="14"
-                  r="7"
-                  fill="#facc15"
-                  stroke="#150d2a"
-                  strokeWidth="2.2"
-                />
-                {/* Straw */}
-                <path
-                  d="M28 18 L36 6 L42 6"
-                  stroke="#ef4444"
-                  strokeWidth="3"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-                {/* Martini Bowl */}
-                <polygon
-                  points="14,15 42,15 28,31"
-                  fill="#fb7185"
-                  stroke="#150d2a"
-                  strokeWidth="2.5"
-                  strokeLinejoin="round"
-                />
-                <line x1="28" y1="31" x2="28" y2="43" stroke="#bae6fd" strokeWidth="3.5" />
-                <ellipse
-                  cx="28"
-                  cy="44"
-                  rx="9"
-                  ry="2.5"
-                  fill="#38bdf8"
-                  stroke="#150d2a"
-                  strokeWidth="2"
-                />
-              </svg>
+                {/* Cartoon Chibi People Icon (matching image_5.png "people for Staff") */}
+                <svg
+                  viewBox="0 0 60 48"
+                  className="w-10 h-8 sm:w-12 sm:h-10 -mt-6 sm:-mt-7 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+                >
+                  <circle cx="17" cy="18" r="6.5" fill="#c084fc" stroke="#150d2a" strokeWidth="2.4" />
+                  <path d="M8 35 C8 26 26 26 26 35 Z" fill="#a855f7" stroke="#150d2a" strokeWidth="2.4" />
+                  <circle cx="43" cy="18" r="6.5" fill="#fb923c" stroke="#150d2a" strokeWidth="2.4" />
+                  <path d="M34 35 C34 26 52 26 52 35 Z" fill="#f97316" stroke="#150d2a" strokeWidth="2.4" />
+                  <circle cx="30" cy="15" r="7.5" fill="#38bdf8" stroke="#150d2a" strokeWidth="2.6" />
+                  <path d="M18 37 C18 26 42 26 42 37 Z" fill="#06b6d4" stroke="#150d2a" strokeWidth="2.6" />
+                </svg>
 
-              <span className="absolute -top-2 right-1 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
-                UPGRADE
-              </span>
+                <span className="absolute -top-2 right-1 sm:right-2 px-1.5 py-0.5 rounded-md bg-cyan-400 border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase text-slate-950 shadow">
+                  {staffMembers.length} STAFF
+                </span>
 
-              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
-                Drink Mixes
-              </span>
-            </button>
+                <span className="text-[10px] sm:text-sm font-black tracking-tight text-white drop-shadow-[0_2px_0_#150d2a] truncate max-w-full">
+                  Staff / Crew
+                </span>
+              </button>
 
-            {/* 3. Parking/Line (Purple) */}
-            <button
-              onClick={() => {
-                soundEngine.playClick();
-                setActiveBottomTab((t) => (t === 'PARKING' ? null : 'PARKING'));
-              }}
-              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#9333ea] via-[#6b21a8] to-[#3b0764] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
-                activeBottomTab === 'PARKING' ? 'ring-2 ring-white' : ''
-              }`}
-            >
-              {/* Overlapping Illustrated Purple Sports Car & Striped Barrier Post */}
-              <svg
-                viewBox="0 0 60 48"
-                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              {/* 3. Drink Mixes (Magenta Cocktail Glass) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveBottomTab((t) => (t === 'DRINKS' ? null : 'DRINKS'));
+                }}
+                className={`relative pt-4 pb-2 sm:py-2.5 px-1 sm:px-2 rounded-2xl border-2 border-pink-300/90 bg-gradient-to-b from-[#e879f9] via-[#c026d3] to-[#701a75] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                  activeBottomTab === 'DRINKS' ? 'ring-2 ring-white' : ''
+                }`}
               >
-                {/* Yellow/Black Striped Parking Post */}
-                <rect
-                  x="41"
-                  y="8"
-                  width="7"
-                  height="28"
-                  rx="2"
-                  fill="#facc15"
-                  stroke="#150d2a"
-                  strokeWidth="2"
-                />
-                <line x1="41" y1="15" x2="48" y2="15" stroke="#150d2a" strokeWidth="3" />
-                <line x1="41" y1="23" x2="48" y2="23" stroke="#150d2a" strokeWidth="3" />
-                {/* Car Cabin & Body */}
-                <path
-                  d="M14 24 L20 14 L36 14 L41 24 Z"
-                  fill="#a855f7"
-                  stroke="#150d2a"
-                  strokeWidth="2.2"
-                />
-                <rect
-                  x="9"
-                  y="23"
-                  width="38"
-                  height="13"
-                  rx="5"
-                  fill="#7e22ce"
-                  stroke="#150d2a"
-                  strokeWidth="2.5"
-                />
-                <circle cx="15" cy="30" r="3" fill="#fde047" />
-                <circle cx="41" cy="30" r="3" fill="#fde047" />
-              </svg>
+                <svg
+                  viewBox="0 0 56 52"
+                  className="w-10 h-8 sm:w-12 sm:h-10 -mt-6 sm:-mt-7 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+                >
+                  <circle cx="17" cy="14" r="7" fill="#facc15" stroke="#150d2a" strokeWidth="2.2" />
+                  <path d="M28 18 L36 6 L42 6" stroke="#ef4444" strokeWidth="3" fill="none" strokeLinecap="round" />
+                  <polygon points="14,15 42,15 28,31" fill="#fb7185" stroke="#150d2a" strokeWidth="2.5" strokeLinejoin="round" />
+                  <line x1="28" y1="31" x2="28" y2="43" stroke="#bae6fd" strokeWidth="3.5" />
+                  <ellipse cx="28" cy="44" rx="9" ry="2.5" fill="#38bdf8" stroke="#150d2a" strokeWidth="2" />
+                </svg>
 
-              <span className="absolute -top-2 right-1 sm:right-2 px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
-                UPGRADE
-              </span>
+                <span className="absolute -top-2 right-1 sm:right-2 px-1.5 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
+                  UPGRADE
+                </span>
 
-              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
-                Parking/Line
-              </span>
-            </button>
+                <span className="text-[10px] sm:text-sm font-black tracking-tight text-white drop-shadow-[0_2px_0_#150d2a] truncate max-w-full">
+                  Drink Mixes
+                </span>
+              </button>
 
-            {/* 4. Invite Friends (Pink/Rose) */}
-            <button
-              onClick={() => {
-                soundEngine.playClick();
-                setActiveBottomTab((t) => (t === 'FRIENDS' ? null : 'FRIENDS'));
-              }}
-              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#f472b6] via-[#db2777] to-[#831843] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
-                activeBottomTab === 'FRIENDS' ? 'ring-2 ring-white' : ''
-              }`}
-            >
-              {/* Overlapping Illustrated 3-Avatar Group Icon */}
-              <svg
-                viewBox="0 0 60 48"
-                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              {/* 4. Parking / Line (Boxy Yellow Taxi & Velvet Rope) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveBottomTab((t) => (t === 'PARKING' ? null : 'PARKING'));
+                }}
+                className={`relative pt-4 pb-2 sm:py-2.5 px-1 sm:px-2 rounded-2xl border-2 border-cyan-300/90 bg-gradient-to-b from-[#9333ea] via-[#6b21a8] to-[#3b0764] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
+                  activeBottomTab === 'PARKING' ? 'ring-2 ring-white' : ''
+                }`}
               >
-                {/* Left & Right Avatars */}
-                <circle cx="17" cy="18" r="6" fill="#c084fc" stroke="#150d2a" strokeWidth="2.2" />
-                <path
-                  d="M8 34 C8 26 26 26 26 34 Z"
-                  fill="#a855f7"
-                  stroke="#150d2a"
-                  strokeWidth="2.2"
-                />
-                <circle cx="43" cy="18" r="6" fill="#fb923c" stroke="#150d2a" strokeWidth="2.2" />
-                <path
-                  d="M34 34 C34 26 52 26 52 34 Z"
-                  fill="#f97316"
-                  stroke="#150d2a"
-                  strokeWidth="2.2"
-                />
-                {/* Center Cyan Avatar */}
-                <circle cx="30" cy="16" r="7" fill="#38bdf8" stroke="#150d2a" strokeWidth="2.5" />
-                <path
-                  d="M18 36 C18 26 42 26 42 36 Z"
-                  fill="#06b6d4"
-                  stroke="#150d2a"
-                  strokeWidth="2.5"
-                />
-              </svg>
+                <svg
+                  viewBox="0 0 60 48"
+                  className="w-10 h-8 sm:w-12 sm:h-10 -mt-6 sm:-mt-7 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+                >
+                  <rect x="41" y="8" width="7" height="28" rx="2" fill="#facc15" stroke="#150d2a" strokeWidth="2" />
+                  <line x1="41" y1="15" x2="48" y2="15" stroke="#150d2a" strokeWidth="3" />
+                  <line x1="41" y1="23" x2="48" y2="23" stroke="#150d2a" strokeWidth="3" />
+                  <path d="M14 24 L19 14 L37 14 L41 24 Z" fill="#eab308" stroke="#150d2a" strokeWidth="2.2" />
+                  <rect x="9" y="23" width="38" height="13" rx="4" fill="#facc15" stroke="#150d2a" strokeWidth="2.5" />
+                  <circle cx="15" cy="30" r="3" fill="#ffffff" />
+                  <circle cx="41" cy="30" r="3" fill="#ffffff" />
+                </svg>
 
-              <span className="absolute -top-2.5 right-1.5 sm:right-2.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#ef4444] border-2 border-[#150d2a] text-xs sm:text-sm font-black text-white flex items-center justify-center shadow">
-                !
-              </span>
+                <span className="absolute -top-2 right-1 sm:right-2 px-1.5 py-0.5 rounded-md bg-gradient-to-b from-[#84cc16] to-[#4d7c0f] border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow">
+                  UPGRADE
+                </span>
 
-              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
-                Invite Friends
-              </span>
-            </button>
+                <span className="text-[10px] sm:text-sm font-black tracking-tight text-white drop-shadow-[0_2px_0_#150d2a] truncate max-w-full">
+                  Parking/Line
+                </span>
+              </button>
 
-            {/* 5. World Map (Cyan/Blue) */}
-            <button
-              onClick={() => {
-                soundEngine.playClick();
-                setActiveBottomTab((t) => (t === 'WORLD_MAP' ? null : 'WORLD_MAP'));
-              }}
-              className={`relative pt-4 pb-2 sm:py-3 px-1 sm:px-2 rounded-2xl border-[2.5px] border-[#150d2a] bg-gradient-to-b from-[#38bdf8] via-[#0284c7] to-[#1e3a8a] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer ${
-                activeBottomTab === 'WORLD_MAP' ? 'ring-2 ring-white' : ''
-              }`}
-            >
-              {/* Overlapping Illustrated Folded Green/Blue World Map */}
-              <svg
-                viewBox="0 0 56 48"
-                className="w-10 h-8 sm:w-13 sm:h-11 -mt-7 sm:-mt-8 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+              {/* 5. Dressing / Style & World Map (Cartoon Hanger Icon matching image_5.png "hangers for Dressing") */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setIsArtStudioOpen(true);
+                }}
+                className="relative pt-4 pb-2 sm:py-2.5 px-1 sm:px-2 rounded-2xl border-2 border-cyan-300/90 bg-gradient-to-b from-[#38bdf8] via-[#0284c7] to-[#1e3a8a] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer"
               >
-                <polygon
-                  points="10,12 22,8 22,34 10,38"
-                  fill="#22c55e"
-                  stroke="#150d2a"
-                  strokeWidth="2.2"
-                  strokeLinejoin="round"
-                />
-                <polygon
-                  points="22,8 34,13 34,39 22,34"
-                  fill="#38bdf8"
-                  stroke="#150d2a"
-                  strokeWidth="2.2"
-                  strokeLinejoin="round"
-                />
-                <polygon
-                  points="34,13 46,9 46,35 34,39"
-                  fill="#4ade80"
-                  stroke="#150d2a"
-                  strokeWidth="2.2"
-                  strokeLinejoin="round"
-                />
-              </svg>
+                {/* Cartoon Clothing Hanger & Neon Shirt Icon (matching image_5.png "hangers for Dressing") */}
+                <svg
+                  viewBox="0 0 56 48"
+                  className="w-10 h-8 sm:w-12 sm:h-10 -mt-6 sm:-mt-7 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+                >
+                  <path
+                    d="M28 15 C28 11 33 11 33 8 C33 5 28 5 26 8"
+                    stroke="#fef08a"
+                    strokeWidth="3"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                  <polygon
+                    points="28,15 46,28 10,28"
+                    fill="none"
+                    stroke="#fef08a"
+                    strokeWidth="3.5"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M16 28 L40 28 L38 40 L18 40 Z"
+                    fill="#f43f5e"
+                    stroke="#150d2a"
+                    strokeWidth="2.4"
+                  />
+                </svg>
 
-              <span className="text-[10px] sm:text-base font-black tracking-tight text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)] truncate max-w-full">
-                World Map
-              </span>
-            </button>
+                <span className="absolute -top-2 right-1 sm:right-2 px-1.5 py-0.5 rounded-md bg-fuchsia-500 border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase text-white shadow">
+                  STYLE
+                </span>
+
+                <span className="text-[10px] sm:text-sm font-black tracking-tight text-white drop-shadow-[0_2px_0_#150d2a] truncate max-w-full">
+                  Dressing/Art
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* 2.5D SOCIAL SIM ART DIRECTION, CHIBI SPRITE SHEET & HUD TEMPLATE STUDIO MODAL */}
+      <ArtStyleAssetStudioModal
+        isOpen={isArtStudioOpen}
+        onClose={() => setIsArtStudioOpen(false)}
+        classicHudMode={classicHudMode}
+        onToggleClassicHudMode={setClassicHudMode}
+      />
 
       {/* ANDROID JETPACK COMPOSE & UNITY C# TECHNICAL BLUEPRINT MODAL */}
       <TechnicalBlueprintModal

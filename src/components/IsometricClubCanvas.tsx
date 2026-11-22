@@ -1642,6 +1642,69 @@ function drawIllustratedParkingAndStreet(
     ctx.stroke();
   }
 
+  // 5. Pedestrian Zebra Crosswalk leading across the front asphalt to the VIP Entrance (gx = 1.85..3.05, gy = 11.15..13.15)
+  for (let stripe = 0; stripe < 5; stripe++) {
+    const gy0 = 11.25 + stripe * 0.38;
+    const gy1 = gy0 + 0.22;
+    const cwPts = [
+      { gx: 1.95, gy: gy0 },
+      { gx: 2.95, gy: gy0 },
+      { gx: 2.95, gy: gy1 },
+      { gx: 1.95, gy: gy1 },
+    ];
+    ctx.beginPath();
+    cwPts.forEach((pt, idx) => {
+      const sx = originX + (pt.gx - pt.gy) * (tileW / 2);
+      const sy = originY + (pt.gx + pt.gy) * (tileH / 2);
+      if (idx === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(241, 245, 249, 0.78)';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1 * scale;
+    ctx.stroke();
+  }
+
+  // 6. Outdoor Chain-Link Perimeter Fence along the left exterior sidewalk border (gx = -1.9, gy = 6.2..10.2)
+  const fenceStart = {
+    x: originX + (-1.95 - 6.2) * (tileW / 2),
+    y: originY + (-1.95 + 6.2) * (tileH / 2),
+  };
+  const fenceEnd = {
+    x: originX + (-1.95 - 10.2) * (tileW / 2),
+    y: originY + (-1.95 + 10.2) * (tileH / 2),
+  };
+  const fenceH = 22 * scale;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(fenceStart.x, fenceStart.y);
+  ctx.lineTo(fenceEnd.x, fenceEnd.y);
+  ctx.lineTo(fenceEnd.x, fenceEnd.y - fenceH);
+  ctx.lineTo(fenceStart.x, fenceStart.y - fenceH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.14)';
+  ctx.fill();
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 1.8 * scale;
+  ctx.stroke();
+
+  // Chain-link diagonal diamond mesh & vertical posts
+  const posts = 5;
+  for (let p = 0; p <= posts; p++) {
+    const u = p / posts;
+    const px = fenceStart.x + (fenceEnd.x - fenceStart.x) * u;
+    const py = fenceStart.y + (fenceEnd.y - fenceStart.y) * u;
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px, py - fenceH - 2 * scale);
+    ctx.stroke();
+  }
+  ctx.restore();
+
   // Front Sidewalk Curb Line separating sidewalk (gy = 11.0) from asphalt parking stalls
   const curbStart = {
     x: originX + (-2.2 - 11.05) * (tileW / 2),
@@ -1660,8 +1723,8 @@ function drawIllustratedParkingAndStreet(
 }
 
 /**
- * Draws the foreground velvet rope queue barriers, front parked cars, and curved streetlamps
- * directly in front of the screen after the guest queue has rendered so the line and cars are 100% visible.
+ * Draws the foreground velvet rope queue barriers, front parked cars (including the Boxy Yellow Taxi Cab),
+ * and curved streetlamps directly in front of the screen after the guest queue has rendered.
  */
 function drawForegroundQueueCarsAndLamps(
   ctx: CanvasRenderingContext2D,
@@ -1737,16 +1800,20 @@ function drawForegroundQueueCarsAndLamps(
   drawStanchionChain(leftQueueStanchions);
   drawStanchionChain(rightVipStanchions);
 
-  // 2. Front Parked Cars in the Foreground Parking Stalls (gy = 11.8..12.4, gx = -0.7..7.5)
-  // Teal Hatchback & Dark Navy Coupe always visible in front of the entrance
-  drawIllustratedSedan(ctx, -0.65, 11.85, originX, originY, tileW, tileH, scale, '#2dd4bf', '#0f766e');
-  drawIllustratedSedan(ctx, 1.55, 12.15, originX, originY, tileW, tileH, scale, '#38bdf8', '#1e3a8a');
-  drawIllustratedSedan(ctx, 3.85, 12.15, originX, originY, tileW, tileH, scale, '#f43f5e', '#9f1239');
+  // 1B. Outdoor Isometric Potted Club Plants flanking the VIP Entrance Archway
+  drawIsometricPottedPlant(ctx, 1.15, 10.15, originX, originY, tileW, tileH, scale);
+  drawIsometricPottedPlant(ctx, 3.65, 10.15, originX, originY, tileW, tileH, scale);
+
+  // 2. Front Parked Vehicles in Foreground Stalls (Boxy Yellow Taxi Cab + Stylized Sedans from image_5.png)
+  drawIllustratedSedan(ctx, -0.65, 11.85, originX, originY, tileW, tileH, scale, '#2dd4bf', '#0f766e', false);
+  // Stylized Boxy Yellow Taxi Cab right by the front crosswalk!
+  drawIllustratedSedan(ctx, 1.55, 12.15, originX, originY, tileW, tileH, scale, '#facc15', '#ca8a04', true);
+  drawIllustratedSedan(ctx, 3.85, 12.15, originX, originY, tileW, tileH, scale, '#f43f5e', '#9f1239', false);
   if (parkingState.lotTier >= 2) {
-    drawIllustratedSedan(ctx, 6.1, 12.15, originX, originY, tileW, tileH, scale, '#a855f7', '#581c87');
+    drawIllustratedSedan(ctx, 6.1, 12.15, originX, originY, tileW, tileH, scale, '#38bdf8', '#1e3a8a', false);
   }
   if (parkingState.lotTier >= 3) {
-    drawIllustratedSedan(ctx, 8.2, 12.1, originX, originY, tileW, tileH, scale, '#facc15', '#a16207');
+    drawIllustratedSedan(ctx, 8.2, 12.1, originX, originY, tileW, tileH, scale, '#a855f7', '#581c87', false);
   }
 
   // 3. Curved Foreground Streetlamps casting warm golden light cones over the queue & front parking lot
@@ -1803,6 +1870,48 @@ function drawForegroundQueueCarsAndLamps(
   }
 }
 
+function drawIsometricPottedPlant(
+  ctx: CanvasRenderingContext2D,
+  gx: number,
+  gy: number,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number
+) {
+  const px = originX + (gx - gy) * (tileW / 2);
+  const py = originY + (gx + gy) * (tileH / 2);
+
+  // Dark slate planter pot with thick hand-drawn outline
+  fillStrokeRoundedRect(
+    ctx,
+    px - 7 * scale,
+    py - 12 * scale,
+    14 * scale,
+    12 * scale,
+    3 * scale,
+    '#334155',
+    INK,
+    2 * scale
+  );
+  // Lush vibrant lime/emerald foliage clusters
+  const leaves = [
+    { dx: -5, dy: -16, r: 5.5, c: '#22c55e' },
+    { dx: 5, dy: -16, r: 5.5, c: '#16a34a' },
+    { dx: 0, dy: -21, r: 6.5, c: '#4ade80' },
+  ];
+  for (const lf of leaves) {
+    ctx.fillStyle = lf.c;
+    ctx.beginPath();
+    ctx.arc(px + lf.dx * scale, py + lf.dy * scale, lf.r * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.6 * scale;
+    ctx.stroke();
+  }
+}
+
 function drawIllustratedSedan(
   ctx: CanvasRenderingContext2D,
   gx: number,
@@ -1813,67 +1922,103 @@ function drawIllustratedSedan(
   tileH: number,
   scale: number,
   bodyColor: string,
-  shadeColor: string
+  shadeColor: string,
+  isTaxi: boolean = false
 ) {
   const cx = originX + (gx - gy) * (tileW / 2);
   const cy = originY + (gx + gy) * (tileH / 2);
 
   ctx.save();
   // Ground shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
   ctx.beginPath();
   ctx.ellipse(cx, cy + 3 * scale, 32 * scale, 15 * scale, -0.35, 0, Math.PI * 2);
   ctx.fill();
 
-  // Lower Car Body (Rounded cartoon chassis with bold ink border)
+  // Lower Car Body (Boxy retro-digital chassis with thick hand-drawn ink border)
   fillStrokeRoundedRect(
     ctx,
     cx - 28 * scale,
     cy - 14 * scale,
     56 * scale,
     22 * scale,
-    9 * scale,
+    6 * scale,
     bodyColor,
     INK,
-    2 * scale
+    2.4 * scale
   );
 
-  // Upper Cabin / Windows
+  // Taxi Checkered Side Stripe
+  if (isTaxi) {
+    for (let sq = 0; sq < 7; sq++) {
+      ctx.fillStyle = sq % 2 === 0 ? '#150d2a' : '#ffffff';
+      ctx.fillRect(cx - 21 * scale + sq * 6 * scale, cy - 4 * scale, 6 * scale, 3.8 * scale);
+    }
+  }
+
+  // Upper Boxy Cabin / Windows
   fillStrokeRoundedRect(
     ctx,
-    cx - 17 * scale,
-    cy - 25 * scale,
-    34 * scale,
+    cx - 18 * scale,
+    cy - 26 * scale,
+    36 * scale,
     14 * scale,
-    7 * scale,
+    4.5 * scale,
     shadeColor,
     INK,
-    1.8 * scale
+    2.2 * scale
   );
 
-  // Windshield & Side Glass
+  // Cel-shaded Windshield & Side Glass with hard white specular highlight
   fillStrokeRoundedRect(
     ctx,
-    cx - 13 * scale,
-    cy - 23 * scale,
+    cx - 14 * scale,
+    cy - 23.5 * scale,
     13 * scale,
     10 * scale,
-    3 * scale,
+    2.5 * scale,
     '#38bdf8',
     INK,
-    1.2 * scale
+    1.5 * scale
   );
+  // Crisp flat specular slash on glass
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.lineWidth = 1.6 * scale;
+  ctx.beginPath();
+  ctx.moveTo(cx - 11 * scale, cy - 21.5 * scale);
+  ctx.lineTo(cx - 6 * scale, cy - 16 * scale);
+  ctx.stroke();
+
   fillStrokeRoundedRect(
     ctx,
     cx + 2 * scale,
-    cy - 23 * scale,
-    11 * scale,
+    cy - 23.5 * scale,
+    12 * scale,
     10 * scale,
-    3 * scale,
+    2.5 * scale,
     '#0284c7',
     INK,
-    1.2 * scale
+    1.5 * scale
   );
+
+  // Glowing Roof "TAXI" Sign on Boxy Yellow Taxi Cab
+  if (isTaxi) {
+    fillStrokeRoundedRect(
+      ctx,
+      cx - 8 * scale,
+      cy - 32 * scale,
+      16 * scale,
+      6.5 * scale,
+      2 * scale,
+      '#fef08a',
+      INK,
+      1.6 * scale
+    );
+    ctx.fillStyle = '#150d2a';
+    ctx.font = `900 ${Math.max(6, Math.round(6 * scale))}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('TAXI', cx, cy - 27 * scale);
+  }
 
   // Wheels
   const wheels = [
@@ -1883,13 +2028,13 @@ function drawIllustratedSedan(
   for (const w of wheels) {
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.arc(w.wx, w.wy, 6.5 * scale, 0, Math.PI * 2);
+    ctx.arc(w.wx, w.wy, 6.8 * scale, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.5 * scale;
+    ctx.lineWidth = 1.8 * scale;
     ctx.stroke();
 
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = '#cbd5e1';
     ctx.beginPath();
     ctx.arc(w.wx, w.wy, 3 * scale, 0, Math.PI * 2);
     ctx.fill();
@@ -1898,7 +2043,7 @@ function drawIllustratedSedan(
   // Glowing Yellow Headlights
   ctx.fillStyle = '#fde047';
   ctx.beginPath();
-  ctx.arc(cx - 25 * scale, cy - 3 * scale, 2.8 * scale, 0, Math.PI * 2);
+  ctx.arc(cx - 25 * scale, cy - 3 * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -2008,10 +2153,56 @@ function drawIllustratedClubShell(
   ctx.fill();
   ctx.stroke();
 
-  // 4. EXPOSED CRACKED BRICK PATCHES ON WALLS (Matching Dive Aesthetic in IMG_1503.jpeg)
+  // 4. EXPOSED CRACKED BRICK PATCHES ON WALLS + GLOWING NEON STRIPE SIGNS & DIGITAL GRAPHIC BACKDROP
   drawExposedBrickPatch(ctx, sw.x + 28 * scale, sw.y - 68 * scale, scale, false);
   drawExposedBrickPatch(ctx, nw.x - 24 * scale, nw.y - 96 * scale, scale, true);
   drawExposedBrickPatch(ctx, se.x - 95 * scale, se.y - 65 * scale, scale, false);
+
+  // 4B. Glowing Cyber-Neon Stripe Signs & Digital Equalizer Graphic Backdrop on Right Wall (image_5.png spec)
+  const backdropX = se.x - 74 * scale;
+  const backdropY = se.y - 78 * scale;
+  fillStrokeRoundedRect(
+    ctx,
+    backdropX,
+    backdropY,
+    56 * scale,
+    30 * scale,
+    4 * scale,
+    '#0f0722',
+    '#22d3ee',
+    2 * scale
+  );
+  // Digital Equalizer Bars inside Graphic Backdrop
+  const eqColors = ['#f43f5e', '#22d3ee', '#84cc16', '#facc15', '#a855f7', '#ec4899'];
+  for (let b = 0; b < 6; b++) {
+    const barH = (8 + Math.abs(Math.sin(t * 6 + b * 1.1)) * 16) * scale;
+    ctx.fillStyle = eqColors[b % eqColors.length];
+    ctx.fillRect(
+      backdropX + (6 + b * 8) * scale,
+      backdropY + 26 * scale - barH,
+      5.5 * scale,
+      barH
+    );
+  }
+  // Dual Glowing Neon Stripe Tubes along Left & Right Back Walls
+  ctx.save();
+  ctx.strokeStyle = '#f43f5e';
+  ctx.lineWidth = 2.6 * scale;
+  ctx.beginPath();
+  ctx.moveTo(sw.x + 12 * scale, sw.y - 84 * scale);
+  ctx.lineTo(sw.x + 74 * scale, sw.y - 115 * scale);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.moveTo(sw.x + 12 * scale, sw.y - 78 * scale);
+  ctx.lineTo(sw.x + 74 * scale, sw.y - 109 * scale);
+  ctx.stroke();
+  ctx.restore();
+
+  // 4C. Indoor Isometric Potted Plants flanking the back corner & lounge
+  drawIsometricPottedPlant(ctx, 0.55, 8.85, originX, originY, tileW, tileH, scale);
+  drawIsometricPottedPlant(ctx, 8.85, 0.65, originX, originY, tileW, tileH, scale);
 
   // 5. 3-TIER WOODEN BACKBAR BOTTLE SHELVING ON LEFT WALL (With colorful liquor bottles)
   drawBackbarBottleShelves(ctx, originX, originY, tileW, tileH, scale);
@@ -2390,8 +2581,8 @@ function drawWallStringLights(
 }
 
 /**
- * Draws the glowing 6x6 sub-tile pastel rainbow disco floor (every 1x1 logical dance tile renders a 2x2
- * illuminated neon sub-grid so a 3x3 dance floor displays the exact 6x6 glowing pastel grid from IMG_1503.jpeg).
+ * Draws the vibrant multicolored checkerboard dance floor (green, electric blue, cyber pink, rich yellow)
+ * with dark hand-drawn borders and flat cel-shaded inner specular squares (matching image_5.png & IMG_1503.jpeg).
  */
 function drawIllustratedDanceTile(
   ctx: CanvasRenderingContext2D,
@@ -2405,17 +2596,16 @@ function drawIllustratedDanceTile(
   t: number
 ) {
   const fp = getRotatedFootprint(cat, item.rotation);
-  const pastelColors = [
-    '#67e8f9', // glowing cyan
-    '#f472b6', // neon pink
-    '#fde047', // warm yellow
-    '#86efac', // mint green
-    '#c084fc', // lavender purple
-    '#fda4af', // coral rose
-    '#38bdf8', // sky blue
+  // Classic 4-color cyber-neon checkerboard palette: Green, Electric Blue, Cyber Pink, Rich Yellow
+  const checkerColors = [
+    '#4ade80', // neon lime green
+    '#38bdf8', // electric blue
+    '#f472b6', // cyber pink
+    '#fde047', // rich disco yellow
+    '#c084fc', // electric purple accent
   ];
 
-  // Subdivide each 1x1 grid cell into 2x2 glowing sub-squares (3x3 tiles = 6x6 illuminated squares!)
+  // Subdivide each 1x1 grid cell into 2x2 glowing checkerboard sub-squares (3x3 tiles = 6x6 illuminated squares!)
   const subDiv = 2;
   const subStep = 1 / subDiv;
 
@@ -2424,8 +2614,11 @@ function drawIllustratedDanceTile(
       const gx = item.gridX + dx;
       const gy = item.gridY + dy;
 
-      const hash = Math.floor(gx * 4.3 + gy * 6.1 + t * 1.8);
-      const baseColor = pastelColors[Math.abs(hash) % pastelColors.length];
+      const ix = Math.round(gx * 2);
+      const iy = Math.round(gy * 2);
+      const beatShift = Math.floor(t * 2.2);
+      const checkerIdx = Math.abs(ix * 3 + iy * 5 + beatShift) % checkerColors.length;
+      const baseColor = checkerColors[checkerIdx];
 
       const halfW = tileW / 2;
       const halfH = tileH / 2;
@@ -2447,16 +2640,20 @@ function drawIllustratedDanceTile(
 
       ctx.fillStyle = baseColor;
       ctx.fill();
-      ctx.strokeStyle = '#312e81';
-      ctx.lineWidth = 1.4 * scale;
+      ctx.strokeStyle = '#150d2a';
+      ctx.lineWidth = 1.8 * scale;
       ctx.stroke();
 
-      // Inner bright center glow highlight
+      // Flat cel-shaded inner specular diamond highlight
       const cx = p0x;
       const cy = (p0y + p2y) / 2;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
       ctx.beginPath();
-      ctx.ellipse(cx, cy, tileW * 0.12, tileH * 0.12, 0, 0, Math.PI * 2);
+      ctx.moveTo(cx, cy - tileH * 0.13);
+      ctx.lineTo(cx + tileW * 0.13, cy);
+      ctx.lineTo(cx, cy + tileH * 0.13);
+      ctx.lineTo(cx - tileW * 0.13, cy);
+      ctx.closePath();
       ctx.fill();
     }
   }
@@ -2775,26 +2972,39 @@ function drawBarStool(
   const sy = originY + (gx + gy) * (tileH / 2);
 
   // Metal Base & Stem
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath();
-  ctx.ellipse(sx, sy, 5.5 * scale, 2.8 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, sy, 5.8 * scale, 3 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 2.5 * scale;
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 2.6 * scale;
   ctx.beginPath();
   ctx.moveTo(sx, sy);
-  ctx.lineTo(sx, sy - 11 * scale);
+  ctx.lineTo(sx, sy - 11.5 * scale);
   ctx.stroke();
 
-  // Round Wooden Cushion Top
-  ctx.fillStyle = '#78482f';
+  // Cushion Seat Top
+  ctx.fillStyle = '#9a3412';
   ctx.beginPath();
-  ctx.ellipse(sx, sy - 12 * scale, 6 * scale, 3.5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, sy - 12 * scale, 6.2 * scale, 3.6 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.4 * scale;
+  ctx.lineWidth = 1.6 * scale;
   ctx.stroke();
+
+  // High-Backed Bar Stool Backrest (matching image_5.png bar prop guidelines)
+  fillStrokeRoundedRect(
+    ctx,
+    sx - 4.5 * scale,
+    sy - 20.5 * scale,
+    9 * scale,
+    7.5 * scale,
+    2 * scale,
+    '#b45309',
+    INK,
+    1.5 * scale
+  );
 }
 
 function drawWoodenChair(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number) {
@@ -3144,8 +3354,11 @@ function drawHiredStaffAgent(
 }
 
 /**
- * Draws the expressive illustrated cartoon guests (matching the 5 dancers on the floor, seated lounge
- * patrons, and queued guests outside in IMG_1503.jpeg) with comic speech bubbles overhead.
+ * Draws the Chibi-style 2.5D patrons (matching image_5.png & IMG_1503.jpeg):
+ * - Oversized expressive heads nearly equal to torso height (1:1 Chibi proportion)
+ * - Round black eyes, omitted nose, and stylized blocky hands
+ * - Youth-culture streetwear variety: baseball caps, hoodies, patterned vests, hair bows, and jeans
+ * - Thick dark hand-drawn cel-shaded outlines
  */
 function drawIllustratedCharacter(
   ctx: CanvasRenderingContext2D,
@@ -3165,82 +3378,229 @@ function drawIllustratedCharacter(
   const isDancing = guest.state === 'DANCING';
   const bounce =
     (isDancing ? Math.abs(Math.sin(t * 6.5 + gx * 2.7)) * 5.5 : Math.sin(t * 3 + gx) * 1.1) * scale;
-  const armWave = isDancing ? Math.sin(t * 7 + gy * 3) * 6 * scale : 0;
+  const armWave = isDancing ? Math.sin(t * 7 + gy * 3) * 5.5 * scale : 0;
+
+  // Deterministic streetwear variant hash per patron name
+  const styleIdx =
+    (guest.name.charCodeAt(0) + (guest.name.charCodeAt(1) || 0)) % 4;
 
   // Floor shadow
-  ctx.fillStyle = 'rgba(15, 10, 30, 0.42)';
+  ctx.fillStyle = 'rgba(15, 10, 30, 0.45)';
   ctx.beginPath();
-  ctx.ellipse(px, py, 9 * scale, 4.5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(px, py, 9.5 * scale, 4.8 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Shoes & Legs
-  ctx.strokeStyle = guest.pantsColor;
-  ctx.lineWidth = 3.5 * scale;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(px - 3.2 * scale, py - 13 * scale - bounce);
-  ctx.lineTo(px - 3.8 * scale, py - 1 * scale - bounce * 0.25);
-  ctx.moveTo(px + 3.2 * scale, py - 13 * scale - bounce);
-  ctx.lineTo(px + 3.8 * scale, py - 1 * scale - bounce * 0.25);
-  ctx.stroke();
-
-  // Arms
-  ctx.strokeStyle = guest.shirtColor;
-  ctx.lineWidth = 3 * scale;
-  ctx.beginPath();
-  ctx.moveTo(px - 6 * scale, py - 24 * scale - bounce);
-  ctx.lineTo(px - 11 * scale, py - 16 * scale - bounce - armWave);
-  ctx.moveTo(px + 6 * scale, py - 24 * scale - bounce);
-  ctx.lineTo(px + 11 * scale, py - 16 * scale - bounce + armWave);
-  ctx.stroke();
-
-  // Torso / Jacket with dark cartoon outline
+  // 1. Jeans & Streetwear Sneakers (Thick dark hand-drawn outlines)
   fillStrokeRoundedRect(
     ctx,
-    px - 7 * scale,
-    py - 28 * scale - bounce,
-    14 * scale,
-    16 * scale,
+    px - 5.2 * scale,
+    py - 11.5 * scale - bounce * 0.4,
+    4.4 * scale,
+    10.5 * scale,
+    2 * scale,
+    guest.pantsColor,
+    INK,
+    1.8 * scale
+  );
+  fillStrokeRoundedRect(
+    ctx,
+    px + 0.8 * scale,
+    py - 11.5 * scale - bounce * 0.4,
+    4.4 * scale,
+    10.5 * scale,
+    2 * scale,
+    guest.pantsColor,
+    INK,
+    1.8 * scale
+  );
+
+  // 2. Arms & Stylized Blocky Hands (image_5.png Chibi guideline)
+  const leftHandX = px - 10.5 * scale;
+  const leftHandY = py - 16.5 * scale - bounce - armWave;
+  const rightHandX = px + 7.2 * scale;
+  const rightHandY = py - 16.5 * scale - bounce + armWave;
+
+  ctx.strokeStyle = guest.shirtColor;
+  ctx.lineWidth = 3.4 * scale;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(px - 6 * scale, py - 21 * scale - bounce);
+  ctx.lineTo(leftHandX + 1.8 * scale, leftHandY + 1.8 * scale);
+  ctx.moveTo(px + 6 * scale, py - 21 * scale - bounce);
+  ctx.lineTo(rightHandX + 1.8 * scale, rightHandY + 1.8 * scale);
+  ctx.stroke();
+
+  // Stylized Blocky Hands
+  fillStrokeRoundedRect(
+    ctx,
+    leftHandX,
+    leftHandY,
+    3.6 * scale,
+    3.6 * scale,
+    1.1 * scale,
+    '#f5cba7',
+    INK,
+    1.5 * scale
+  );
+  fillStrokeRoundedRect(
+    ctx,
+    rightHandX,
+    rightHandY,
+    3.6 * scale,
+    3.6 * scale,
+    1.1 * scale,
+    '#f5cba7',
+    INK,
+    1.5 * scale
+  );
+
+  // 3. Chibi Torso (14px height to match oversized 8.8px-radius Chibi head)
+  fillStrokeRoundedRect(
+    ctx,
+    px - 7.2 * scale,
+    py - 25 * scale - bounce,
+    14.4 * scale,
+    14.5 * scale,
     4.5 * scale,
     guest.shirtColor,
     INK,
-    1.6 * scale
+    2.1 * scale
   );
 
-  // Head
+  // Streetwear Patterned Vest / Hoodie Detail
+  if (styleIdx === 1) {
+    // Open Patterned Vest over contrasting tee
+    fillStrokeRoundedRect(
+      ctx,
+      px - 2.6 * scale,
+      py - 24.5 * scale - bounce,
+      5.2 * scale,
+      13.5 * scale,
+      1.5 * scale,
+      '#fef08a',
+      INK,
+      1.2 * scale
+    );
+  } else if (styleIdx === 2) {
+    // Graphic Diamond Emblem on Hoodie
+    ctx.fillStyle = '#22d3ee';
+    ctx.beginPath();
+    ctx.moveTo(px, py - 21.5 * scale - bounce);
+    ctx.lineTo(px + 3 * scale, py - 18 * scale - bounce);
+    ctx.lineTo(px, py - 14.5 * scale - bounce);
+    ctx.lineTo(px - 3 * scale, py - 18 * scale - bounce);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 4. Oversized Expressive Chibi Head (Radius 8.6 * scale ≈ torso height, omitted nose, thick dark outline)
+  const headY = py - 34 * scale - bounce;
+  const headR = 8.6 * scale;
   ctx.fillStyle = '#f5cba7';
   ctx.beginPath();
-  ctx.arc(px, py - 35 * scale - bounce, 6.8 * scale, 0, Math.PI * 2);
+  ctx.arc(px, headY, headR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.6 * scale;
+  ctx.lineWidth = 2.2 * scale;
   ctx.stroke();
 
-  // Expressive Eyes & Smile
-  ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.arc(px - 2.2 * scale, py - 35 * scale - bounce, 1.1 * scale, 0, Math.PI * 2);
-  ctx.arc(px + 2.2 * scale, py - 35 * scale - bounce, 1.1 * scale, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Styled Cartoon Hair
+  // Bold Outline-Rich Hair
   ctx.fillStyle = guest.hairColor;
   ctx.beginPath();
-  ctx.arc(px, py - 37 * scale - bounce, 7.2 * scale, Math.PI * 0.92, Math.PI * 0.08);
+  ctx.arc(px, headY - 1.8 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.4 * scale;
+  ctx.lineWidth = 2 * scale;
   ctx.stroke();
+
+  // Round Black Chibi Eyes (facing isometric diagonal, omitted nose)
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(px - 2.8 * scale, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
+  ctx.arc(px + 2.8 * scale, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tiny white eye catchlight
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(px - 3.2 * scale, headY, 0.55 * scale, 0, Math.PI * 2);
+  ctx.arc(px + 2.4 * scale, headY, 0.55 * scale, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 5. Youth Streetwear Headgear (Baseball Caps, Hair Bows, Beanies)
+  if (styleIdx === 0) {
+    // Streetwear Baseball Cap with sideways/diagonal visor
+    ctx.fillStyle = '#22d3ee';
+    ctx.beginPath();
+    ctx.arc(px, headY - 2.5 * scale, headR + 0.4 * scale, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.stroke();
+    // Cap Visor Bill
+    fillStrokeRoundedRect(
+      ctx,
+      px + 1 * scale,
+      headY - 4.2 * scale,
+      9.5 * scale,
+      3.2 * scale,
+      1.4 * scale,
+      '#0284c7',
+      INK,
+      1.5 * scale
+    );
+  } else if (styleIdx === 1) {
+    // Vibrant Pink Hair Bow on top-right of head
+    const bowX = px + 4.5 * scale;
+    const bowY = headY - 7.5 * scale;
+    ctx.fillStyle = '#f43f5e';
+    ctx.beginPath();
+    ctx.moveTo(bowX, bowY);
+    ctx.lineTo(bowX - 5 * scale, bowY - 3.5 * scale);
+    ctx.lineTo(bowX - 4 * scale, bowY + 3 * scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.4 * scale;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(bowX, bowY);
+    ctx.lineTo(bowX + 5 * scale, bowY - 3.5 * scale);
+    ctx.lineTo(bowX + 4 * scale, bowY + 3 * scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(bowX, bowY, 1.8 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (styleIdx === 3) {
+    // Ribbed Neon Street Beanie
+    fillStrokeRoundedRect(
+      ctx,
+      px - 8.5 * scale,
+      headY - 6.8 * scale,
+      17 * scale,
+      4.2 * scale,
+      2 * scale,
+      '#a855f7',
+      INK,
+      1.6 * scale
+    );
+  }
 
   if (guest.isCelebrity) {
     ctx.fillStyle = '#facc15';
     ctx.font = `800 ${Math.max(8, Math.round(10 * scale))}px "Outfit", sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText('★ VIP', px, py - 45 * scale - bounce);
+    ctx.fillText('★ VIP', px, py - 48 * scale - bounce);
   }
 
   if (guest.bubble) {
-    drawIllustratedSpeechBubble(ctx, px, py - 58 * scale - bounce, scale, guest.bubble);
+    drawIllustratedSpeechBubble(ctx, px, py - 60 * scale - bounce, scale, guest.bubble);
   }
 }
 
