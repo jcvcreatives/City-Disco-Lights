@@ -4,6 +4,7 @@ import {
   Check,
   Code2,
   Crown,
+  GitBranch,
   Info,
   Lock,
   Plus,
@@ -16,6 +17,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { soundEngine } from './audio/soundEngine';
+import { GitHubPublishModal } from './components/GitHubPublishModal';
 import { HypeBlastEvent, HypeBlastOverlay } from './components/HypeBlastOverlay';
 import {
   ClubSimulationMetrics,
@@ -204,15 +206,15 @@ const INITIAL_GUESTS: GuestAgent[] = [
     pantsColor: '#1e293b',
     cashSpent: 90,
   },
-  // Guests queuing outside along left sidewalk with Music (♫) & Chat (•••) bubbles
+  // Guests queuing outside in front of the screen along the front sidewalk (gy = 10.4..10.6, gx = 1.65..-0.1)
   {
     id: 'g_queue_1',
     name: 'Chloe',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: -0.75,
-    gridY: 8.9,
+    gridX: 1.65,
+    gridY: 10.42,
     path: [],
     state: 'QUEUEING',
     stateTimer: 2.5,
@@ -231,8 +233,8 @@ const INITIAL_GUESTS: GuestAgent[] = [
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: -0.75,
-    gridY: 7.9,
+    gridX: 0.77,
+    gridY: 10.56,
     path: [],
     state: 'QUEUEING',
     stateTimer: 4.0,
@@ -251,8 +253,8 @@ const INITIAL_GUESTS: GuestAgent[] = [
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: -0.75,
-    gridY: 6.9,
+    gridX: -0.11,
+    gridY: 10.42,
     path: [],
     state: 'QUEUEING',
     stateTimer: 5.5,
@@ -289,8 +291,8 @@ export default function App() {
     ropeTier: 1,
   });
 
-  // Build Mode & UI State (Default open in Build Mode showing Isometric Chair & Speaker like IMG_1503.jpeg)
-  const [activeBottomTab, setActiveBottomTab] = useState<BottomDrawerTab>('BUILD');
+  // Build Mode & UI State (Default null so front entrance, queue line & parked cars are 100% visible)
+  const [activeBottomTab, setActiveBottomTab] = useState<BottomDrawerTab>(null);
   const [showFullCatalog, setShowFullCatalog] = useState<boolean>(false);
   const [buildCategory, setBuildCategory] = useState<ItemCategory | 'ALL'>('ALL');
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogItem | null>(
@@ -303,9 +305,10 @@ export default function App() {
   const [cameraZoom, setCameraZoom] = useState<number>(1.0);
   const [cameraResetTick, setCameraResetTick] = useState<number>(0);
 
-  // Left Sidebar Modal & Technical Blueprint Modal
+  // Left Sidebar Modal, Technical Blueprint Modal & GitHub Publish Modal
   const [activeLeftModal, setActiveLeftModal] = useState<LeftModalTab>(null);
   const [isBlueprintOpen, setIsBlueprintOpen] = useState<boolean>(false);
+  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState<boolean>(false);
 
   // Quests, Live Alerts & Audio
   const [quests, setQuests] = useState<QuestTask[]>(INITIAL_QUESTS);
@@ -1053,6 +1056,14 @@ export default function App() {
                 <Code2 className="w-4 h-4" />
                 <span>Kotlin / C# Code</span>
               </button>
+
+              <button
+                onClick={() => setIsGitHubModalOpen(true)}
+                className="px-4 py-3.5 rounded-2xl bg-cyan-950/90 hover:bg-cyan-900 border-2 border-emerald-400/60 text-emerald-300 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <GitBranch className="w-4 h-4" />
+                <span>Publish to GitHub</span>
+              </button>
             </div>
 
             <div className="text-xs font-mono text-purple-300/75 pt-1">
@@ -1254,6 +1265,15 @@ export default function App() {
                     {dayNightReport.emissiveMultiplier.toFixed(2)}x NEON
                     {dayNightOverrideHour !== null ? ' (LOCKED)' : ''}
                   </span>
+                </button>
+
+                <button
+                  onClick={() => setIsGitHubModalOpen(true)}
+                  className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-emerald-400/60 text-emerald-300 hover:bg-emerald-950 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
+                  title="Publish Repo to GitHub Pages for Other Players"
+                >
+                  <GitBranch className="w-3.5 h-3.5" />
+                  <span>Publish to GitHub</span>
                 </button>
 
                 <button
@@ -2793,6 +2813,12 @@ export default function App() {
       <TechnicalBlueprintModal
         isOpen={isBlueprintOpen}
         onClose={() => setIsBlueprintOpen(false)}
+      />
+
+      {/* PUBLISH TO GITHUB & SHARE WITH PLAYERS MODAL */}
+      <GitHubPublishModal
+        isOpen={isGitHubModalOpen}
+        onClose={() => setIsGitHubModalOpen(false)}
       />
     </div>
   );

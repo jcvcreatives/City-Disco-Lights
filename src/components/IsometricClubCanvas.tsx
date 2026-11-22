@@ -256,12 +256,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   });
 
   const getViewportTransform = (width: number, height: number, userZoom: number) => {
-    const autoScale = Math.min(1.22, Math.max(0.55, Math.min(width / 760, height / 640)));
+    const autoScale = Math.min(1.18, Math.max(0.54, Math.min(width / 780, height / 670)));
     const scale = autoScale * userZoom;
     const tileW = BASE_TILE_W * scale;
     const tileH = BASE_TILE_H * scale;
-    const originX = width * (width < 640 ? 0.53 : 0.505) + panOffsetRef.current.x;
-    const originY = height * (width < 640 ? 0.28 : 0.305) + panOffsetRef.current.y;
+    const originX = width * (width < 640 ? 0.525 : 0.505) + panOffsetRef.current.x;
+    const originY = height * (width < 640 ? 0.205 : 0.225) + panOffsetRef.current.y;
     return { scale, tileW, tileH, originX, originY };
   };
 
@@ -835,20 +835,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
       drawIllustratedCitySkyline(ctx, originX, originY, scale, t);
 
-      // 2. OUTSIDE STREET, PARKING LOT, CARS, STREETLAMPS & VELVET ROPE QUEUE
-      drawIllustratedParkingAndStreet(
-        ctx,
-        originX,
-        originY,
-        tileW,
-        tileH,
-        scale,
-        t,
-        props.parkingState,
-        guestsRef.current
-      );
-
-      // 3. CLUB CUTAWAY WALLS, EXPOSED BRICKS, STAIRCASE, SCAFFOLDING & BOTTLE SHELVES
+      // 2. CLUB CUTAWAY WALLS, EXPOSED BRICKS, STAIRCASE, SCAFFOLDING & BOTTLE SHELVES
       drawIllustratedClubShell(
         ctx,
         originX,
@@ -861,6 +848,19 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         props.unlockedFloors,
         props.playerLevel,
         stairsHitboxRef
+      );
+
+      // 3. FRONT FOREGROUND ENTRANCE PLAZA, SIDEWALK, VELVET ROPE QUEUE & PARKING LOT
+      drawIllustratedParkingAndStreet(
+        ctx,
+        originX,
+        originY,
+        tileW,
+        tileH,
+        scale,
+        t,
+        props.parkingState,
+        guestsRef.current
       );
 
       // 4. PASTEL RAINBOW GLOWING 6x6 DANCE FLOOR GRID (Matching the center disco floor in IMG_1503.jpeg)
@@ -932,7 +932,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         );
       }
 
-      // 6. PAINTER'S ALGORITHM DEPTH SORT FOR 3D FURNITURE, HIRED STAFF & GUESTS
+      // 6. PAINTER'S ALGORITHM DEPTH SORT FOR 3D FURNITURE, HIRED STAFF, GUESTS & FRONT QUEUE
       const drawables: Array<{ depth: number; draw: () => void }> = [];
 
       for (const item of floorItems) {
@@ -1004,7 +1004,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         });
       }
 
-      // Active Floor Guests
+      // Active Floor Interior Guests
       const allGuests = guestsRef.current;
       for (let i = 0; i < allGuests.length; i++) {
         const guest = allGuests[i];
@@ -1028,16 +1028,39 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         });
       }
 
-      // Foreground Entrance Archway Wall Cutaway (at DOOR_COORD = 2, 9)
+      // Foreground Entrance Archway Wall Cutaway & Neon Entry Sign (at Front Door gy = 10, gx = 1.4..3.5)
       drawables.push({
-        depth: DOOR_COORD.x + DOOR_COORD.y + 2.2,
+        depth: DOOR_COORD.x + DOOR_COORD.y + 1.15,
         draw: () => drawEntranceArchwayCutaway(ctx, originX, originY, tileW, tileH, scale),
+      });
+
+      // Front Sidewalk Queueing Guests standing right in front of the Entrance Archway
+      const queueGuests = allGuests.filter((g) => g.state === 'QUEUEING');
+      queueGuests.forEach((qg, idx) => {
+        const qx = 1.65 - idx * 0.88;
+        const qy = 10.42 + (idx % 2) * 0.14;
+        drawables.push({
+          depth: qx + qy + 2.5,
+          draw: () =>
+            drawIllustratedCharacter(ctx, qg, qx, qy, originX, originY, tileW, tileH, scale, t),
+        });
       });
 
       drawables.sort((a, b) => a.depth - b.depth);
       for (let i = 0; i < drawables.length; i++) {
         drawables[i].draw();
       }
+
+      // 6B. FRONT FOREGROUND VELVET ROPES, PARKED CARS & CURVED STREETLAMPS (Always visible in front!)
+      drawForegroundQueueCarsAndLamps(
+        ctx,
+        originX,
+        originY,
+        tileW,
+        tileH,
+        scale,
+        props.parkingState
+      );
 
       // 7. GLOBAL DAY/NIGHT CYCLE SCENE DARKENING OVERLAY
       drawGlobalDayNightOverlay(
@@ -1517,8 +1540,8 @@ function drawIllustratedCitySkyline(
 }
 
 /**
- * Draws the outside asphalt parking lot with white diagonal parking lines, rounded teal & dark sedans,
- * tall curved streetlights casting warm golden light cones, sidewalk curb, and velvet rope queue.
+ * Draws the outside asphalt parking lot in front of the screen (gy = 10..15, gx = -3..11)
+ * with white diagonal parking stall lines, front sidewalk pavement, curb strips, and VIP entrance carpet.
  */
 function drawIllustratedParkingAndStreet(
   ctx: CanvasRenderingContext2D,
@@ -1527,18 +1550,18 @@ function drawIllustratedParkingAndStreet(
   tileW: number,
   tileH: number,
   scale: number,
-  t: number,
-  parkingState: ParkingUpgradeState,
-  guests: GuestAgent[]
+  _t: number,
+  _parkingState: ParkingUpgradeState,
+  _guests: GuestAgent[]
 ) {
-  // Dark Slate/Indigo Asphalt Base on Left & Bottom
+  // 1. Front & Left-Front Slate/Indigo Asphalt Parking Lot Base (directly in front of the club at gy = 10..15)
   const lotPoly = [
-    { gx: -7, gy: 1 },
-    { gx: 0, gy: 1 },
+    { gx: -4.5, gy: 5.5 },
+    { gx: 0, gy: 5.5 },
     { gx: 0, gy: 10 },
-    { gx: 11, gy: 10 },
-    { gx: 11, gy: 15 },
-    { gx: -7, gy: 15 },
+    { gx: 10.5, gy: 10 },
+    { gx: 10.5, gy: 15.2 },
+    { gx: -4.5, gy: 15.2 },
   ];
   ctx.beginPath();
   lotPoly.forEach((pt, idx) => {
@@ -1548,11 +1571,11 @@ function drawIllustratedParkingAndStreet(
     else ctx.lineTo(sx, sy);
   });
   ctx.closePath();
-  ctx.fillStyle = '#221d38';
+  ctx.fillStyle = '#1f1a36';
   ctx.fill();
 
-  // Sidewalk pavement along the club's front-left wall (gx = -1.5..0, gy = 1..10.5) & front-right wall
-  for (let gy = 1; gy < GRID_SIZE + 1; gy++) {
+  // 2. Front Sidewalk Pavement along the front entrance wall (gy = 10, gx = -2..10) & left corner (gx = -1, gy = 7..10)
+  for (let gy = 7; gy < GRID_SIZE; gy++) {
     drawIsoTilePolygon(
       ctx,
       -1,
@@ -1562,12 +1585,13 @@ function drawIllustratedParkingAndStreet(
       originY,
       tileW,
       tileH,
-      '#352d54',
-      '#231c3d',
+      '#382f57',
+      '#241d3d',
       1.2
     );
   }
-  for (let gx = -1; gx < GRID_SIZE + 1; gx++) {
+  for (let gx = -2; gx < GRID_SIZE; gx++) {
+    const isDoorway = gx === 2 || gx === 1;
     drawIsoTilePolygon(
       ctx,
       gx,
@@ -1577,37 +1601,77 @@ function drawIllustratedParkingAndStreet(
       originY,
       tileW,
       tileH,
-      '#352d54',
+      isDoorway ? '#4c1d95' : '#3a3159',
       '#231c3d',
       1.2
     );
   }
 
-  // Diagonal White Parking Space Lines on Left Lot
-  ctx.strokeStyle = 'rgba(203, 213, 225, 0.35)';
+  // 3. VIP Entrance Red/Magenta Carpet Runner at the Front Door (gx = 1.7..3.1, gy = 9.95..11.15)
+  const carpetPts = [
+    { gx: 1.65, gy: 9.95 },
+    { gx: 3.15, gy: 9.95 },
+    { gx: 3.15, gy: 11.15 },
+    { gx: 1.65, gy: 11.15 },
+  ];
+  ctx.beginPath();
+  carpetPts.forEach((pt, idx) => {
+    const sx = originX + (pt.gx - pt.gy) * (tileW / 2);
+    const sy = originY + (pt.gx + pt.gy) * (tileH / 2);
+    if (idx === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  });
+  ctx.closePath();
+  ctx.fillStyle = '#be185d';
+  ctx.fill();
+  ctx.strokeStyle = '#facc15';
   ctx.lineWidth = 2 * scale;
-  for (let row = 3; row <= 11; row += 2) {
-    const p1x = originX + (-2.2 - row) * (tileW / 2);
-    const p1y = originY + (-2.2 + row) * (tileH / 2);
-    const p2x = originX + (-4.5 - row) * (tileW / 2);
-    const p2y = originY + (-4.5 + row) * (tileH / 2);
+  ctx.stroke();
+
+  // 4. Diagonal White Parking Stall Lines across the Front Parking Lot (gy = 11.15..13.5, gx = -2.2..9.2)
+  ctx.strokeStyle = 'rgba(226, 232, 240, 0.42)';
+  ctx.lineWidth = 2.2 * scale;
+  for (let stallGx = -2.0; stallGx <= 8.8; stallGx += 2.15) {
+    const p1x = originX + (stallGx - 11.15) * (tileW / 2);
+    const p1y = originY + (stallGx + 11.15) * (tileH / 2);
+    const p2x = originX + (stallGx - 0.5 - 13.35) * (tileW / 2);
+    const p2y = originY + (stallGx - 0.5 + 13.35) * (tileH / 2);
     ctx.beginPath();
     ctx.moveTo(p1x, p1y);
     ctx.lineTo(p2x, p2y);
     ctx.stroke();
   }
 
-  // Illustrated Isometric Rounded Cars (Teal Hatchback & Dark Navy Coupe from IMG_1503.jpeg)
-  drawIllustratedSedan(ctx, -3.5, 5.5, originX, originY, tileW, tileH, scale, '#2dd4bf', '#0f766e');
-  drawIllustratedSedan(ctx, -2.5, 8.6, originX, originY, tileW, tileH, scale, '#334155', '#1e293b');
-  if (parkingState.lotTier >= 2) {
-    drawIllustratedSedan(ctx, -3.6, 3.2, originX, originY, tileW, tileH, scale, '#f43f5e', '#9f1239');
-  }
-  if (parkingState.lotTier >= 3) {
-    drawIllustratedSedan(ctx, -1.5, 11.2, originX, originY, tileW, tileH, scale, '#facc15', '#a16207');
-  }
+  // Front Sidewalk Curb Line separating sidewalk (gy = 11.0) from asphalt parking stalls
+  const curbStart = {
+    x: originX + (-2.2 - 11.05) * (tileW / 2),
+    y: originY + (-2.2 + 11.05) * (tileH / 2),
+  };
+  const curbEnd = {
+    x: originX + (9.8 - 11.05) * (tileW / 2),
+    y: originY + (9.8 + 11.05) * (tileH / 2),
+  };
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 3 * scale;
+  ctx.beginPath();
+  ctx.moveTo(curbStart.x, curbStart.y);
+  ctx.lineTo(curbEnd.x, curbEnd.y);
+  ctx.stroke();
+}
 
-  // Velvet Rope Stanchions along sidewalk queue leading to Front Door
+/**
+ * Draws the foreground velvet rope queue barriers, front parked cars, and curved streetlamps
+ * directly in front of the screen after the guest queue has rendered so the line and cars are 100% visible.
+ */
+function drawForegroundQueueCarsAndLamps(
+  ctx: CanvasRenderingContext2D,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  parkingState: ParkingUpgradeState
+) {
   const ropeColor =
     parkingState.ropeTier === 3
       ? '#facc15'
@@ -1615,95 +1679,124 @@ function drawIllustratedParkingAndStreet(
       ? '#f43f5e'
       : '#c026d3';
 
-  const stanchions = [
-    { gx: -0.3, gy: 6.2 },
-    { gx: -0.3, gy: 7.7 },
-    { gx: -0.3, gy: 9.2 },
+  // 1. Front Sidewalk Velvet Rope Stanchions guarding the front queue line (gy = 10.82, gx = -1.6..1.85)
+  const leftQueueStanchions = [
+    { gx: -1.55, gy: 10.82 },
+    { gx: -0.4, gy: 10.82 },
+    { gx: 0.75, gy: 10.82 },
+    { gx: 1.85, gy: 10.82 },
   ];
-  for (let i = 0; i < stanchions.length; i++) {
-    const st = stanchions[i];
-    const px = originX + (st.gx - st.gy) * (tileW / 2);
-    const py = originY + (st.gx + st.gy) * (tileH / 2);
+  const rightVipStanchions = [
+    { gx: 3.15, gy: 10.82 },
+    { gx: 4.45, gy: 10.82 },
+    { gx: 5.75, gy: 10.82 },
+  ];
 
-    // Gold/Chrome Base & Pole
-    ctx.fillStyle = '#94a3b8';
-    ctx.beginPath();
-    ctx.ellipse(px, py, 4.5 * scale, 2.2 * scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.2 * scale;
-    ctx.stroke();
+  const drawStanchionChain = (chain: { gx: number; gy: number }[]) => {
+    for (let i = 0; i < chain.length; i++) {
+      const st = chain[i];
+      const px = originX + (st.gx - st.gy) * (tileW / 2);
+      const py = originY + (st.gx + st.gy) * (tileH / 2);
 
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 2.5 * scale;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px, py - 19 * scale);
-    ctx.stroke();
-
-    if (i < stanchions.length - 1) {
-      const next = stanchions[i + 1];
-      const nx = originX + (next.gx - next.gy) * (tileW / 2);
-      const ny = originY + (next.gx + next.gy) * (tileH / 2);
-      ctx.strokeStyle = ropeColor;
-      ctx.lineWidth = 3 * scale;
+      // Gold/Chrome Base & Pole
+      ctx.fillStyle = parkingState.ropeTier >= 2 ? '#facc15' : '#94a3b8';
       ctx.beginPath();
-      ctx.moveTo(px, py - 15 * scale);
-      ctx.quadraticCurveTo((px + nx) / 2, (py + ny) / 2 - 6 * scale, nx, ny - 15 * scale);
+      ctx.ellipse(px, py, 5 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.3 * scale;
       ctx.stroke();
+
+      ctx.strokeStyle = parkingState.ropeTier >= 2 ? '#fef08a' : '#e2e8f0';
+      ctx.lineWidth = 2.6 * scale;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px, py - 20 * scale);
+      ctx.stroke();
+
+      // Top finial ball
+      ctx.fillStyle = parkingState.ropeTier >= 2 ? '#facc15' : '#cbd5e1';
+      ctx.beginPath();
+      ctx.arc(px, py - 21 * scale, 2.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (i < chain.length - 1) {
+        const next = chain[i + 1];
+        const nx = originX + (next.gx - next.gy) * (tileW / 2);
+        const ny = originY + (next.gx + next.gy) * (tileH / 2);
+        ctx.strokeStyle = ropeColor;
+        ctx.lineWidth = 3.4 * scale;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 15 * scale);
+        ctx.quadraticCurveTo((px + nx) / 2, (py + ny) / 2 - 5 * scale, nx, ny - 15 * scale);
+        ctx.stroke();
+      }
     }
+  };
+
+  drawStanchionChain(leftQueueStanchions);
+  drawStanchionChain(rightVipStanchions);
+
+  // 2. Front Parked Cars in the Foreground Parking Stalls (gy = 11.8..12.4, gx = -0.7..7.5)
+  // Teal Hatchback & Dark Navy Coupe always visible in front of the entrance
+  drawIllustratedSedan(ctx, -0.65, 11.85, originX, originY, tileW, tileH, scale, '#2dd4bf', '#0f766e');
+  drawIllustratedSedan(ctx, 1.55, 12.15, originX, originY, tileW, tileH, scale, '#38bdf8', '#1e3a8a');
+  drawIllustratedSedan(ctx, 3.85, 12.15, originX, originY, tileW, tileH, scale, '#f43f5e', '#9f1239');
+  if (parkingState.lotTier >= 2) {
+    drawIllustratedSedan(ctx, 6.1, 12.15, originX, originY, tileW, tileH, scale, '#a855f7', '#581c87');
+  }
+  if (parkingState.lotTier >= 3) {
+    drawIllustratedSedan(ctx, 8.2, 12.1, originX, originY, tileW, tileH, scale, '#facc15', '#a16207');
   }
 
-  // Queueing Guests standing along the sidewalk (left wall exterior, matching IMG_1503.jpeg)
-  const queueGuests = guests.filter((g) => g.state === 'QUEUEING');
-  queueGuests.forEach((qg, idx) => {
-    const qx = -0.75;
-    const qy = 8.9 - idx * 0.95;
-    drawIllustratedCharacter(ctx, qg, qx, qy, originX, originY, tileW, tileH, scale, t);
-  });
-
-  // Curved Streetlamps with volumetric warm yellow light cones (Matching left side of IMG_1503.jpeg)
+  // 3. Curved Foreground Streetlamps casting warm golden light cones over the queue & front parking lot
   const lamps = [
-    { gx: -1.4, gy: 4.5 },
-    { gx: -1.4, gy: 7.2 },
-    { gx: -1.4, gy: 10.0 },
-    { gx: 0.4, gy: 11.4 },
+    { gx: -1.75, gy: 11.1 },
+    { gx: 1.35, gy: 11.1 },
+    { gx: 4.85, gy: 11.1 },
+    { gx: 8.15, gy: 11.1 },
   ];
   for (let i = 0; i < lamps.length; i++) {
     const l = lamps[i];
     const lx = originX + (l.gx - l.gy) * (tileW / 2);
     const ly = originY + (l.gx + l.gy) * (tileH / 2);
 
-    // Pole
-    ctx.strokeStyle = '#475569';
+    // Pole base
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.ellipse(lx, ly, 4.5 * scale, 2.2 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Curved Pole
+    ctx.strokeStyle = '#64748b';
     ctx.lineWidth = 3 * scale;
     ctx.beginPath();
     ctx.moveTo(lx, ly);
-    ctx.lineTo(lx, ly - 54 * scale);
-    ctx.quadraticCurveTo(lx, ly - 62 * scale, lx - 12 * scale, ly - 60 * scale);
+    ctx.lineTo(lx, ly - 52 * scale);
+    ctx.quadraticCurveTo(lx, ly - 60 * scale, lx - 12 * scale, ly - 58 * scale);
     ctx.stroke();
 
     // Lamp Hood
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = '#cbd5e1';
     ctx.beginPath();
-    ctx.ellipse(lx - 13 * scale, ly - 60 * scale, 5 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(lx - 13 * scale, ly - 58 * scale, 5 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Warm Golden Cone of Light
     ctx.save();
     const coneGrad = ctx.createLinearGradient(
       lx - 13 * scale,
-      ly - 60 * scale,
+      ly - 58 * scale,
       lx - 13 * scale,
-      ly - 5 * scale
+      ly - 3 * scale
     );
-    coneGrad.addColorStop(0, 'rgba(253, 224, 71, 0.55)');
+    coneGrad.addColorStop(0, 'rgba(253, 224, 71, 0.5)');
     coneGrad.addColorStop(1, 'rgba(253, 224, 71, 0)');
     ctx.fillStyle = coneGrad;
     ctx.beginPath();
-    ctx.moveTo(lx - 13 * scale, ly - 60 * scale);
-    ctx.lineTo(lx - 38 * scale, ly - 4 * scale);
-    ctx.lineTo(lx + 12 * scale, ly - 4 * scale);
+    ctx.moveTo(lx - 13 * scale, ly - 58 * scale);
+    ctx.lineTo(lx - 36 * scale, ly - 3 * scale);
+    ctx.lineTo(lx + 12 * scale, ly - 3 * scale);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -2182,7 +2275,8 @@ function drawBackbarBottleShelves(
 }
 
 /**
- * Draws the front-left entrance cutaway archway wall segment that guests walk through.
+ * Draws the front entrance archway with twin neon pillars and an illuminated "CLUB ENTRANCE" header
+ * right at the front boundary (gy = 10, gx = 1.45..3.35) where queued guests walk into the club.
  */
 function drawEntranceArchwayCutaway(
   ctx: CanvasRenderingContext2D,
@@ -2192,29 +2286,69 @@ function drawEntranceArchwayCutaway(
   tileH: number,
   scale: number
 ) {
-  const gx = 0;
-  const gy = 8.4;
-  const p1 = {
-    x: originX + (gx - gy) * (tileW / 2),
-    y: originY + (gx + gy) * (tileH / 2),
+  const gy = 10;
+  const leftPillarA = {
+    x: originX + (1.3 - gy) * (tileW / 2),
+    y: originY + (1.3 + gy) * (tileH / 2),
   };
-  const p2 = {
-    x: originX + (gx - (gy + 1.6)) * (tileW / 2),
-    y: originY + (gx + (gy + 1.6)) * (tileH / 2),
+  const leftPillarB = {
+    x: originX + (1.85 - gy) * (tileW / 2),
+    y: originY + (1.85 + gy) * (tileH / 2),
   };
-  const h = 64 * scale;
+  const rightPillarA = {
+    x: originX + (2.95 - gy) * (tileW / 2),
+    y: originY + (2.95 + gy) * (tileH / 2),
+  };
+  const rightPillarB = {
+    x: originX + (3.5 - gy) * (tileW / 2),
+    y: originY + (3.5 + gy) * (tileH / 2),
+  };
+  const h = 58 * scale;
 
+  // Left Entrance Pillar
   ctx.beginPath();
-  ctx.moveTo(p1.x, p1.y);
-  ctx.lineTo(p2.x, p2.y);
-  ctx.lineTo(p2.x, p2.y - h);
-  ctx.lineTo(p1.x, p1.y - h);
+  ctx.moveTo(leftPillarA.x, leftPillarA.y);
+  ctx.lineTo(leftPillarB.x, leftPillarB.y);
+  ctx.lineTo(leftPillarB.x, leftPillarB.y - h);
+  ctx.lineTo(leftPillarA.x, leftPillarA.y - h);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(71, 56, 89, 0.88)';
+  ctx.fillStyle = 'rgba(59, 43, 84, 0.92)';
   ctx.fill();
   ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+
+  // Right Entrance Pillar
+  ctx.beginPath();
+  ctx.moveTo(rightPillarA.x, rightPillarA.y);
+  ctx.lineTo(rightPillarB.x, rightPillarB.y);
+  ctx.lineTo(rightPillarB.x, rightPillarB.y - h);
+  ctx.lineTo(rightPillarA.x, rightPillarA.y - h);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(59, 43, 84, 0.92)';
+  ctx.fill();
+  ctx.stroke();
+
+  // Overhead Archway Lintel Beam connecting the two pillars
+  ctx.beginPath();
+  ctx.moveTo(leftPillarA.x, leftPillarA.y - h);
+  ctx.lineTo(rightPillarB.x, rightPillarB.y - h);
+  ctx.lineTo(rightPillarB.x, rightPillarB.y - h - 15 * scale);
+  ctx.lineTo(leftPillarA.x, leftPillarA.y - h - 15 * scale);
+  ctx.closePath();
+  ctx.fillStyle = '#311042';
+  ctx.fill();
+  ctx.strokeStyle = '#f472b6';
   ctx.lineWidth = 2.2 * scale;
   ctx.stroke();
+
+  // Glowing Neon "ENTRANCE" Sign centered on the lintel
+  const midX = (leftPillarA.x + rightPillarB.x) / 2;
+  const midY = (leftPillarA.y + rightPillarB.y) / 2 - h - 4 * scale;
+  ctx.fillStyle = '#67e8f9';
+  ctx.font = `900 ${Math.max(8, Math.round(9.5 * scale))}px "Outfit", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('★ VIP ENTRANCE ★', midX, midY);
 }
 
 function drawWallStringLights(
