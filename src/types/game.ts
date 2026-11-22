@@ -57,11 +57,19 @@ export type GuestState =
   | 'ORDERING_DRINK'
   | 'WALKING_TO_DANCE'
   | 'DANCING'
+  | 'DANCER_MOVES'
   | 'WALKING_TO_SEAT'
   | 'RESTING_AT_SEAT'
   | 'CLIMBING_STAIRS'
   | 'DESCENDING_STAIRS'
   | 'LEAVING';
+
+export type DancerMoveVariant =
+  | 'SHUFFLE_STEP'
+  | 'FIST_PUMP'
+  | 'SPIN_TWIRL'
+  | 'BREAKDANCE_WAVE'
+  | 'CYBER_JUMP';
 
 export type BubbleType =
   | 'BEER'
@@ -94,6 +102,9 @@ export interface GuestAgent {
   hairColor: string;
   pantsColor: string;
   cashSpent: number;
+  danceMove?: DancerMoveVariant;
+  danceMoveTimer?: number;
+  dancePhaseOffset?: number;
 }
 
 export interface FloatingText {
@@ -179,7 +190,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     category: 'DANCE_TILE',
     tier: 3,
     costCash: 750,
-    costGems: 2,
+    costGems: 0,
     unlockLevel: 6,
     width: 2,
     depth: 2,

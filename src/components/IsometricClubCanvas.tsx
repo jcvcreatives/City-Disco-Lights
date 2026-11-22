@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   BubbleType,
   CatalogItem,
+  DancerMoveVariant,
   DrinkMix,
   FloatingText,
   GuestAgent,
@@ -58,6 +59,7 @@ interface IsometricClubCanvasProps {
   activeDrink: DrinkMix;
   parkingState: ParkingUpgradeState;
   clubMetrics: ClubSimulationMetrics;
+  clubBpm?: number;
   isRemoveMode: boolean;
   cameraZoom: number;
   cameraResetTick: number;
@@ -99,6 +101,87 @@ const CELEBRITY_NAMES = [
 const SHIRT_COLORS = ['#dc2626', '#6366f1', '#475569', '#e11d48', '#9333ea', '#0284c7', '#10b981'];
 const HAIR_COLORS = ['#1e1b4b', '#78350f', '#92400e', '#451a03', '#3b0764'];
 const PANTS_COLORS = ['#1e3a8a', '#1e293b', '#312e81', '#334155', '#3b0764'];
+const MAX_HYPE_PARTICLE_COLORS = [
+  '#22d3ee',
+  '#f43f5e',
+  '#facc15',
+  '#a855f7',
+  '#4ade80',
+  '#ec4899',
+  '#38bdf8',
+];
+
+const ALL_DANCER_MOVES: DancerMoveVariant[] = [
+  'SHUFFLE_STEP',
+  'FIST_PUMP',
+  'SPIN_TWIRL',
+  'BREAKDANCE_WAVE',
+  'CYBER_JUMP',
+];
+
+/**
+ * Selects a randomized dance move weighted by the club's current music BPM:
+ * - Lower BPM (<= 118): favors groove-heavy SHUFFLE_STEP & BREAKDANCE_WAVE
+ * - Mid BPM (119 - 129): favors FIST_PUMP, SPIN_TWIRL & SHUFFLE_STEP
+ * - High BPM (>= 130): favors high-energy CYBER_JUMP, SPIN_TWIRL & FIST_PUMP
+ */
+function pickRandomDancerMoveForBpm(
+  bpm: number,
+  currentMove?: DancerMoveVariant
+): DancerMoveVariant {
+  const pool: DancerMoveVariant[] =
+    bpm >= 130
+      ? [
+          'CYBER_JUMP',
+          'CYBER_JUMP',
+          'SPIN_TWIRL',
+          'SPIN_TWIRL',
+          'FIST_PUMP',
+          'FIST_PUMP',
+          'BREAKDANCE_WAVE',
+          'SHUFFLE_STEP',
+        ]
+      : bpm >= 120
+      ? [
+          'FIST_PUMP',
+          'FIST_PUMP',
+          'SPIN_TWIRL',
+          'SHUFFLE_STEP',
+          'SHUFFLE_STEP',
+          'BREAKDANCE_WAVE',
+          'CYBER_JUMP',
+        ]
+      : [
+          'SHUFFLE_STEP',
+          'SHUFFLE_STEP',
+          'BREAKDANCE_WAVE',
+          'BREAKDANCE_WAVE',
+          'FIST_PUMP',
+          'SPIN_TWIRL',
+        ];
+  const filtered = currentMove ? pool.filter((m) => m !== currentMove) : pool;
+  const candidates = filtered.length > 0 ? filtered : ALL_DANCER_MOVES;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+interface DancerHypeParticle {
+  floor: 1 | 2;
+  gridX: number;
+  gridY: number;
+  offsetX: number;
+  offsetY: number;
+  vx: number;
+  vy: number;
+  kind: 'CONFETTI' | 'BUBBLE';
+  color: string;
+  size: number;
+  rotation: number;
+  rotationSpeed: number;
+  swayPhase: number;
+  swaySpeed: number;
+  age: number;
+  maxAge: number;
+}
 
 /**
  * Cross-browser rounded rectangle helper (works on all older Safari/iOS/Android WebView versions).
@@ -153,6 +236,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   activeDrink,
   parkingState,
   clubMetrics,
+  clubBpm = 124,
   isRemoveMode,
   cameraZoom,
   cameraResetTick,
@@ -193,6 +277,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     h: 0,
   });
 
+  const dancerParticlesRef = useRef<DancerHypeParticle[]>([]);
+  const prevHypeSegmentsRef = useRef<number>(clubMetrics.hypeSegments);
+
   useEffect(() => {
     panOffsetRef.current = { x: 0, y: 0 };
   }, [cameraResetTick]);
@@ -218,6 +305,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     activeDrink,
     parkingState,
     clubMetrics,
+    clubBpm,
     isRemoveMode,
     cameraZoom,
     dayNightOverrideHour,
@@ -229,40 +317,40 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     onClickBuyFloor2,
   });
 
-  useEffect(() => {
-    latestPropsRef.current = {
-      isPlaying,
-      activeFloor,
-      unlockedFloors,
-      playerLevel,
-      placedItems,
-      staffMembers,
-      buildModeItem,
-      buildRotation,
-      placementModeStaff,
-      relocatingStaffUid,
-      activeDrink,
-      parkingState,
-      clubMetrics,
-      isRemoveMode,
-      cameraZoom,
-      dayNightOverrideHour,
-      onCycleTimeReport,
-      onEarnRevenue,
-      onStaffTaskComplete,
-      onQueueCountChange,
-      onClickGrid,
-      onClickBuyFloor2,
-    };
-  });
+  latestPropsRef.current = {
+    isPlaying,
+    activeFloor,
+    unlockedFloors,
+    playerLevel,
+    placedItems,
+    staffMembers,
+    buildModeItem,
+    buildRotation,
+    placementModeStaff,
+    relocatingStaffUid,
+    activeDrink,
+    parkingState,
+    clubMetrics,
+    clubBpm,
+    isRemoveMode,
+    cameraZoom,
+    dayNightOverrideHour,
+    onCycleTimeReport,
+    onEarnRevenue,
+    onStaffTaskComplete,
+    onQueueCountChange,
+    onClickGrid,
+    onClickBuyFloor2,
+  };
 
   const getViewportTransform = (width: number, height: number, userZoom: number) => {
     const autoScale = Math.min(1.18, Math.max(0.54, Math.min(width / 780, height / 670)));
     const scale = autoScale * userZoom;
     const tileW = BASE_TILE_W * scale;
     const tileH = BASE_TILE_H * scale;
+    const floorLift = latestPropsRef.current.activeFloor >= 2 ? -36 * scale : 0;
     const originX = width * (width < 640 ? 0.525 : 0.505) + panOffsetRef.current.x;
-    const originY = height * (width < 640 ? 0.205 : 0.225) + panOffsetRef.current.y;
+    const originY = height * (width < 640 ? 0.205 : 0.225) + panOffsetRef.current.y + floorLift;
     return { scale, tileW, tileH, originX, originY };
   };
 
@@ -291,6 +379,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     let animId = 0;
     let lastTimeMs = performance.now();
     let spawnAccumulator = 0;
+    let particleEmitAccumulator = 0;
     let lastReportedQueueCount = -1;
 
     let viewportWidth = canvas.clientWidth || window.innerWidth;
@@ -312,6 +401,38 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     window.addEventListener('resize', updateCanvasSize);
     window.addEventListener('orientationchange', updateCanvasSize);
 
+    const spawnParticlesAboveDancer = (dancer: GuestAgent, count: number) => {
+      const particles = dancerParticlesRef.current;
+      for (let k = 0; k < count; k++) {
+        if (particles.length >= 160) {
+          particles.shift();
+        }
+        const isBubble = Math.random() < 0.46;
+        const color =
+          MAX_HYPE_PARTICLE_COLORS[
+            Math.floor(Math.random() * MAX_HYPE_PARTICLE_COLORS.length)
+          ];
+        particles.push({
+          floor: dancer.floor,
+          gridX: dancer.gridX + (Math.random() - 0.5) * 0.28,
+          gridY: dancer.gridY + (Math.random() - 0.5) * 0.28,
+          offsetX: (Math.random() - 0.5) * 16,
+          offsetY: -44 - Math.random() * 12,
+          vx: (Math.random() - 0.5) * (isBubble ? 10 : 22),
+          vy: isBubble ? -18 - Math.random() * 14 : -26 - Math.random() * 18,
+          kind: isBubble ? 'BUBBLE' : 'CONFETTI',
+          color,
+          size: isBubble ? 2.8 + Math.random() * 2.4 : 3.2 + Math.random() * 2.6,
+          rotation: Math.random() * Math.PI * 2,
+          rotationSpeed: (Math.random() - 0.5) * 11,
+          swayPhase: Math.random() * Math.PI * 2,
+          swaySpeed: 4 + Math.random() * 4,
+          age: 0,
+          maxAge: isBubble ? 1.15 + Math.random() * 0.55 : 0.95 + Math.random() * 0.5,
+        });
+      }
+    };
+
     const stepSimulation60fps = (dt: number) => {
       const props = latestPropsRef.current;
       if (!props.isPlaying) return;
@@ -331,6 +452,54 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       }
 
       const guests = guestsRef.current;
+
+      // Update Max-Hype (3/3 segments) Dancer Confetti & Bubbles Particle System at 60fps
+      const activeParticles = dancerParticlesRef.current;
+      for (let i = activeParticles.length - 1; i >= 0; i--) {
+        const p = activeParticles[i];
+        p.age += dt;
+        if (p.age >= p.maxAge) {
+          activeParticles.splice(i, 1);
+          continue;
+        }
+        p.swayPhase += p.swaySpeed * dt;
+        p.rotation += p.rotationSpeed * dt;
+        const swayVelX = Math.sin(p.swayPhase) * (p.kind === 'BUBBLE' ? 11 : 18);
+        p.offsetX += (p.vx + swayVelX) * dt;
+        p.offsetY += p.vy * dt;
+        if (p.kind === 'CONFETTI') {
+          // Confetti pops up above the dancer, then flutters gently downward
+          p.vy += 36 * dt;
+        } else {
+          // Bubbles accelerate slightly upward with buoyancy
+          p.vy -= 4 * dt;
+        }
+      }
+
+      const currentBpm = Math.max(90, Math.min(180, props.clubBpm || 124));
+      const beatDurationSec = 60 / currentBpm;
+
+      if (metrics.hypeSegments >= 3) {
+        const activeDancers = guests.filter(
+          (g) => g.state === 'DANCING' || g.state === 'DANCER_MOVES'
+        );
+        // Celebrate immediately when Hype reaches maximum 3 segments
+        if (prevHypeSegmentsRef.current < 3 && activeDancers.length > 0) {
+          for (const d of activeDancers) {
+            spawnParticlesAboveDancer(d, 7);
+          }
+        }
+        particleEmitAccumulator += dt;
+        if (particleEmitAccumulator >= 0.085 && activeDancers.length > 0) {
+          particleEmitAccumulator = 0;
+          for (const d of activeDancers) {
+            if (Math.random() < 0.78) {
+              spawnParticlesAboveDancer(d, 2);
+            }
+          }
+        }
+      }
+      prevHypeSegmentsRef.current = metrics.hypeSegments;
       let earnedCashThisFrame = 0;
       let earnedXpThisFrame = 0;
 
@@ -341,6 +510,29 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           guest.bubbleTimer -= dt;
           if (guest.bubbleTimer <= 0) {
             guest.bubble = null;
+          }
+        }
+
+        // BPM-driven DANCER_MOVES AI randomization while guest is on the dance floor
+        if (guest.state === 'DANCER_MOVES' || guest.state === 'DANCING') {
+          if (!guest.danceMove) {
+            guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
+            guest.dancePhaseOffset = Math.random() * Math.PI * 2;
+          }
+          // Automatically promote DANCING guests into DANCER_MOVES after their initial warm-up beat
+          if (guest.state === 'DANCING' && guest.stateTimer < 6.5) {
+            guest.state = 'DANCER_MOVES';
+            guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
+            guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 3));
+          }
+          if (guest.state === 'DANCER_MOVES') {
+            guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 4) - dt;
+            if (guest.danceMoveTimer <= 0) {
+              // Randomize next dance sprite animation move on a musical phrase boundary (4-beat or 8-beat bar)
+              guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
+              guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 4));
+              guest.dancePhaseOffset = Math.random() * Math.PI * 2;
+            }
           }
         }
 
@@ -452,43 +644,61 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             );
             guest.stateTimer = 0.8;
           } else if (guest.state === 'WALKING_TO_DANCE') {
-            guest.state = 'DANCING';
-            guest.stateTimer = 5 + Math.random() * 4;
+            guest.state = 'DANCER_MOVES';
+            guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
+            guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 4));
+            guest.dancePhaseOffset = Math.random() * Math.PI * 2;
+            guest.stateTimer = 6 + Math.random() * 4.5;
             guest.bubble =
               metrics.lightingCount < 2 && Math.random() < 0.25
                 ? 'SPARKLE'
-                : Math.random() < 0.45
-                ? 'SPARKLE'
-                : 'BEER';
+                : Math.random() < 0.5
+                ? 'MUSIC'
+                : 'SPARKLE';
             guest.bubbleTimer = 5.5;
-          } else if (guest.state === 'DANCING') {
-            const seats = items.filter(
+          } else if (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES') {
+            // 35% chance to chain into another DANCER_MOVES freestyle burst on an adjacent dance tile before heading to a seat
+            const danceTiles = items.filter(
               (it) =>
-                it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
+                it.floor === guest.floor &&
+                getCatalogItem(it.catalogId)?.category === 'DANCE_TILE'
             );
-            if (seats.length > 0) {
-              const chosenSeat = seats[Math.floor(Math.random() * seats.length)];
-              guest.state = 'WALKING_TO_SEAT';
-              guest.path = findGridPath(
-                items,
-                guest.floor,
-                guest.gridX,
-                guest.gridY,
-                chosenSeat.gridX,
-                chosenSeat.gridY
-              );
-              guest.stateTimer = 0.8;
+            if (guest.state === 'DANCING' || (danceTiles.length > 0 && Math.random() < 0.35)) {
+              guest.state = 'DANCER_MOVES';
+              guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
+              guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 4));
+              guest.stateTimer = 4.5 + Math.random() * 3.5;
+              guest.bubble = Math.random() < 0.5 ? 'MUSIC' : 'SPARKLE';
+              guest.bubbleTimer = 4.0;
             } else {
-              guest.state = 'LEAVING';
-              guest.path = findGridPath(
-                items,
-                guest.floor,
-                guest.gridX,
-                guest.gridY,
-                DOOR_COORD.x,
-                DOOR_COORD.y
+              const seats = items.filter(
+                (it) =>
+                  it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
               );
-              guest.stateTimer = 1.2;
+              if (seats.length > 0) {
+                const chosenSeat = seats[Math.floor(Math.random() * seats.length)];
+                guest.state = 'WALKING_TO_SEAT';
+                guest.path = findGridPath(
+                  items,
+                  guest.floor,
+                  guest.gridX,
+                  guest.gridY,
+                  chosenSeat.gridX,
+                  chosenSeat.gridY
+                );
+                guest.stateTimer = 0.8;
+              } else {
+                guest.state = 'LEAVING';
+                guest.path = findGridPath(
+                  items,
+                  guest.floor,
+                  guest.gridX,
+                  guest.gridY,
+                  DOOR_COORD.x,
+                  DOOR_COORD.y
+                );
+                guest.stateTimer = 1.2;
+              }
             }
           } else if (guest.state === 'WALKING_TO_SEAT') {
             guest.state = 'RESTING_AT_SEAT';
@@ -912,7 +1122,60 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
       drawIllustratedCitySkyline(ctx, originX, originY, scale, t);
 
-      // 2. CLUB CUTAWAY WALLS, EXPOSED BRICKS, STAIRCASE, SCAFFOLDING & BOTTLE SHELVES
+      // Negative isometric Z-offset & negative z-index layer offset relative to the building's floor level (Floors 2+)
+      // On Floor 1: zOffset = 0, carZIndex = 100 (foreground street level)
+      // On Floor 2+: negative zOffset (-92 * (activeFloor - 1) * scale) and negative carZIndex (-100 * (activeFloor - 1))
+      // so parked cars and street elements render visually and depth-wise *underneath* the elevated building structure.
+      const streetZOffset = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 92 * scale : 0;
+      const parkedCarsZIndex = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 100 : 100;
+      const floorDropH = -streetZOffset;
+      const streetOriginY = originY - streetZOffset;
+
+      // 2. GROUND-LEVEL ENTRANCE PLAZA, SIDEWALK, CROSSWALK & PARKING LOT (At negative zOffset below the building)
+      drawIllustratedParkingAndStreet(
+        ctx,
+        originX,
+        streetOriginY,
+        tileW,
+        tileH,
+        scale,
+        t,
+        props.parkingState,
+        guestsRef.current
+      );
+
+      // 2A. CONDITIONAL NEGATIVE Z-INDEX PARKED CARS PASS (When activeFloor >= 2, carZIndex < 0 so cars render UNDERNEATH the building slab & understructure)
+      if (parkedCarsZIndex < 0) {
+        drawForegroundQueueCarsAndLamps(
+          ctx,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale,
+          props.parkingState,
+          streetZOffset,
+          parkedCarsZIndex,
+          props.activeFloor
+        );
+      }
+
+      // 2B. LOWER BUILDING 1ST-FLOOR EXTERIOR FACADE UNDERSTRUCTURE & OVERHANG SHADOW (When on Floor 2+)
+      if (props.activeFloor >= 2) {
+        drawLowerBuildingUnderstructure(
+          ctx,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale,
+          floorDropH,
+          t,
+          props.activeFloor
+        );
+      }
+
+      // 3. CLUB CUTAWAY WALLS, EXPOSED BRICKS, STAIRCASE, SCAFFOLDING & BOTTLE SHELVES
       drawIllustratedClubShell(
         ctx,
         originX,
@@ -925,19 +1188,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         props.unlockedFloors,
         props.playerLevel,
         stairsHitboxRef
-      );
-
-      // 3. FRONT FOREGROUND ENTRANCE PLAZA, SIDEWALK, VELVET ROPE QUEUE & PARKING LOT
-      drawIllustratedParkingAndStreet(
-        ctx,
-        originX,
-        originY,
-        tileW,
-        tileH,
-        scale,
-        t,
-        props.parkingState,
-        guestsRef.current
       );
 
       // 4. PASTEL RAINBOW GLOWING 6x6 DANCE FLOOR GRID (Matching the center disco floor in IMG_1503.jpeg)
@@ -1009,8 +1259,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         );
       }
 
-      // 6. PAINTER'S ALGORITHM DEPTH SORT FOR 3D FURNITURE, HIRED STAFF, GUESTS & FRONT QUEUE
-      const drawables: Array<{ depth: number; draw: () => void }> = [];
+      // 6. PAINTER'S ALGORITHM DEPTH & Z-INDEX SORT FOR 3D FURNITURE, HIRED STAFF, GUESTS & FRONT QUEUE
+      const drawables: Array<{ zIndex: number; depth: number; draw: () => void }> = [];
 
       for (const item of floorItems) {
         const cat = getCatalogItem(item.catalogId);
@@ -1018,6 +1268,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         const fp = getRotatedFootprint(cat, item.rotation);
         const depth = item.gridX + item.gridY + (fp.width + fp.depth) * 0.5;
         drawables.push({
+          zIndex: 0,
           depth,
           draw: () =>
             drawIllustratedFurniture(
@@ -1042,6 +1293,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       );
       if (primaryDj) {
         drawables.push({
+          zIndex: 0,
           depth: primaryDj.gridX + primaryDj.gridY + 0.35,
           draw: () =>
             drawIllustratedStaff(
@@ -1065,6 +1317,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         const sm = floorStaff[i];
         const depth = sm.gridX + sm.gridY + 0.58;
         drawables.push({
+          zIndex: 0,
           depth,
           draw: () =>
             drawHiredStaffAgent(
@@ -1083,11 +1336,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
       // Active Floor Interior Guests
       const allGuests = guestsRef.current;
+      const activeBpm = props.clubBpm || 124;
       for (let i = 0; i < allGuests.length; i++) {
         const guest = allGuests[i];
         if (guest.floor !== props.activeFloor || guest.state === 'QUEUEING') continue;
         const depth = guest.gridX + guest.gridY + 0.6;
         drawables.push({
+          zIndex: 0,
           depth,
           draw: () =>
             drawIllustratedCharacter(
@@ -1100,44 +1355,66 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               tileW,
               tileH,
               scale,
-              t
+              t,
+              activeBpm
             ),
         });
       }
 
-      // Foreground Entrance Archway Wall Cutaway & Neon Entry Sign (at Front Door gy = 10, gx = 1.4..3.5)
-      drawables.push({
-        depth: DOOR_COORD.x + DOOR_COORD.y + 1.15,
-        draw: () => drawEntranceArchwayCutaway(ctx, originX, originY, tileW, tileH, scale),
-      });
+      // Foreground Entrance Archway Wall Cutaway & Neon Entry Sign (only on Floor 1 at zIndex 0; on Floor 2+ it sits under the building facade)
+      if (props.activeFloor === 1) {
+        drawables.push({
+          zIndex: 0,
+          depth: DOOR_COORD.x + DOOR_COORD.y + 1.15,
+          draw: () => drawEntranceArchwayCutaway(ctx, originX, streetOriginY, tileW, tileH, scale),
+        });
+      }
 
-      // Front Sidewalk Queueing Guests standing right in front of the Entrance Archway
+      // Front Sidewalk Queueing Guests standing right in front of the ground-level Entrance Archway
       const queueGuests = allGuests.filter((g) => g.state === 'QUEUEING');
       queueGuests.forEach((qg, idx) => {
         const qx = 1.65 - idx * 0.88;
         const qy = 10.42 + (idx % 2) * 0.14;
         drawables.push({
+          zIndex: parkedCarsZIndex < 0 ? parkedCarsZIndex + 10 : 0,
           depth: qx + qy + 2.5,
           draw: () =>
-            drawIllustratedCharacter(ctx, qg, qx, qy, originX, originY, tileW, tileH, scale, t),
+            drawIllustratedCharacter(
+              ctx,
+              qg,
+              qx,
+              qy,
+              originX,
+              streetOriginY,
+              tileW,
+              tileH,
+              scale,
+              t,
+              activeBpm
+            ),
         });
       });
 
-      drawables.sort((a, b) => a.depth - b.depth);
+      drawables.sort((a, b) => (a.zIndex !== b.zIndex ? a.zIndex - b.zIndex : a.depth - b.depth));
       for (let i = 0; i < drawables.length; i++) {
         drawables[i].draw();
       }
 
-      // 6B. FRONT FOREGROUND VELVET ROPES, PARKED CARS & CURVED STREETLAMPS (Always visible in front!)
-      drawForegroundQueueCarsAndLamps(
-        ctx,
-        originX,
-        originY,
-        tileW,
-        tileH,
-        scale,
-        props.parkingState
-      );
+      // 6B. FOREGROUND PARKED CARS PASS (Only when parkedCarsZIndex >= 0 on Floor 1)
+      if (parkedCarsZIndex >= 0) {
+        drawForegroundQueueCarsAndLamps(
+          ctx,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale,
+          props.parkingState,
+          streetZOffset,
+          parkedCarsZIndex,
+          props.activeFloor
+        );
+      }
 
       // 7. GLOBAL DAY/NIGHT CYCLE SCENE DARKENING OVERLAY
       drawGlobalDayNightOverlay(
@@ -1171,6 +1448,90 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         if (cat && cat.category === 'LIGHTING' && cat.tier >= 2) {
           drawLightingBeams(ctx, lItem, cat, originX, originY, tileW, tileH, scale, t);
         }
+      }
+
+      // 8B. MAX-HYPE (3/3 SEGMENTS) DANCER CONFETTI & BUBBLES PARTICLE SYSTEM
+      const dancerParticles = dancerParticlesRef.current;
+      if (dancerParticles.length > 0) {
+        ctx.save();
+        for (let i = 0; i < dancerParticles.length; i++) {
+          const p = dancerParticles[i];
+          if (p.floor !== props.activeFloor) continue;
+          const lifeRatio = p.age / p.maxAge;
+          const alpha =
+            lifeRatio < 0.15
+              ? lifeRatio / 0.15
+              : lifeRatio > 0.78
+              ? Math.max(0, (1 - lifeRatio) / 0.22)
+              : 1;
+          const basePx = originX + (p.gridX - p.gridY) * (tileW / 2);
+          const basePy = originY + (p.gridX + p.gridY) * (tileH / 2);
+          const sx = basePx + p.offsetX * scale;
+          const sy = basePy + p.offsetY * scale;
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+
+          if (p.kind === 'BUBBLE') {
+            const r = p.size * (1 + lifeRatio * 0.28) * scale;
+            if (lifeRatio > 0.88) {
+              // Tiny bubble pop ring burst at end of lifetime
+              ctx.strokeStyle = p.color;
+              ctx.lineWidth = 1.4 * scale;
+              ctx.beginPath();
+              ctx.arc(sx, sy, r * 1.45, 0, Math.PI * 2);
+              ctx.stroke();
+            } else {
+              // Translucent glossy neon bubble with dark cel outline & white catchlight
+              ctx.fillStyle = p.color;
+              ctx.globalAlpha = alpha * 0.32;
+              ctx.beginPath();
+              ctx.arc(sx, sy, r, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.globalAlpha = alpha;
+              ctx.strokeStyle = INK;
+              ctx.lineWidth = 1.3 * scale;
+              ctx.beginPath();
+              ctx.arc(sx, sy, r, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.strokeStyle = p.color;
+              ctx.lineWidth = 1.1 * scale;
+              ctx.beginPath();
+              ctx.arc(sx, sy, Math.max(0.5, r - 0.8 * scale), 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Specular bubble highlight dot
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              ctx.arc(
+                sx - r * 0.34,
+                sy - r * 0.34,
+                Math.max(0.7, r * 0.26),
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+            }
+          } else {
+            // 3D tumbling cyber-neon confetti ribbon with dark cel-shaded outline
+            const w = p.size * 1.55 * scale;
+            const h = p.size * 0.85 * Math.max(0.28, Math.abs(Math.cos(p.rotation * 1.6))) * scale;
+            ctx.translate(sx, sy);
+            ctx.rotate(p.rotation);
+            ctx.fillStyle = p.color;
+            ctx.strokeStyle = INK;
+            ctx.lineWidth = 1.1 * scale;
+            ctx.beginPath();
+            ctx.rect(-w / 2, -h / 2, w, h);
+            ctx.fill();
+            ctx.stroke();
+          }
+
+          ctx.restore();
+        }
+        ctx.restore();
       }
 
       // 9. FLOATING CASH & HYPE TEXTS
@@ -1801,7 +2162,8 @@ function drawIllustratedParkingAndStreet(
 
 /**
  * Draws the foreground velvet rope queue barriers, front parked cars (including the Boxy Yellow Taxi Cab),
- * and curved streetlamps directly in front of the screen after the guest queue has rendered.
+ * and curved streetlamps using a conditional negative z-index offset and negative vertical zOffset
+ * relative to the building's floor level when on Floor 2 or higher.
  */
 function drawForegroundQueueCarsAndLamps(
   ctx: CanvasRenderingContext2D,
@@ -1810,8 +2172,13 @@ function drawForegroundQueueCarsAndLamps(
   tileW: number,
   tileH: number,
   scale: number,
-  parkingState: ParkingUpgradeState
+  parkingState: ParkingUpgradeState,
+  zOffset: number = 0,
+  zIndex: number = 100,
+  activeFloor: number = 1
 ) {
+  const effectiveOriginY = originY - zOffset;
+  const isUnderBuilding = zIndex < 0 || activeFloor >= 2;
   const ropeColor =
     parkingState.ropeTier === 3
       ? '#facc15'
@@ -1836,7 +2203,7 @@ function drawForegroundQueueCarsAndLamps(
     for (let i = 0; i < chain.length; i++) {
       const st = chain[i];
       const px = originX + (st.gx - st.gy) * (tileW / 2);
-      const py = originY + (st.gx + st.gy) * (tileH / 2);
+      const py = effectiveOriginY + (st.gx + st.gy) * (tileH / 2);
 
       // Gold/Chrome Base & Pole
       ctx.fillStyle = parkingState.ropeTier >= 2 ? '#facc15' : '#94a3b8';
@@ -1863,7 +2230,7 @@ function drawForegroundQueueCarsAndLamps(
       if (i < chain.length - 1) {
         const next = chain[i + 1];
         const nx = originX + (next.gx - next.gy) * (tileW / 2);
-        const ny = originY + (next.gx + next.gy) * (tileH / 2);
+        const ny = effectiveOriginY + (next.gx + next.gy) * (tileH / 2);
         ctx.strokeStyle = ropeColor;
         ctx.lineWidth = 3.4 * scale;
         ctx.beginPath();
@@ -1878,19 +2245,92 @@ function drawForegroundQueueCarsAndLamps(
   drawStanchionChain(rightVipStanchions);
 
   // 1B. Outdoor Isometric Potted Club Plants flanking the VIP Entrance Archway
-  drawIsometricPottedPlant(ctx, 1.15, 10.15, originX, originY, tileW, tileH, scale);
-  drawIsometricPottedPlant(ctx, 3.65, 10.15, originX, originY, tileW, tileH, scale);
+  drawIsometricPottedPlant(ctx, 1.15, 10.15, originX, effectiveOriginY, tileW, tileH, scale);
+  drawIsometricPottedPlant(ctx, 3.65, 10.15, originX, effectiveOriginY, tileW, tileH, scale);
 
-  // 2. Front Parked Vehicles in Foreground Stalls (Boxy Yellow Taxi Cab + Stylized Sedans from image_5.png)
-  drawIllustratedSedan(ctx, -0.65, 11.85, originX, originY, tileW, tileH, scale, '#2dd4bf', '#0f766e', false);
+  // 2. Front Parked Vehicles in Foreground Stalls with Negative Z-Index & Negative Z-Offset relative to Floor 2+
+  // When isUnderBuilding (activeFloor >= 2, zIndex < 0), vehicles shift slightly closer under the building overhang
+  // and render with a building shadow cast across their hoods/roofs so they visually sit underneath the building.
+  const underBuildingGyShift = isUnderBuilding ? -0.95 : 0;
+  drawIllustratedSedan(
+    ctx,
+    -0.65,
+    11.85 + underBuildingGyShift,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    '#2dd4bf',
+    '#0f766e',
+    false,
+    zOffset,
+    zIndex
+  );
   // Stylized Boxy Yellow Taxi Cab right by the front crosswalk!
-  drawIllustratedSedan(ctx, 1.55, 12.15, originX, originY, tileW, tileH, scale, '#facc15', '#ca8a04', true);
-  drawIllustratedSedan(ctx, 3.85, 12.15, originX, originY, tileW, tileH, scale, '#f43f5e', '#9f1239', false);
+  drawIllustratedSedan(
+    ctx,
+    1.55,
+    12.15 + underBuildingGyShift,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    '#facc15',
+    '#ca8a04',
+    true,
+    zOffset,
+    zIndex
+  );
+  drawIllustratedSedan(
+    ctx,
+    3.85,
+    12.15 + underBuildingGyShift,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    '#f43f5e',
+    '#9f1239',
+    false,
+    zOffset,
+    zIndex
+  );
   if (parkingState.lotTier >= 2) {
-    drawIllustratedSedan(ctx, 6.1, 12.15, originX, originY, tileW, tileH, scale, '#38bdf8', '#1e3a8a', false);
+    drawIllustratedSedan(
+      ctx,
+      6.1,
+      12.15 + underBuildingGyShift,
+      originX,
+      originY,
+      tileW,
+      tileH,
+      scale,
+      '#38bdf8',
+      '#1e3a8a',
+      false,
+      zOffset,
+      zIndex
+    );
   }
   if (parkingState.lotTier >= 3) {
-    drawIllustratedSedan(ctx, 8.2, 12.1, originX, originY, tileW, tileH, scale, '#a855f7', '#581c87', false);
+    drawIllustratedSedan(
+      ctx,
+      8.2,
+      12.1 + underBuildingGyShift,
+      originX,
+      originY,
+      tileW,
+      tileH,
+      scale,
+      '#a855f7',
+      '#581c87',
+      false,
+      zOffset,
+      zIndex
+    );
   }
 
   // 3. Curved Foreground Streetlamps casting warm golden light cones over the queue & front parking lot
@@ -1903,7 +2343,7 @@ function drawForegroundQueueCarsAndLamps(
   for (let i = 0; i < lamps.length; i++) {
     const l = lamps[i];
     const lx = originX + (l.gx - l.gy) * (tileW / 2);
-    const ly = originY + (l.gx + l.gy) * (tileH / 2);
+    const ly = effectiveOriginY + (l.gx + l.gy) * (tileH / 2);
 
     // Pole base
     ctx.fillStyle = '#334155';
@@ -2000,128 +2440,370 @@ function drawIllustratedSedan(
   scale: number,
   bodyColor: string,
   shadeColor: string,
-  isTaxi: boolean = false
+  isTaxi: boolean = false,
+  zOffset: number = 0,
+  zIndex: number = 100
 ) {
+  // Apply negative zOffset (cy = originY + (gx + gy) * (tileH / 2) - zOffset)
+  // When zOffset < 0 on Floor 2+, the car projects vertically down to street level underneath the building.
   const cx = originX + (gx - gy) * (tileW / 2);
-  const cy = originY + (gx + gy) * (tileH / 2);
+  const cy = originY + (gx + gy) * (tileH / 2) - zOffset;
+  const isUnderBuilding = zIndex < 0;
+  // Slightly foreshorten scale when viewed from elevated Floor 2+ above street level
+  const carScale = isUnderBuilding ? scale * 0.92 : scale;
 
   ctx.save();
-  // Ground shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  // Ground shadow (expanded when underneath the building overhang)
+  ctx.fillStyle = isUnderBuilding ? 'rgba(6, 3, 18, 0.62)' : 'rgba(0, 0, 0, 0.45)';
   ctx.beginPath();
-  ctx.ellipse(cx, cy + 3 * scale, 32 * scale, 15 * scale, -0.35, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 3 * carScale, 33 * carScale, 15.5 * carScale, -0.35, 0, Math.PI * 2);
   ctx.fill();
 
   // Lower Car Body (Boxy retro-digital chassis with thick hand-drawn ink border)
   fillStrokeRoundedRect(
     ctx,
-    cx - 28 * scale,
-    cy - 14 * scale,
-    56 * scale,
-    22 * scale,
-    6 * scale,
+    cx - 28 * carScale,
+    cy - 14 * carScale,
+    56 * carScale,
+    22 * carScale,
+    6 * carScale,
     bodyColor,
     INK,
-    2.4 * scale
+    2.4 * carScale
   );
 
   // Taxi Checkered Side Stripe
   if (isTaxi) {
     for (let sq = 0; sq < 7; sq++) {
       ctx.fillStyle = sq % 2 === 0 ? '#150d2a' : '#ffffff';
-      ctx.fillRect(cx - 21 * scale + sq * 6 * scale, cy - 4 * scale, 6 * scale, 3.8 * scale);
+      ctx.fillRect(
+        cx - 21 * carScale + sq * 6 * carScale,
+        cy - 4 * carScale,
+        6 * carScale,
+        3.8 * carScale
+      );
     }
   }
 
   // Upper Boxy Cabin / Windows
   fillStrokeRoundedRect(
     ctx,
-    cx - 18 * scale,
-    cy - 26 * scale,
-    36 * scale,
-    14 * scale,
-    4.5 * scale,
+    cx - 18 * carScale,
+    cy - 26 * carScale,
+    36 * carScale,
+    14 * carScale,
+    4.5 * carScale,
     shadeColor,
     INK,
-    2.2 * scale
+    2.2 * carScale
   );
 
   // Cel-shaded Windshield & Side Glass with hard white specular highlight
   fillStrokeRoundedRect(
     ctx,
-    cx - 14 * scale,
-    cy - 23.5 * scale,
-    13 * scale,
-    10 * scale,
-    2.5 * scale,
+    cx - 14 * carScale,
+    cy - 23.5 * carScale,
+    13 * carScale,
+    10 * carScale,
+    2.5 * carScale,
     '#38bdf8',
     INK,
-    1.5 * scale
+    1.5 * carScale
   );
   // Crisp flat specular slash on glass
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.lineWidth = 1.6 * scale;
+  ctx.lineWidth = 1.6 * carScale;
   ctx.beginPath();
-  ctx.moveTo(cx - 11 * scale, cy - 21.5 * scale);
-  ctx.lineTo(cx - 6 * scale, cy - 16 * scale);
+  ctx.moveTo(cx - 11 * carScale, cy - 21.5 * carScale);
+  ctx.lineTo(cx - 6 * carScale, cy - 16 * carScale);
   ctx.stroke();
 
   fillStrokeRoundedRect(
     ctx,
-    cx + 2 * scale,
-    cy - 23.5 * scale,
-    12 * scale,
-    10 * scale,
-    2.5 * scale,
+    cx + 2 * carScale,
+    cy - 23.5 * carScale,
+    12 * carScale,
+    10 * carScale,
+    2.5 * carScale,
     '#0284c7',
     INK,
-    1.5 * scale
+    1.5 * carScale
   );
 
   // Glowing Roof "TAXI" Sign on Boxy Yellow Taxi Cab
   if (isTaxi) {
     fillStrokeRoundedRect(
       ctx,
-      cx - 8 * scale,
-      cy - 32 * scale,
-      16 * scale,
-      6.5 * scale,
-      2 * scale,
+      cx - 8 * carScale,
+      cy - 32 * carScale,
+      16 * carScale,
+      6.5 * carScale,
+      2 * carScale,
       '#fef08a',
       INK,
-      1.6 * scale
+      1.6 * carScale
     );
     ctx.fillStyle = '#150d2a';
-    ctx.font = `900 ${Math.max(6, Math.round(6 * scale))}px "JetBrains Mono", monospace`;
+    ctx.font = `900 ${Math.max(6, Math.round(6 * carScale))}px "JetBrains Mono", monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('TAXI', cx, cy - 27 * scale);
+    ctx.fillText('TAXI', cx, cy - 27 * carScale);
   }
 
   // Wheels
   const wheels = [
-    { wx: cx - 15 * scale, wy: cy + 7 * scale },
-    { wx: cx + 14 * scale, wy: cy + 5 * scale },
+    { wx: cx - 15 * carScale, wy: cy + 7 * carScale },
+    { wx: cx + 14 * carScale, wy: cy + 5 * carScale },
   ];
   for (const w of wheels) {
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.arc(w.wx, w.wy, 6.8 * scale, 0, Math.PI * 2);
+    ctx.arc(w.wx, w.wy, 6.8 * carScale, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.8 * scale;
+    ctx.lineWidth = 1.8 * carScale;
     ctx.stroke();
 
     ctx.fillStyle = '#cbd5e1';
     ctx.beginPath();
-    ctx.arc(w.wx, w.wy, 3 * scale, 0, Math.PI * 2);
+    ctx.arc(w.wx, w.wy, 3 * carScale, 0, Math.PI * 2);
     ctx.fill();
   }
 
   // Glowing Yellow Headlights
   ctx.fillStyle = '#fde047';
   ctx.beginPath();
-  ctx.arc(cx - 25 * scale, cy - 3 * scale, 3 * scale, 0, Math.PI * 2);
+  ctx.arc(cx - 25 * carScale, cy - 3 * carScale, 3 * carScale, 0, Math.PI * 2);
   ctx.fill();
+
+  // Conditional Under-Building Ambient Shadow Tint when zIndex < 0 (Floors 2+)
+  if (isUnderBuilding) {
+    fillStrokeRoundedRect(
+      ctx,
+      cx - 28 * carScale,
+      cy - 26 * carScale,
+      56 * carScale,
+      34 * carScale,
+      6 * carScale,
+      'rgba(9, 5, 24, 0.24)',
+      'rgba(0, 0, 0, 0)',
+      0
+    );
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draws the 3D lower-story exterior building understructure when viewing Floor 2+,
+ * so the Floor 2 slab sits visually on top of the 1st-floor nightclub building
+ * while the parking lot, street, queue, and parked cars sit down at ground level below the building.
+ */
+function drawLowerBuildingUnderstructure(
+  ctx: CanvasRenderingContext2D,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  floorDropH: number,
+  t: number,
+  activeFloor: number
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  // Front-left corner (gx=0, gy=10), Front-center apex (gx=10, gy=10), Front-right corner (gx=10, gy=0)
+  const sw = {
+    x: originX - GRID_SIZE * halfW,
+    y: originY + GRID_SIZE * halfH,
+  };
+  const s = {
+    x: originX,
+    y: originY + GRID_SIZE * tileH,
+  };
+  const se = {
+    x: originX + GRID_SIZE * halfW,
+    y: originY + GRID_SIZE * halfH,
+  };
+
+  ctx.save();
+
+  // 0. Ground-Level Building Overhang Drop Shadow cast onto the street & parked cars below (zIndex < 0 layer)
+  const shadowReach = 34 * scale;
+  const shadowGrad = ctx.createLinearGradient(
+    s.x,
+    s.y + floorDropH - 6 * scale,
+    s.x,
+    s.y + floorDropH + shadowReach
+  );
+  shadowGrad.addColorStop(0, 'rgba(7, 3, 19, 0.72)');
+  shadowGrad.addColorStop(1, 'rgba(7, 3, 19, 0)');
+  ctx.fillStyle = shadowGrad;
+  ctx.beginPath();
+  ctx.moveTo(sw.x - 18 * scale, sw.y + floorDropH);
+  ctx.lineTo(s.x, s.y + floorDropH);
+  ctx.lineTo(se.x + 12 * scale, se.y + floorDropH);
+  ctx.lineTo(se.x + 12 * scale, se.y + floorDropH + shadowReach);
+  ctx.lineTo(s.x, s.y + floorDropH + shadowReach * 1.15);
+  ctx.lineTo(sw.x - 18 * scale, sw.y + floorDropH + shadowReach);
+  ctx.closePath();
+  ctx.fill();
+
+  // 1. LEFT FRONT EXTERIOR BUILDING FACADE (gx = 0..10 along gy = 10, facing the front parking lot & entrance)
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.y);
+  ctx.lineTo(s.x, s.y);
+  ctx.lineTo(s.x, s.y + floorDropH);
+  ctx.lineTo(sw.x, sw.y + floorDropH);
+  ctx.closePath();
+  ctx.fillStyle = '#251942';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2.4 * scale;
+  ctx.stroke();
+
+  // 2. RIGHT FRONT EXTERIOR BUILDING FACADE (gy = 10..0 along gx = 10, facing the right street side)
+  ctx.beginPath();
+  ctx.moveTo(s.x, s.y);
+  ctx.lineTo(se.x, se.y);
+  ctx.lineTo(se.x, se.y + floorDropH);
+  ctx.lineTo(s.x, s.y + floorDropH);
+  ctx.closePath();
+  ctx.fillStyle = '#1b1133';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2.4 * scale;
+  ctx.stroke();
+
+  // 3. Structural Vertical Concrete Pilasters & Horizontal Brick Courses on Both Lower Facades
+  for (let i = 1; i <= 4; i++) {
+    const frac = i / 5;
+    // Left facade pilaster
+    const lx = sw.x + (s.x - sw.x) * frac;
+    const ly = sw.y + (s.y - sw.y) * frac;
+    ctx.strokeStyle = '#332457';
+    ctx.lineWidth = 4 * scale;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly + 4 * scale);
+    ctx.lineTo(lx, ly + floorDropH - 2 * scale);
+    ctx.stroke();
+
+    // Right facade pilaster
+    const rx = s.x + (se.x - s.x) * frac;
+    const ry = s.y + (se.y - s.y) * frac;
+    ctx.strokeStyle = '#281b47';
+    ctx.lineWidth = 4 * scale;
+    ctx.beginPath();
+    ctx.moveTo(rx, ry + 4 * scale);
+    ctx.lineTo(rx, ry + floorDropH - 2 * scale);
+    ctx.stroke();
+  }
+
+  // 4. Glowing 1st-Floor Frosted Club Windows on the Lower Building Facades (showing Floor 1 disco pulse below)
+  const windowColors = ['#22d3ee', '#f43f5e', '#a855f7', '#38bdf8'];
+  for (let w = 0; w < 3; w++) {
+    // Left facade windows (avoiding the ground floor main entrance doorway near gx=1.5..3.5)
+    const fracL = 0.46 + w * 0.19;
+    const wxL = sw.x + (s.x - sw.x) * fracL;
+    const wyL = sw.y + (s.y - sw.y) * fracL + floorDropH * 0.32;
+    const winW = 20 * scale;
+    const winH = 26 * scale;
+    const glowColor = windowColors[(w + Math.floor(t * 2)) % windowColors.length];
+
+    ctx.beginPath();
+    ctx.moveTo(wxL - winW * 0.5, wyL - winW * 0.25);
+    ctx.lineTo(wxL + winW * 0.5, wyL + winW * 0.25);
+    ctx.lineTo(wxL + winW * 0.5, wyL + winW * 0.25 + winH);
+    ctx.lineTo(wxL - winW * 0.5, wyL - winW * 0.25 + winH);
+    ctx.closePath();
+    ctx.fillStyle = '#0f0722';
+    ctx.fill();
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.stroke();
+
+    // Inner neon window glow
+    ctx.fillStyle = glowColor;
+    ctx.globalAlpha = 0.28 + 0.15 * Math.sin(t * 4 + w);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Right facade windows
+    const fracR = 0.2 + w * 0.26;
+    const wxR = s.x + (se.x - s.x) * fracR;
+    const wyR = s.y + (se.y - s.y) * fracR + floorDropH * 0.32;
+    const glowR = windowColors[(w + 1 + Math.floor(t * 2)) % windowColors.length];
+
+    ctx.beginPath();
+    ctx.moveTo(wxR - winW * 0.5, wyR + winW * 0.25);
+    ctx.lineTo(wxR + winW * 0.5, wyR - winW * 0.25);
+    ctx.lineTo(wxR + winW * 0.5, wyR - winW * 0.25 + winH);
+    ctx.lineTo(wxR - winW * 0.5, wyR + winW * 0.25 + winH);
+    ctx.closePath();
+    ctx.fillStyle = '#0f0722';
+    ctx.fill();
+    ctx.strokeStyle = glowR;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.stroke();
+
+    ctx.fillStyle = glowR;
+    ctx.globalAlpha = 0.26 + 0.14 * Math.cos(t * 4 + w);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // 5. Structural Floor-2 Concrete Cantilever Ledge & Glowing Cyan/Magenta Floor Divider Cornice
+  const ledgeH = 9 * scale;
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.y);
+  ctx.lineTo(s.x, s.y);
+  ctx.lineTo(s.x, s.y + ledgeH);
+  ctx.lineTo(sw.x, sw.y + ledgeH);
+  ctx.closePath();
+  ctx.fillStyle = '#4c3b78';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(s.x, s.y);
+  ctx.lineTo(se.x, se.y);
+  ctx.lineTo(se.x, se.y + ledgeH);
+  ctx.lineTo(s.x, s.y + ledgeH);
+  ctx.closePath();
+  ctx.fillStyle = '#3b2c63';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+
+  // Neon Cyan & Magenta Architectural Trim Strips Separating Upper Floor Slab from Lower Building Story
+  ctx.strokeStyle = '#22d3ee';
+  ctx.lineWidth = 2.6 * scale;
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.y + ledgeH + 1.5 * scale);
+  ctx.lineTo(s.x, s.y + ledgeH + 1.5 * scale);
+  ctx.lineTo(se.x, se.y + ledgeH + 1.5 * scale);
+  ctx.stroke();
+
+  // Badge on the front corner beam showing elevated story level above street parking
+  fillStrokeRoundedRect(
+    ctx,
+    s.x - 54 * scale,
+    s.y + 14 * scale,
+    108 * scale,
+    17 * scale,
+    5 * scale,
+    '#0f0724',
+    '#f43f5e',
+    1.8 * scale
+  );
+  ctx.fillStyle = '#67e8f9';
+  ctx.font = `900 ${Math.max(8, Math.round(8.5 * scale))}px "JetBrains Mono", monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(`▲ FLOOR ${activeFloor} · STREET BELOW ▼`, s.x, s.y + 25.5 * scale);
+
   ctx.restore();
 }
 
@@ -3676,32 +4358,153 @@ function drawIllustratedCharacter(
   tileW: number,
   tileH: number,
   scale: number,
-  t: number
+  t: number,
+  clubBpm: number = 124
 ) {
   const px = originX + (gx - gy) * (tileW / 2);
   const py = originY + (gx + gy) * (tileH / 2);
 
-  const isDancing = guest.state === 'DANCING';
-  const bounce =
-    (isDancing ? Math.abs(Math.sin(t * 6.5 + gx * 2.7)) * 5.5 : Math.sin(t * 3 + gx) * 1.1) * scale;
-  const armWave = isDancing ? Math.sin(t * 7 + gy * 3) * 5.5 * scale : 0;
+  const isDancing = guest.state === 'DANCING' || guest.state === 'DANCER_MOVES';
+  const isFreestyleMove = guest.state === 'DANCER_MOVES';
+  const activeMove: DancerMoveVariant = guest.danceMove || 'SHUFFLE_STEP';
+
+  // BPM-synchronized angular frequency: 1 full beat cycle per (60 / clubBpm) seconds
+  const beatHz = Math.max(90, Math.min(180, clubBpm)) / 60;
+  const phase =
+    t * beatHz * Math.PI * 2 + (guest.dancePhaseOffset ?? (gx * 2.7 + gy * 1.9));
+  const beatSin = Math.sin(phase);
+  const beatCos = Math.cos(phase);
+  const halfBeatSin = Math.sin(phase * 0.5);
+
+  // Move-specific kinematics synchronized to the music BPM
+  let bounce = Math.sin(t * 3 + gx) * 1.1 * scale;
+  let swayX = 0;
+  let bodyScaleX = 1;
+  let leftLegDx = 0;
+  let rightLegDx = 0;
+  let leftLegLift = 0;
+  let rightLegLift = 0;
+  let leftHandOffsetX = -10.5 * scale;
+  let leftHandOffsetY = -16.5 * scale;
+  let rightHandOffsetX = 7.2 * scale;
+  let rightHandOffsetY = -16.5 * scale;
+  let headTiltX = 0;
+  let moveRingColor = '#22d3ee';
+
+  if (isDancing) {
+    if (!isFreestyleMove) {
+      // Basic groove bounce
+      bounce = Math.abs(beatSin) * 5.2 * scale;
+      const armWave = beatCos * 5.2 * scale;
+      leftHandOffsetY -= armWave;
+      rightHandOffsetY += armWave;
+    } else if (activeMove === 'SHUFFLE_STEP') {
+      // Melbourne Shuffle: lateral slide, alternating high knee kicks & counter-arm swing
+      bounce = Math.abs(beatSin) * 4.8 * scale;
+      swayX = halfBeatSin * 4.5 * scale;
+      leftLegDx = beatSin * 3.8 * scale;
+      rightLegDx = -beatSin * 3.8 * scale;
+      leftLegLift = Math.max(0, beatSin) * 4.2 * scale;
+      rightLegLift = Math.max(0, -beatSin) * 4.2 * scale;
+      leftHandOffsetX = (-11.2 + beatCos * 2.4) * scale;
+      leftHandOffsetY = (-17.5 - beatSin * 4.2) * scale;
+      rightHandOffsetX = (7.8 - beatCos * 2.4) * scale;
+      rightHandOffsetY = (-17.5 + beatSin * 4.2) * scale;
+      headTiltX = beatSin * 1.6 * scale;
+      moveRingColor = '#22d3ee';
+    } else if (activeMove === 'FIST_PUMP') {
+      // High-energy Bass Fist Pump: deep knee bounce + right/left fist pumping high overhead on the beat
+      bounce = Math.pow(Math.abs(beatSin), 0.75) * 6.8 * scale;
+      swayX = beatCos * 1.8 * scale;
+      const pumpUp = Math.max(0, beatSin) * 14.5 * scale;
+      const altPumpUp = Math.max(0, -beatSin) * 11.5 * scale;
+      leftHandOffsetX = -10.8 * scale;
+      leftHandOffsetY = -19.5 * scale - altPumpUp;
+      rightHandOffsetX = 8.4 * scale;
+      rightHandOffsetY = -22.5 * scale - pumpUp;
+      headTiltX = beatCos * 2.1 * scale;
+      moveRingColor = '#f43f5e';
+    } else if (activeMove === 'SPIN_TWIRL') {
+      // 360 Spin Twirl: horizontal foreshortening (cos spin), wide outstretched arms & twirl lift
+      bounce = (2.5 + Math.abs(beatSin) * 5.2) * scale;
+      bodyScaleX = 0.52 + 0.48 * Math.abs(beatCos);
+      swayX = beatSin * 3.2 * scale;
+      const armSpan = beatCos * 12.5 * scale;
+      leftHandOffsetX = -3.5 * scale - armSpan;
+      leftHandOffsetY = (-21.5 + beatSin * 3.2) * scale;
+      rightHandOffsetX = 0.5 * scale + armSpan;
+      rightHandOffsetY = (-21.5 - beatSin * 3.2) * scale;
+      leftLegLift = Math.max(0, beatSin) * 3.5 * scale;
+      rightLegLift = Math.max(0, -beatSin) * 3.5 * scale;
+      headTiltX = beatSin * 2.4 * scale;
+      moveRingColor = '#e879f9';
+    } else if (activeMove === 'BREAKDANCE_WAVE') {
+      // Electro Body-Wave: sinusoidal torso ripple, wide stance & liquid wave arms
+      bounce = Math.abs(beatCos) * 4.2 * scale;
+      swayX = Math.sin(phase) * 5.2 * scale;
+      leftLegDx = -1.8 * scale;
+      rightLegDx = 1.8 * scale;
+      leftHandOffsetX = (-13.5 + beatCos * 2.2) * scale;
+      leftHandOffsetY = (-21 + Math.sin(phase - 0.9) * 7.5) * scale;
+      rightHandOffsetX = (10.2 + beatCos * 2.2) * scale;
+      rightHandOffsetY = (-21 + Math.sin(phase + 0.9) * 7.5) * scale;
+      headTiltX = Math.sin(phase + 0.6) * 2.8 * scale;
+      moveRingColor = '#a855f7';
+    } else if (activeMove === 'CYBER_JUMP') {
+      // High-BPM Cyber Rave Jump: explosive vertical leap, दोनों hands raised in V-shape & tucked legs
+      const jumpPeak = Math.max(0, beatSin);
+      bounce = (jumpPeak * 10.5 + Math.abs(beatCos) * 2.2) * scale;
+      leftLegLift = jumpPeak * 4.8 * scale;
+      rightLegLift = jumpPeak * 4.8 * scale;
+      leftLegDx = -jumpPeak * 2.2 * scale;
+      rightLegDx = jumpPeak * 2.2 * scale;
+      leftHandOffsetX = (-12.5 - jumpPeak * 2.5) * scale;
+      leftHandOffsetY = (-26.5 - jumpPeak * 7.5) * scale;
+      rightHandOffsetX = (9.2 + jumpPeak * 2.5) * scale;
+      rightHandOffsetY = (-26.5 - jumpPeak * 7.5) * scale;
+      moveRingColor = '#4ade80';
+    }
+  }
 
   // Deterministic streetwear variant hash per patron name
   const styleIdx =
     (guest.name.charCodeAt(0) + (guest.name.charCodeAt(1) || 0)) % 4;
 
-  // Floor shadow
+  // Floor shadow & BPM-pulsing neon dance ring for DANCER_MOVES
+  if (isFreestyleMove) {
+    const ringPulse = (11.5 + Math.abs(beatSin) * 4.5) * scale;
+    ctx.save();
+    ctx.strokeStyle = moveRingColor;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.globalAlpha = 0.68;
+    ctx.beginPath();
+    ctx.ellipse(px + swayX * 0.4, py, ringPulse, ringPulse * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.fillStyle = 'rgba(15, 10, 30, 0.45)';
   ctx.beginPath();
-  ctx.ellipse(px, py, 9.5 * scale, 4.8 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(
+    px + swayX * 0.5,
+    py,
+    Math.max(5.5, 9.5 - bounce * 0.25 / scale) * scale,
+    Math.max(2.8, 4.8 - bounce * 0.12 / scale) * scale,
+    0,
+    0,
+    Math.PI * 2
+  );
   ctx.fill();
 
-  // 1. Jeans & Streetwear Sneakers (Thick dark hand-drawn outlines)
+  const torsoW = 14.4 * scale * bodyScaleX;
+  const cx = px + swayX;
+
+  // 1. Jeans & Streetwear Sneakers (Thick dark hand-drawn outlines + move-driven leg stride/lift)
   fillStrokeRoundedRect(
     ctx,
-    px - 5.2 * scale,
-    py - 11.5 * scale - bounce * 0.4,
-    4.4 * scale,
+    cx - 5.2 * scale * bodyScaleX + leftLegDx,
+    py - 11.5 * scale - bounce * 0.45 - leftLegLift,
+    4.4 * scale * Math.max(0.7, bodyScaleX),
     10.5 * scale,
     2 * scale,
     guest.pantsColor,
@@ -3710,9 +4513,9 @@ function drawIllustratedCharacter(
   );
   fillStrokeRoundedRect(
     ctx,
-    px + 0.8 * scale,
-    py - 11.5 * scale - bounce * 0.4,
-    4.4 * scale,
+    cx + 0.8 * scale * bodyScaleX + rightLegDx,
+    py - 11.5 * scale - bounce * 0.45 - rightLegLift,
+    4.4 * scale * Math.max(0.7, bodyScaleX),
     10.5 * scale,
     2 * scale,
     guest.pantsColor,
@@ -3720,19 +4523,19 @@ function drawIllustratedCharacter(
     1.8 * scale
   );
 
-  // 2. Arms & Stylized Blocky Hands (image_5.png Chibi guideline)
-  const leftHandX = px - 10.5 * scale;
-  const leftHandY = py - 16.5 * scale - bounce - armWave;
-  const rightHandX = px + 7.2 * scale;
-  const rightHandY = py - 16.5 * scale - bounce + armWave;
+  // 2. Arms & Stylized Blocky Hands (image_5.png Chibi guideline + randomized BPM move poses)
+  const leftHandX = cx + leftHandOffsetX;
+  const leftHandY = py + leftHandOffsetY - bounce;
+  const rightHandX = cx + rightHandOffsetX;
+  const rightHandY = py + rightHandOffsetY - bounce;
 
   ctx.strokeStyle = guest.shirtColor;
   ctx.lineWidth = 3.4 * scale;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(px - 6 * scale, py - 21 * scale - bounce);
+  ctx.moveTo(cx - 6 * scale * bodyScaleX, py - 21 * scale - bounce);
   ctx.lineTo(leftHandX + 1.8 * scale, leftHandY + 1.8 * scale);
-  ctx.moveTo(px + 6 * scale, py - 21 * scale - bounce);
+  ctx.moveTo(cx + 6 * scale * bodyScaleX, py - 21 * scale - bounce);
   ctx.lineTo(rightHandX + 1.8 * scale, rightHandY + 1.8 * scale);
   ctx.stroke();
 
@@ -3763,9 +4566,9 @@ function drawIllustratedCharacter(
   // 3. Chibi Torso (14px height to match oversized 8.8px-radius Chibi head)
   fillStrokeRoundedRect(
     ctx,
-    px - 7.2 * scale,
+    cx - torsoW * 0.5,
     py - 25 * scale - bounce,
-    14.4 * scale,
+    torsoW,
     14.5 * scale,
     4.5 * scale,
     guest.shirtColor,
@@ -3778,9 +4581,9 @@ function drawIllustratedCharacter(
     // Open Patterned Vest over contrasting tee
     fillStrokeRoundedRect(
       ctx,
-      px - 2.6 * scale,
+      cx - 2.6 * scale * bodyScaleX,
       py - 24.5 * scale - bounce,
-      5.2 * scale,
+      5.2 * scale * bodyScaleX,
       13.5 * scale,
       1.5 * scale,
       '#fef08a',
@@ -3791,20 +4594,21 @@ function drawIllustratedCharacter(
     // Graphic Diamond Emblem on Hoodie
     ctx.fillStyle = '#22d3ee';
     ctx.beginPath();
-    ctx.moveTo(px, py - 21.5 * scale - bounce);
-    ctx.lineTo(px + 3 * scale, py - 18 * scale - bounce);
-    ctx.lineTo(px, py - 14.5 * scale - bounce);
-    ctx.lineTo(px - 3 * scale, py - 18 * scale - bounce);
+    ctx.moveTo(cx, py - 21.5 * scale - bounce);
+    ctx.lineTo(cx + 3 * scale * bodyScaleX, py - 18 * scale - bounce);
+    ctx.lineTo(cx, py - 14.5 * scale - bounce);
+    ctx.lineTo(cx - 3 * scale * bodyScaleX, py - 18 * scale - bounce);
     ctx.closePath();
     ctx.fill();
   }
 
   // 4. Oversized Expressive Chibi Head (Radius 8.6 * scale ≈ torso height, omitted nose, thick dark outline)
+  const headX = cx + headTiltX;
   const headY = py - 34 * scale - bounce;
   const headR = 8.6 * scale;
   ctx.fillStyle = '#f5cba7';
   ctx.beginPath();
-  ctx.arc(px, headY, headR, 0, Math.PI * 2);
+  ctx.arc(headX, headY, headR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2.2 * scale;
@@ -3813,24 +4617,25 @@ function drawIllustratedCharacter(
   // Bold Outline-Rich Hair
   ctx.fillStyle = guest.hairColor;
   ctx.beginPath();
-  ctx.arc(px, headY - 1.8 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
+  ctx.arc(headX, headY - 1.8 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2 * scale;
   ctx.stroke();
 
   // Round Black Chibi Eyes (facing isometric diagonal, omitted nose)
+  const eyeShift = headTiltX * 0.35;
   ctx.fillStyle = INK;
   ctx.beginPath();
-  ctx.arc(px - 2.8 * scale, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
-  ctx.arc(px + 2.8 * scale, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
+  ctx.arc(headX - 2.8 * scale + eyeShift, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
+  ctx.arc(headX + 2.8 * scale + eyeShift, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
   ctx.fill();
 
   // Tiny white eye catchlight
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(px - 3.2 * scale, headY, 0.55 * scale, 0, Math.PI * 2);
-  ctx.arc(px + 2.4 * scale, headY, 0.55 * scale, 0, Math.PI * 2);
+  ctx.arc(headX - 3.2 * scale + eyeShift, headY, 0.55 * scale, 0, Math.PI * 2);
+  ctx.arc(headX + 2.4 * scale + eyeShift, headY, 0.55 * scale, 0, Math.PI * 2);
   ctx.fill();
 
   // 5. Youth Streetwear Headgear (Baseball Caps, Hair Bows, Beanies)
@@ -3838,7 +4643,7 @@ function drawIllustratedCharacter(
     // Streetwear Baseball Cap with sideways/diagonal visor
     ctx.fillStyle = '#22d3ee';
     ctx.beginPath();
-    ctx.arc(px, headY - 2.5 * scale, headR + 0.4 * scale, Math.PI, 0);
+    ctx.arc(headX, headY - 2.5 * scale, headR + 0.4 * scale, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = INK;
@@ -3847,7 +4652,7 @@ function drawIllustratedCharacter(
     // Cap Visor Bill
     fillStrokeRoundedRect(
       ctx,
-      px + 1 * scale,
+      headX + 1 * scale,
       headY - 4.2 * scale,
       9.5 * scale,
       3.2 * scale,
@@ -3858,7 +4663,7 @@ function drawIllustratedCharacter(
     );
   } else if (styleIdx === 1) {
     // Vibrant Pink Hair Bow on top-right of head
-    const bowX = px + 4.5 * scale;
+    const bowX = headX + 4.5 * scale;
     const bowY = headY - 7.5 * scale;
     ctx.fillStyle = '#f43f5e';
     ctx.beginPath();
@@ -3887,7 +4692,7 @@ function drawIllustratedCharacter(
     // Ribbed Neon Street Beanie
     fillStrokeRoundedRect(
       ctx,
-      px - 8.5 * scale,
+      headX - 8.5 * scale,
       headY - 6.8 * scale,
       17 * scale,
       4.2 * scale,
@@ -3902,11 +4707,11 @@ function drawIllustratedCharacter(
     ctx.fillStyle = '#facc15';
     ctx.font = `800 ${Math.max(8, Math.round(10 * scale))}px "Outfit", sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText('★ VIP', px, py - 48 * scale - bounce);
+    ctx.fillText('★ VIP', headX, py - 48 * scale - bounce);
   }
 
   if (guest.bubble) {
-    drawIllustratedSpeechBubble(ctx, px, py - 60 * scale - bounce, scale, guest.bubble);
+    drawIllustratedSpeechBubble(ctx, headX, py - 60 * scale - bounce, scale, guest.bubble);
   }
 }
 

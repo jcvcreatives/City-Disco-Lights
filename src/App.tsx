@@ -2,12 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowUpCircle,
   Check,
-  Code2,
   Crown,
-  GitBranch,
   Info,
   Lock,
-  Palette,
   Plus,
   RotateCw,
   Trash2,
@@ -18,15 +15,12 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { soundEngine } from './audio/soundEngine';
-import { ArtStyleAssetStudioModal } from './components/ArtStyleAssetStudioModal';
-import { GitHubPublishModal } from './components/GitHubPublishModal';
 import { HypeBlastEvent, HypeBlastOverlay } from './components/HypeBlastOverlay';
 import {
   ClubSimulationMetrics,
   DayNightCycleReport,
   IsometricClubCanvas,
 } from './components/IsometricClubCanvas';
-import { TechnicalBlueprintModal } from './components/TechnicalBlueprintModal';
 import {
   CATALOG_ITEMS,
   CatalogItem,
@@ -51,6 +45,8 @@ import {
   canPlaceItem,
   DOOR_COORD,
   getCatalogItem,
+  getRotatedFootprint,
+  GRID_SIZE,
   STAIRS_COORD,
 } from './utils/pathfinding';
 
@@ -82,7 +78,7 @@ const INITIAL_GUESTS: GuestAgent[] = [
     gridX: 3.35,
     gridY: 4.35,
     path: [],
-    state: 'DANCING',
+    state: 'DANCER_MOVES',
     stateTimer: 8,
     patience: 90,
     hype: 80,
@@ -92,6 +88,9 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#451a03',
     pantsColor: '#1e3a8a',
     cashSpent: 45,
+    danceMove: 'SHUFFLE_STEP',
+    danceMoveTimer: 2.2,
+    dancePhaseOffset: 0.4,
   },
   {
     id: 'g_dance_2',
@@ -102,7 +101,7 @@ const INITIAL_GUESTS: GuestAgent[] = [
     gridX: 4.35,
     gridY: 4.85,
     path: [],
-    state: 'DANCING',
+    state: 'DANCER_MOVES',
     stateTimer: 9,
     patience: 95,
     hype: 85,
@@ -112,6 +111,9 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#7c2d12',
     pantsColor: '#1e293b',
     cashSpent: 45,
+    danceMove: 'FIST_PUMP',
+    danceMoveTimer: 2.5,
+    dancePhaseOffset: 1.7,
   },
   {
     id: 'g_dance_3',
@@ -122,7 +124,7 @@ const INITIAL_GUESTS: GuestAgent[] = [
     gridX: 4.25,
     gridY: 3.7,
     path: [],
-    state: 'DANCING',
+    state: 'DANCER_MOVES',
     stateTimer: 7.5,
     patience: 88,
     hype: 90,
@@ -132,6 +134,9 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#1e1b4b',
     pantsColor: '#0f172a',
     cashSpent: 90,
+    danceMove: 'SPIN_TWIRL',
+    danceMoveTimer: 2.0,
+    dancePhaseOffset: 2.9,
   },
   {
     id: 'g_dance_4',
@@ -142,7 +147,7 @@ const INITIAL_GUESTS: GuestAgent[] = [
     gridX: 4.85,
     gridY: 3.35,
     path: [],
-    state: 'DANCING',
+    state: 'DANCER_MOVES',
     stateTimer: 10,
     patience: 92,
     hype: 88,
@@ -152,6 +157,9 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#1e1b4b',
     pantsColor: '#1e3a8a',
     cashSpent: 45,
+    danceMove: 'BREAKDANCE_WAVE',
+    danceMoveTimer: 2.8,
+    dancePhaseOffset: 4.1,
   },
   {
     id: 'g_dance_5',
@@ -162,7 +170,7 @@ const INITIAL_GUESTS: GuestAgent[] = [
     gridX: 5.35,
     gridY: 3.9,
     path: [],
-    state: 'DANCING',
+    state: 'DANCER_MOVES',
     stateTimer: 8.5,
     patience: 90,
     hype: 92,
@@ -172,6 +180,9 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#451a03',
     pantsColor: '#1e1b4b',
     cashSpent: 45,
+    danceMove: 'CYBER_JUMP',
+    danceMoveTimer: 2.4,
+    dancePhaseOffset: 5.2,
   },
   // Seated Lounge Patrons on bottom-right tables & purple booth
   {
@@ -285,6 +296,8 @@ export default function App() {
   const [xp, setXp] = useState<number>(48);
   const [cash, setCash] = useState<number>(1250);
   const [gems, setGems] = useState<number>(5);
+  const cashRef = useRef<number>(cash);
+  cashRef.current = cash;
 
   // Multi-Floor State
   const [activeFloor, setActiveFloor] = useState<1 | 2>(1);
@@ -313,13 +326,10 @@ export default function App() {
   const [cameraZoom, setCameraZoom] = useState<number>(1.0);
   const [cameraResetTick, setCameraResetTick] = useState<number>(0);
 
-  // Left Sidebar Modal, Technical Blueprint Modal, Art Style Studio Modal & GitHub Publish Modal
+  // Left Sidebar Modal & Club Status
   const [activeLeftModal, setActiveLeftModal] = useState<LeftModalTab>(null);
-  const [isBlueprintOpen, setIsBlueprintOpen] = useState<boolean>(false);
-  const [isArtStudioOpen, setIsArtStudioOpen] = useState<boolean>(false);
-  const [classicHudMode, setClassicHudMode] = useState<boolean>(true);
   const [isClubOpenStatus, setIsClubOpenStatus] = useState<boolean>(true);
-  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState<boolean>(false);
+  const [hypeSurgeBonus, setHypeSurgeBonus] = useState<number>(0);
 
   // Quests, Live Alerts & Audio
   const [quests, setQuests] = useState<QuestTask[]>(INITIAL_QUESTS);
@@ -394,7 +404,8 @@ export default function App() {
     totalHype +=
       activeDrink.hypeBoost +
       (parkingState.lotTier - 1) * 25 +
-      (parkingState.bouncerCount - 1) * 15;
+      (parkingState.bouncerCount - 1) * 15 +
+      hypeSurgeBonus;
     totalVibe += (parkingState.ropeTier - 1) * 20;
     tipBonus += (activeDrink.tier - 1) * 0.08 + (parkingState.ropeTier - 1) * 0.06;
 
@@ -414,7 +425,7 @@ export default function App() {
       vibeSegments,
       maxGuests,
     };
-  }, [placedItems, staffMembers, parkingState, unlockedFloors, activeDrink]);
+  }, [placedItems, staffMembers, parkingState, unlockedFloors, activeDrink, hypeSurgeBonus]);
 
   // Compute exact screen pixel position of the Dance Floor Center (gridX = 4.5, gridY = 4.5)
   const triggerHypeBlast = useCallback(
@@ -589,7 +600,6 @@ export default function App() {
         } else if (e.key === 'Escape') {
           setActiveBottomTab(null);
           setActiveLeftModal(null);
-          setIsBlueprintOpen(false);
           setIsRemoveMode(false);
           setPlacementModeStaff(null);
           setRelocatingStaffUid(null);
@@ -606,7 +616,7 @@ export default function App() {
     gridX: number,
     gridY: number
   ) => {
-    if (cash < staffCat.hireCostCash) {
+    if (cashRef.current < staffCat.hireCostCash) {
       soundEngine.playError();
       floatingTextsRef.current.push({
         id: `staff_err_${performance.now()}`,
@@ -663,6 +673,7 @@ export default function App() {
       bubbleTimer: 3.5,
     };
 
+    cashRef.current -= staffCat.hireCostCash;
     setCash((c) => c - staffCat.hireCostCash);
     setStaffMembers((prev) => [...prev, newStaff]);
     if (staffCat.role === 'BOUNCER') {
@@ -677,6 +688,170 @@ export default function App() {
       gridX,
       gridY,
       color: '#38bdf8',
+      age: 0,
+    });
+    return true;
+  };
+
+  /**
+   * Smart placement & spending resolver:
+   * - Checks synchronous `cashRef.current` against `item.costCash` (no hidden Gem gates blocking cash purchases).
+   * - Clamps multi-tile footprints inside the 10x10 floor boundary when clicking near walls.
+   * - Allows upgrading/replacing overlapping items of the same category (or placing furniture over basic dance tiles).
+   * - Automatically snaps to the nearest open tile on the active floor if the exact clicked tile is occupied.
+   */
+  const purchaseAndPlaceCatalogItem = (
+    item: CatalogItem,
+    targetCoord?: { x: number; y: number }
+  ): boolean => {
+    if (cashRef.current < item.costCash) {
+      soundEngine.playError();
+      floatingTextsRef.current.push({
+        id: `err_${performance.now()}`,
+        text: `NEED $${item.costCash} CASH!`,
+        floor: activeFloor,
+        gridX: targetCoord ? targetCoord.x : 4,
+        gridY: targetCoord ? targetCoord.y : 4,
+        color: '#f87171',
+        age: 0,
+      });
+      return false;
+    }
+
+    const fp = getRotatedFootprint(item, buildRotation);
+    const reqX = targetCoord
+      ? Math.max(0, Math.min(GRID_SIZE - fp.width, targetCoord.x))
+      : Math.floor((GRID_SIZE - fp.width) / 2);
+    const reqY = targetCoord
+      ? Math.max(0, Math.min(GRID_SIZE - fp.depth, targetCoord.y))
+      : Math.floor((GRID_SIZE - fp.depth) / 2);
+
+    const isStairsOrDoorBlocked = (gx: number, gy: number) => {
+      for (let dx = 0; dx < fp.width; dx++) {
+        for (let dy = 0; dy < fp.depth; dy++) {
+          const tx = gx + dx;
+          const ty = gy + dy;
+          if (tx === STAIRS_COORD.x && ty === STAIRS_COORD.y) return true;
+          if (activeFloor === 1 && tx === DOOR_COORD.x && ty === DOOR_COORD.y) return true;
+        }
+      }
+      return false;
+    };
+
+    const getOverlappingFloorItems = (gx: number, gy: number) => {
+      return placedItems.filter((p) => {
+        if (p.floor !== activeFloor) return false;
+        const exCat = getCatalogItem(p.catalogId);
+        if (!exCat) return false;
+        const exFp = getRotatedFootprint(exCat, p.rotation);
+        const overlapX = gx < p.gridX + exFp.width && gx + fp.width > p.gridX;
+        const overlapY = gy < p.gridY + exFp.depth && gy + fp.depth > p.gridY;
+        return overlapX && overlapY;
+      });
+    };
+
+    let chosenX = -1;
+    let chosenY = -1;
+    let replacedUids: string[] = [];
+
+    // 1. Check exact clamped coordinate first (empty tile OR upgrade/replace same category or dance tile)
+    if (canPlaceItem(placedItems, item, activeFloor, reqX, reqY, buildRotation)) {
+      chosenX = reqX;
+      chosenY = reqY;
+    } else if (targetCoord && !isStairsOrDoorBlocked(reqX, reqY)) {
+      const overlapping = getOverlappingFloorItems(reqX, reqY);
+      const canUpgradeReplace =
+        overlapping.length > 0 &&
+        overlapping.every((ov) => {
+          const ovCat = getCatalogItem(ov.catalogId);
+          if (!ovCat) return false;
+          // Allow replacing same category item or placing furniture over a dance tile
+          return ovCat.category === item.category || ovCat.category === 'DANCE_TILE';
+        });
+      if (canUpgradeReplace) {
+        chosenX = reqX;
+        chosenY = reqY;
+        replacedUids = overlapping.map((o) => o.uid);
+      }
+    }
+
+    // 2. If exact coordinate is occupied by another category or doorway, find nearest open tile on the floor
+    if (chosenX === -1) {
+      let bestDist = Infinity;
+      for (let gy = 0; gy <= GRID_SIZE - fp.depth; gy++) {
+        for (let gx = 0; gx <= GRID_SIZE - fp.width; gx++) {
+          if (canPlaceItem(placedItems, item, activeFloor, gx, gy, buildRotation)) {
+            const dist = Math.hypot(gx - reqX, gy - reqY);
+            if (dist < bestDist) {
+              bestDist = dist;
+              chosenX = gx;
+              chosenY = gy;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Final fallback: allow replacing dance tiles at the nearest valid spot if floor is completely full
+    if (chosenX === -1) {
+      for (let gy = 0; gy <= GRID_SIZE - fp.depth; gy++) {
+        for (let gx = 0; gx <= GRID_SIZE - fp.width; gx++) {
+          if (isStairsOrDoorBlocked(gx, gy)) continue;
+          const overlapping = getOverlappingFloorItems(gx, gy);
+          if (
+            overlapping.length > 0 &&
+            overlapping.every((o) => {
+              const c = getCatalogItem(o.catalogId);
+              return c?.category === 'DANCE_TILE' || c?.category === item.category;
+            })
+          ) {
+            chosenX = gx;
+            chosenY = gy;
+            replacedUids = overlapping.map((o) => o.uid);
+            break;
+          }
+        }
+        if (chosenX !== -1) break;
+      }
+    }
+
+    if (chosenX === -1 || chosenY === -1) {
+      soundEngine.playError();
+      floatingTextsRef.current.push({
+        id: `full_${performance.now()}`,
+        text: 'NO OPEN TILE ON THIS FLOOR!',
+        floor: activeFloor,
+        gridX: reqX,
+        gridY: reqY,
+        color: '#fbbf24',
+        age: 0,
+      });
+      return false;
+    }
+
+    cashRef.current -= item.costCash;
+    setCash((c) => c - item.costCash);
+    const newItem: PlacedItem = {
+      uid: `placed_${Date.now()}_${Math.random()}`,
+      catalogId: item.id,
+      floor: activeFloor,
+      gridX: chosenX,
+      gridY: chosenY,
+      rotation: buildRotation,
+    };
+    setPlacedItems((prev) => [
+      ...prev.filter((p) => !replacedUids.includes(p.uid)),
+      newItem,
+    ]);
+    addXp(35);
+    soundEngine.playPlaceItem();
+    floatingTextsRef.current.push({
+      id: `place_${performance.now()}`,
+      text: `+${item.hypeBonus} HYPE / +${item.vibeBonus} VIBE (-$${item.costCash})`,
+      floor: activeFloor,
+      gridX: chosenX,
+      gridY: chosenY,
+      color: '#4ade80',
       age: 0,
     });
     return true;
@@ -753,6 +928,7 @@ export default function App() {
         const cat = getCatalogItem(target.catalogId);
         const refund = cat ? Math.floor(cat.costCash * 0.5) : 50;
         setPlacedItems((prev) => prev.filter((i) => i.uid !== target.uid));
+        cashRef.current += refund;
         setCash((c) => c + refund);
         soundEngine.playCashRegister();
         floatingTextsRef.current.push({
@@ -770,54 +946,7 @@ export default function App() {
 
     // 4. Placing Furniture Item in Build Mode
     if (activeBottomTab === 'BUILD' && selectedCatalogItem) {
-      const valid = canPlaceItem(
-        placedItems,
-        selectedCatalogItem,
-        activeFloor,
-        coord.x,
-        coord.y,
-        buildRotation
-      );
-      if (!valid) {
-        soundEngine.playError();
-        return;
-      }
-      if (cash < selectedCatalogItem.costCash || gems < selectedCatalogItem.costGems) {
-        soundEngine.playError();
-        floatingTextsRef.current.push({
-          id: `err_${performance.now()}`,
-          text: 'NEED MORE FUNDS!',
-          floor: activeFloor,
-          gridX: coord.x,
-          gridY: coord.y,
-          color: '#f87171',
-          age: 0,
-        });
-        return;
-      }
-
-      setCash((c) => c - selectedCatalogItem.costCash);
-      setGems((g) => g - selectedCatalogItem.costGems);
-      const newItem: PlacedItem = {
-        uid: `placed_${Date.now()}_${Math.random()}`,
-        catalogId: selectedCatalogItem.id,
-        floor: activeFloor,
-        gridX: coord.x,
-        gridY: coord.y,
-        rotation: buildRotation,
-      };
-      setPlacedItems((prev) => [...prev, newItem]);
-      addXp(35);
-      soundEngine.playPlaceItem();
-      floatingTextsRef.current.push({
-        id: `place_${performance.now()}`,
-        text: `+${selectedCatalogItem.hypeBonus} HYPE / +${selectedCatalogItem.vibeBonus} VIBE`,
-        floor: activeFloor,
-        gridX: coord.x,
-        gridY: coord.y,
-        color: '#4ade80',
-        age: 0,
-      });
+      purchaseAndPlaceCatalogItem(selectedCatalogItem, coord);
     }
   };
 
@@ -977,6 +1106,7 @@ export default function App() {
         activeDrink={activeDrink}
         parkingState={parkingState}
         clubMetrics={clubMetrics}
+        clubBpm={selectedBpm}
         isRemoveMode={isRemoveMode}
         cameraZoom={cameraZoom}
         cameraResetTick={cameraResetTick}
@@ -1054,40 +1184,6 @@ export default function App() {
                 className="px-6 py-3.5 rounded-2xl bg-gradient-to-b from-lime-400 via-emerald-500 to-emerald-700 hover:from-lime-300 hover:to-emerald-600 text-white font-black text-base sm:text-lg border-2 border-lime-200 shadow-[0_5px_0_#064e3b] active:translate-y-0.5 transition-all cursor-pointer"
               >
                 Play Neon Nights (Level 1 Dive)
-              </button>
-
-              <button
-                onClick={() => {
-                  handleLoadPreset('VIP_MEGA');
-                  setGameState('PLAYING');
-                }}
-                className="px-5 py-3.5 rounded-2xl bg-gradient-to-b from-fuchsia-500 to-purple-700 hover:from-fuchsia-400 hover:to-purple-600 text-white font-bold text-sm sm:text-base border-2 border-fuchsia-300/60 shadow-[0_5px_0_#4a044e] active:translate-y-0.5 transition-all cursor-pointer"
-              >
-                Preview Level 20 VIP Mega-Club
-              </button>
-
-              <button
-                onClick={() => setIsArtStudioOpen(true)}
-                className="px-4 py-3.5 rounded-2xl bg-gradient-to-b from-cyan-500 to-blue-700 hover:from-cyan-400 hover:to-blue-600 border-2 border-cyan-200 text-white font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-[0_5px_0_#1e3a8a] transition-all"
-              >
-                <Palette className="w-4 h-4" />
-                <span>2.5D Art &amp; Asset Studio</span>
-              </button>
-
-              <button
-                onClick={() => setIsBlueprintOpen(true)}
-                className="px-4 py-3.5 rounded-2xl bg-purple-950/85 hover:bg-purple-900 border-2 border-cyan-400/50 text-cyan-300 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <Code2 className="w-4 h-4" />
-                <span>Kotlin / C# Code</span>
-              </button>
-
-              <button
-                onClick={() => setIsGitHubModalOpen(true)}
-                className="px-4 py-3.5 rounded-2xl bg-cyan-950/90 hover:bg-cyan-900 border-2 border-emerald-400/60 text-emerald-300 font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <GitBranch className="w-4 h-4" />
-                <span>Publish to GitHub</span>
               </button>
             </div>
 
@@ -1212,13 +1308,14 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Hype Lightning & Vibe Flame 3-Box Star Meters Stack (Tap to trigger Hype Blast preview) */}
+                {/* Hype Lightning & Vibe Flame 3-Box Star Meters Stack (Tap to surge Hype to 3/3 Max & trigger Dancer Confetti/Bubbles!) */}
                 <button
                   onClick={() => {
                     soundEngine.playUpgradeFanfare();
-                    triggerHypeBlast(25, clubMetrics.totalHype, clubMetrics.tipBonus);
+                    setHypeSurgeBonus((prev) => (prev >= 110 ? 0 : 120));
+                    triggerHypeBlast(35, clubMetrics.totalHype + 35, clubMetrics.tipBonus);
                   }}
-                  title="Tap to trigger Dance Floor Hype Blast!"
+                  title="Tap to surge Hype to 3/3 Max & trigger Dancer Confetti/Bubbles!"
                   className="hidden sm:flex flex-col gap-1.5 cursor-pointer active:scale-95 transition-transform"
                 >
                   {/* Top Row: Yellow Lightning Bolt + 3 Dark Recessed Boxes + Star */}
@@ -1309,31 +1406,6 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={() => setIsArtStudioOpen(true)}
-                  className="px-2.5 py-1 rounded-xl bg-[#140e26]/95 border-2 border-cyan-400/80 text-cyan-200 hover:bg-cyan-950 text-[11px] font-black flex items-center gap-1 cursor-pointer shadow-[0_3px_0_#150d2a]"
-                  title="Open 2.5D Art Direction, Chibi Asset Sheet & HUD Templates"
-                >
-                  <Palette className="w-3.5 h-3.5 text-fuchsia-400" />
-                  <span>Art &amp; Asset Studio</span>
-                </button>
-
-                <button
-                  onClick={() => setIsGitHubModalOpen(true)}
-                  className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-emerald-400/60 text-emerald-300 hover:bg-emerald-950 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
-                  title="Publish Repo to GitHub Pages for Other Players"
-                >
-                  <GitBranch className="w-3.5 h-3.5" />
-                  <span>Publish to GitHub</span>
-                </button>
-
-                <button
-                  onClick={() => handleLoadPreset(level < 10 ? 'VIP_MEGA' : 'DIVE')}
-                  className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-fuchsia-400/60 text-fuchsia-200 hover:bg-fuchsia-950 text-[11px] font-extrabold cursor-pointer shadow"
-                >
-                  {level < 10 ? 'Preview Lvl 20 VIP Club' : 'Reset to Lvl 1 Dive'}
-                </button>
-
-                <button
                   onClick={handleFloor2Action}
                   className="px-2.5 py-1 rounded-xl bg-[#1b1630]/95 border border-cyan-400/60 text-cyan-300 hover:bg-cyan-950 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
                 >
@@ -1386,14 +1458,6 @@ export default function App() {
                   ) : (
                     <Volume2 className="w-4 h-4 text-cyan-300" />
                   )}
-                </button>
-
-                <button
-                  onClick={() => setIsBlueprintOpen(true)}
-                  className="px-2.5 py-1 rounded-xl bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 hover:bg-cyan-900 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
-                >
-                  <Code2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Kotlin/C#</span>
                 </button>
               </div>
             </div>
@@ -1775,14 +1839,14 @@ export default function App() {
                         onClick={() => {
                           setIsRemoveMode(false);
                           setSelectedCatalogItem(chairItem);
-                          soundEngine.playClick();
+                          purchaseAndPlaceCatalogItem(chairItem);
                         }}
                         className={`group flex flex-col items-center p-2 rounded-xl transition-transform cursor-pointer ${
                           selectedCatalogItem?.id === chairItem.id && !isRemoveMode
                             ? 'bg-emerald-950/35 ring-2 ring-white scale-105'
                             : 'hover:bg-emerald-950/20'
                         }`}
-                        title={`Place ${chairItem.name} ($${chairItem.costCash})`}
+                        title={`Buy & Place ${chairItem.name} ($${chairItem.costCash})`}
                       >
                         <svg viewBox="0 0 64 72" className="w-14 h-16 sm:w-16 sm:h-18 drop-shadow">
                           {/* Chair Backrest */}
@@ -1819,14 +1883,14 @@ export default function App() {
                         onClick={() => {
                           setIsRemoveMode(false);
                           setSelectedCatalogItem(speakerItem);
-                          soundEngine.playClick();
+                          purchaseAndPlaceCatalogItem(speakerItem);
                         }}
                         className={`group flex flex-col items-center p-2 rounded-xl transition-transform cursor-pointer ${
                           selectedCatalogItem?.id === speakerItem.id && !isRemoveMode
                             ? 'bg-emerald-950/35 ring-2 ring-white scale-105'
                             : 'hover:bg-emerald-950/20'
                         }`}
-                        title={`Place ${speakerItem.name} ($${speakerItem.costCash})`}
+                        title={`Buy & Place ${speakerItem.name} ($${speakerItem.costCash})`}
                       >
                         <svg viewBox="0 0 64 72" className="w-14 h-16 sm:w-16 sm:h-18 drop-shadow">
                           {/* Top Face */}
@@ -1887,7 +1951,7 @@ export default function App() {
                         onClick={() => {
                           setIsRemoveMode(false);
                           setSelectedCatalogItem(lightItem);
-                          soundEngine.playClick();
+                          purchaseAndPlaceCatalogItem(lightItem);
                         }}
                         className={`px-2 py-1 rounded-lg text-[11px] font-black cursor-pointer ${
                           selectedCatalogItem?.id === lightItem.id
@@ -2038,19 +2102,19 @@ export default function App() {
                     <div className="flex items-center gap-2 overflow-x-auto pb-1">
                       {filteredCatalog.map((item) => {
                         const isSelected = selectedCatalogItem?.id === item.id && !isRemoveMode;
-                        const canAfford = cash >= item.costCash && gems >= item.costGems;
+                        const canAfford = cash >= item.costCash;
                         return (
-                          <button
+                          <div
                             key={item.id}
                             onClick={() => {
                               setIsRemoveMode(false);
                               setSelectedCatalogItem(item);
                               soundEngine.playClick();
                             }}
-                            className={`w-32 shrink-0 p-2 rounded-xl border-2 text-left cursor-pointer ${
+                            className={`w-36 shrink-0 p-2 rounded-xl border-2 text-left cursor-pointer ${
                               isSelected
                                 ? 'bg-slate-950 border-white text-white'
-                                : 'bg-emerald-950/80 border-emerald-300/40 text-emerald-50'
+                                : 'bg-emerald-950/85 border-emerald-300/40 text-emerald-50'
                             }`}
                           >
                             <div className="flex items-center justify-between text-[10px] font-mono">
@@ -2060,15 +2124,27 @@ export default function App() {
                               <span className="text-amber-300">+{item.hypeBonus}⚡</span>
                             </div>
                             <div className="text-xs font-extrabold truncate mt-0.5">{item.name}</div>
-                            <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-emerald-500/30 text-xs font-mono font-bold">
+                            <div className="flex items-center justify-between gap-1 mt-1.5 pt-1 border-t border-emerald-500/30 text-xs font-mono font-bold">
                               <span className={canAfford ? 'text-emerald-300' : 'text-rose-400'}>
                                 ${item.costCash}
                               </span>
-                              {item.costGems > 0 && (
-                                <span className="text-fuchsia-300">{item.costGems}G</span>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsRemoveMode(false);
+                                  setSelectedCatalogItem(item);
+                                  purchaseAndPlaceCatalogItem(item);
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer ${
+                                  canAfford
+                                    ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
+                                    : 'bg-rose-950/80 text-rose-300'
+                                }`}
+                              >
+                                Buy+Place
+                              </button>
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -2620,8 +2696,8 @@ export default function App() {
               ))}
             </div>
 
-            {/* 5 Docked Square-Like Cartoon Command Buttons */}
-            <div className="flex-1 grid grid-cols-5 gap-1.5 sm:gap-2.5">
+            {/* 4 Docked Square-Like Cartoon Command Buttons */}
+            <div className="flex-1 grid grid-cols-4 gap-1.5 sm:gap-2.5">
               {/* 1. Decorate / Build (Couch & Hammer Icon + Green UPGRADE) */}
               <button
                 onClick={() => {
@@ -2746,74 +2822,10 @@ export default function App() {
                   Parking/Line
                 </span>
               </button>
-
-              {/* 5. Dressing / Style & World Map (Cartoon Hanger Icon matching image_5.png "hangers for Dressing") */}
-              <button
-                onClick={() => {
-                  soundEngine.playClick();
-                  setIsArtStudioOpen(true);
-                }}
-                className="relative pt-4 pb-2 sm:py-2.5 px-1 sm:px-2 rounded-2xl border-2 border-cyan-300/90 bg-gradient-to-b from-[#38bdf8] via-[#0284c7] to-[#1e3a8a] text-white shadow-[0_5px_0_#150d2a] active:translate-y-0.5 transition-all flex flex-col items-center justify-end cursor-pointer"
-              >
-                {/* Cartoon Clothing Hanger & Neon Shirt Icon (matching image_5.png "hangers for Dressing") */}
-                <svg
-                  viewBox="0 0 56 48"
-                  className="w-10 h-8 sm:w-12 sm:h-10 -mt-6 sm:-mt-7 mb-0.5 drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
-                >
-                  <path
-                    d="M28 15 C28 11 33 11 33 8 C33 5 28 5 26 8"
-                    stroke="#fef08a"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                  <polygon
-                    points="28,15 46,28 10,28"
-                    fill="none"
-                    stroke="#fef08a"
-                    strokeWidth="3.5"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M16 28 L40 28 L38 40 L18 40 Z"
-                    fill="#f43f5e"
-                    stroke="#150d2a"
-                    strokeWidth="2.4"
-                  />
-                </svg>
-
-                <span className="absolute -top-2 right-1 sm:right-2 px-1.5 py-0.5 rounded-md bg-fuchsia-500 border-2 border-[#150d2a] text-[8px] sm:text-[10px] font-black uppercase text-white shadow">
-                  STYLE
-                </span>
-
-                <span className="text-[10px] sm:text-sm font-black tracking-tight text-white drop-shadow-[0_2px_0_#150d2a] truncate max-w-full">
-                  Dressing/Art
-                </span>
-              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* 2.5D SOCIAL SIM ART DIRECTION, CHIBI SPRITE SHEET & HUD TEMPLATE STUDIO MODAL */}
-      <ArtStyleAssetStudioModal
-        isOpen={isArtStudioOpen}
-        onClose={() => setIsArtStudioOpen(false)}
-        classicHudMode={classicHudMode}
-        onToggleClassicHudMode={setClassicHudMode}
-      />
-
-      {/* ANDROID JETPACK COMPOSE & UNITY C# TECHNICAL BLUEPRINT MODAL */}
-      <TechnicalBlueprintModal
-        isOpen={isBlueprintOpen}
-        onClose={() => setIsBlueprintOpen(false)}
-      />
-
-      {/* PUBLISH TO GITHUB & SHARE WITH PLAYERS MODAL */}
-      <GitHubPublishModal
-        isOpen={isGitHubModalOpen}
-        onClose={() => setIsGitHubModalOpen(false)}
-      />
     </div>
   );
 }
