@@ -39,10 +39,13 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Neon Nights production bundle
         run: npm run build
+
+      - name: Add .nojekyll to dist
+        run: touch ./dist/.nojekyll
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -58,14 +61,14 @@ jobs:
 `;
 
 export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({ isOpen, onClose }) => {
-  const [repoUsername, setRepoUsername] = useState<string>('your-username');
-  const [repoName, setRepoName] = useState<string>('neon-nights-tycoon');
+  const [repoUsername, setRepoUsername] = useState<string>('jcvcreatives');
+  const [repoName, setRepoName] = useState<string>('City-Disco-Lights');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const cleanUser = repoUsername.trim() || 'your-username';
-  const cleanRepo = repoName.trim() || 'neon-nights-tycoon';
+  const cleanUser = repoUsername.trim() || 'jcvcreatives';
+  const cleanRepo = repoName.trim() || 'City-Disco-Lights';
 
   const gitPushCommands = `git init
 git add .
