@@ -19,11 +19,11 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
-      // in production builds. Do not remove.
+      // Copies src/assets into dist/ and mirrors the compiled production bundle
+      // to /assets and /docs so GitHub Pages always receives the latest build
+      // even when compile_applet cleans up dist/ after verification.
       {
-        name: 'copy-unbundled-src-assets',
+        name: 'sync-github-pages-bundles',
         apply: 'build',
         closeBundle(error?: Error): void {
           if (error) {
@@ -35,17 +35,30 @@ export default defineConfig(() => {
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
           }
-          // Copy built production bundle to /docs and /dist/assets -> /assets so GitHub Pages
-          // works out-of-the-box even when set to "Deploy from a branch (main / root or /docs)"!
+
           if (fs.existsSync(distDir)) {
+            const buildId = `build_${Date.now()}`;
             const docsDir = path.resolve(__dirname, 'docs');
             fs.cpSync(distDir, docsDir, {recursive: true, force: true});
             fs.writeFileSync(path.resolve(docsDir, '.nojekyll'), '');
             fs.writeFileSync(path.resolve(distDir, '.nojekyll'), '');
+
             const distAssetsBundle = path.resolve(distDir, 'assets');
             const rootAssetsBundle = path.resolve(__dirname, 'assets');
             if (fs.existsSync(distAssetsBundle)) {
               fs.cpSync(distAssetsBundle, rootAssetsBundle, {recursive: true, force: true});
+            }
+
+            // Stamp the latest build ID into root index.html so Git detects changes
+            // and browsers/CDNs bust cache immediately after every push to GitHub.
+            const rootIndexHtmlPath = path.resolve(__dirname, 'index.html');
+            if (fs.existsSync(rootIndexHtmlPath)) {
+              const html = fs.readFileSync(rootIndexHtmlPath, 'utf8');
+              const updatedHtml = html.replace(
+                /window\.__NEON_NIGHTS_BUILD__\s*=\s*'[^']*';/,
+                `window.__NEON_NIGHTS_BUILD__ = '${buildId}';`
+              );
+              fs.writeFileSync(rootIndexHtmlPath, updatedHtml, 'utf8');
             }
           }
         },

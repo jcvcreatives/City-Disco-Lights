@@ -6,57 +6,66 @@ interface GitHubPublishModalProps {
   onClose: () => void;
 }
 
-const GITHUB_ACTIONS_YML = `name: Deploy Neon Nights to GitHub Pages
+const GITHUB_ACTIONS_YML = `name: Build & Auto-Update GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: "pages-deploy"
   cancel-in-progress: true
 
 jobs:
-  build_and_deploy:
-    environment:
-      name: github-pages
-      url: \${{ steps.deployment.outputs.page_url }}
+  build_and_update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Neon Nights production bundle
+      - name: Build production bundle (updates assets/, docs/, and dist/)
         run: npm run build
 
-      - name: Add .nojekyll to dist
-        run: touch ./dist/.nojekyll
+      - name: Commit updated prebuilt bundles back to branch
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f assets/ docs/ dist/ index.html .nojekyll
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: auto-update compiled game bundle [skip ci]"
+            git push
+          fi
 
       - name: Configure GitHub Pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
 
-      - name: Upload dist artifact
+      - name: Upload Pages artifact
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4
 `;
 
@@ -70,12 +79,19 @@ export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({ isOpen, 
   const cleanUser = repoUsername.trim() || 'jcvcreatives';
   const cleanRepo = repoName.trim() || 'City-Disco-Lights';
 
-  const gitPushCommands = `git init
-git add .
-git commit -m "Initial release: Neon Nights 60fps 2.5D Nightclub Tycoon"
+  const gitPushCommands = `# First-time repo setup:
+git init
+git add -A
+git commit -m "Release: Neon Nights 60fps 2.5D Nightclub Tycoon"
 git branch -M main
 git remote add origin https://github.com/${cleanUser}/${cleanRepo}.git
-git push -u origin main`;
+git push -u origin main
+
+# Pushing future updates to GitHub Pages:
+npm run build
+git add -A
+git commit -m "Update game features & prebuilt bundle"
+git push origin main`;
 
   const liveGameUrl = `https://${cleanUser}.github.io/${cleanRepo}/`;
 

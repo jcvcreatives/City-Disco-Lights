@@ -1,4 +1,4 @@
-name: Deploy Neon Nights to GitHub Pages
+name: Build & Auto-Update GitHub Pages
 
 on:
   push:
@@ -6,23 +6,22 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: "pages-deploy"
   cancel-in-progress: true
 
 jobs:
-  build_and_deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build_and_update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -32,20 +31,37 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Neon Nights production bundle
+      - name: Build production bundle (updates assets/, docs/, and dist/)
         run: npm run build
 
-      - name: Add .nojekyll to dist
-        run: touch ./dist/.nojekyll
+      - name: Add .nojekyll markers
+        run: |
+          touch ./.nojekyll
+          touch ./dist/.nojekyll
+          touch ./docs/.nojekyll
+
+      - name: Commit updated prebuilt bundles back to branch (for Branch Deploy mode)
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f assets/ docs/ dist/ index.html .nojekyll
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: auto-update compiled game bundle [skip ci]"
+            git push
+          fi
 
       - name: Configure GitHub Pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
 
-      - name: Upload dist artifact
+      - name: Upload Pages artifact
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (for Actions Deploy mode)
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4
