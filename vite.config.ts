@@ -17,11 +17,23 @@ export default defineConfig(() => {
       },
     },
     plugins: [
+      {
+        name: 'ensure-main-tsx-entry',
+        enforce: 'pre',
+        transformIndexHtml(html: string): string {
+          if (!html.includes('/src/main.tsx')) {
+            return html.replace(
+              '<div id="root"></div>',
+              '<div id="root"></div>\n    <script type="module" src="/src/main.tsx"></script>'
+            );
+          }
+          return html;
+        },
+      },
       react(),
       tailwindcss(),
-      // Copies src/assets into dist/ and mirrors the compiled production bundle
-      // to /assets and /docs so GitHub Pages always receives the latest build
-      // even when compile_applet cleans up dist/ after verification.
+      // Mirrors the compiled production bundle to /assets and /docs during GitHub Actions builds
+      // without mutating tracked source files during AI Studio's internal compile_applet check.
       {
         name: 'sync-github-pages-bundles',
         apply: 'build',
@@ -29,13 +41,13 @@ export default defineConfig(() => {
           if (error) {
             return;
           }
-          const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
-          const distAssets = path.resolve(distDir, 'src/assets');
-          if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
-            fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
+          // Do not mutate tracked workspace files outside dist/ during AI Studio compile_applet
+          // (where DISABLE_HMR === 'true' and GITHUB_ACTIONS is not set), so AI Studio never reverts index.html.
+          if (process.env.DISABLE_HMR === 'true' && process.env.GITHUB_ACTIONS !== 'true') {
+            return;
           }
 
+          const distDir = path.resolve(__dirname, 'dist');
           if (fs.existsSync(distDir)) {
             const buildId = `build_${Date.now()}`;
             const docsDir = path.resolve(__dirname, 'docs');
@@ -49,8 +61,6 @@ export default defineConfig(() => {
               fs.cpSync(distAssetsBundle, rootAssetsBundle, {recursive: true, force: true});
             }
 
-            // Stamp the latest build ID into root index.html so Git detects changes
-            // and browsers/CDNs bust cache immediately after every push to GitHub.
             const rootIndexHtmlPath = path.resolve(__dirname, 'index.html');
             if (fs.existsSync(rootIndexHtmlPath)) {
               const html = fs.readFileSync(rootIndexHtmlPath, 'utf8');
