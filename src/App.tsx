@@ -10,6 +10,7 @@ import {
   Sparkles,
   Star,
   Trash2,
+  Upload,
   Volume2,
   VolumeX,
   X,
@@ -29,11 +30,13 @@ import {
   CatalogItem,
   DRINK_MIXES,
   FloatingText,
+  FloorLevel,
   GuestAgent,
   INITIAL_PLACED_ITEMS,
   INITIAL_QUESTS,
   INITIAL_STAFF_MEMBERS,
   ItemCategory,
+  LEVEL_1_DIVE_BAR_ITEMS,
   ParkingUpgradeState,
   PlacedItem,
   QuestTask,
@@ -51,6 +54,11 @@ import {
   GRID_SIZE,
   STAIRS_COORD,
 } from './utils/pathfinding';
+import {
+  assetManager,
+  SPRITE_ASSET_DEFINITIONS,
+  SpriteAssetKey,
+} from './utils/assetManager';
 
 type DockTabId =
   | 'TONIGHT'
@@ -105,7 +113,7 @@ const INITIAL_GUESTS: GuestAgent[] = [
   },
   {
     id: 'g_dance_2',
-    name: 'Mia H.',
+    name: 'Mia J.',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
@@ -119,7 +127,7 @@ const INITIAL_GUESTS: GuestAgent[] = [
     bubble: 'COCKTAIL',
     bubbleTimer: 10,
     shirtColor: '#f43f5e',
-    hairColor: '#111116',
+    hairColor: '#0D0D14',
     pantsColor: '#1e293b',
     cashSpent: 90,
     danceMove: 'FIST_PUMP',
@@ -264,18 +272,18 @@ const INITIAL_GUESTS: GuestAgent[] = [
     danceMoveTimer: 4.4,
     dancePhaseOffset: 3.5,
   },
-  // Patrons Sitting in Chairs & Tufted Purple VIP Booth Sofas (with bent seated legs & natural separation)
+  // Patrons Sitting on Tufted Purple VIP Booth Sofas along Back-Left Wall (strictly on the purple sofa cushions behind the black VIP tables)
   {
-    id: 'g_chair_1',
+    id: 'g_vip_sofa_1',
     name: 'Milo',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: 0.35,
-    gridY: 1.32,
+    gridX: 0.28,
+    gridY: 1.46,
     path: [],
     state: 'RESTING_AT_SEAT',
-    stateTimer: 14,
+    stateTimer: 16,
     patience: 92,
     hype: 84,
     bubble: 'CASH',
@@ -284,18 +292,21 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#dc2626',
     pantsColor: '#334155',
     cashSpent: 90,
+    seatPosture: 'SITTING_SOFA',
+    facingDir: 'SE',
+    assignedSlotId: 'f1_vip_1_sofa_0',
   },
   {
-    id: 'g_chair_2',
+    id: 'g_vip_sofa_2',
     name: 'Sienna',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: 0.35,
-    gridY: 4.35,
+    gridX: 0.28,
+    gridY: 2.46,
     path: [],
     state: 'RESTING_AT_SEAT',
-    stateTimer: 15,
+    stateTimer: 17,
     patience: 94,
     hype: 86,
     bubble: 'CHAT',
@@ -304,18 +315,91 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#111116',
     pantsColor: '#1e293b',
     cashSpent: 110,
+    seatPosture: 'SITTING_SOFA',
+    facingDir: 'SE',
+    assignedSlotId: 'f1_vip_1_sofa_1',
   },
   {
-    id: 'g_chair_3',
-    name: 'Jade',
+    id: 'g_vip_sofa_3',
+    name: 'Jaxon',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: 1.12,
-    gridY: 7.42,
+    gridX: 0.28,
+    gridY: 3.46,
     path: [],
     state: 'RESTING_AT_SEAT',
-    stateTimer: 13,
+    stateTimer: 15,
+    patience: 93,
+    hype: 87,
+    bubble: 'VIP_CROWN',
+    bubbleTimer: 8,
+    shirtColor: '#f59e0b',
+    hairColor: '#1e1b4b',
+    pantsColor: '#0f172a',
+    cashSpent: 135,
+    seatPosture: 'SITTING_SOFA',
+    facingDir: 'SE',
+    assignedSlotId: 'f1_vip_2_sofa_0',
+  },
+  {
+    id: 'g_vip_sofa_4',
+    name: 'Nyx',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 0.28,
+    gridY: 4.46,
+    path: [],
+    state: 'RESTING_AT_SEAT',
+    stateTimer: 14.5,
+    patience: 91,
+    hype: 85,
+    bubble: 'COCKTAIL',
+    bubbleTimer: 7,
+    shirtColor: '#ec4899',
+    hairColor: '#f8fafc',
+    pantsColor: '#1e293b',
+    cashSpent: 105,
+    seatPosture: 'SITTING_SOFA',
+    facingDir: 'SE',
+    assignedSlotId: 'f1_vip_2_sofa_1',
+  },
+  {
+    id: 'g_vip_sofa_5',
+    name: 'Kobe',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 0.28,
+    gridY: 5.46,
+    path: [],
+    state: 'RESTING_AT_SEAT',
+    stateTimer: 18,
+    patience: 95,
+    hype: 89,
+    bubble: 'SPARKLE',
+    bubbleTimer: 9,
+    shirtColor: '#14b8a6',
+    hairColor: '#451a03',
+    pantsColor: '#1e1b4b',
+    cashSpent: 120,
+    seatPosture: 'SITTING_SOFA',
+    facingDir: 'SE',
+    assignedSlotId: 'f1_vip_3_sofa_0',
+  },
+  // Patrons Sitting in Cushioned Club Chairs & Standing Beside High-Top Cocktail Tables (never on top of the tables!)
+  {
+    id: 'g_seat_bistro_1',
+    name: 'Kira R.',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 1.14,
+    gridY: 7.52,
+    path: [],
+    state: 'RESTING_AT_SEAT',
+    stateTimer: 15,
     patience: 91,
     hype: 85,
     bubble: 'COCKTAIL',
@@ -324,19 +408,21 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#facc15',
     pantsColor: '#0f172a',
     cashSpent: 95,
+    seatPosture: 'SITTING_CHAIR',
+    facingDir: 'SE',
+    assignedSlotId: 'f1_bistro_1_chair_back',
   },
-  // Patrons Standing at High-Top Cocktail Tables & Bar Counters (naturally separated with cocktail glasses)
   {
-    id: 'g_table_stand_1',
+    id: 'g_seat_bistro_2',
     name: 'Liam',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: 2.02,
-    gridY: 7.18,
+    gridX: 1.86,
+    gridY: 7.48,
     path: [],
     state: 'RESTING_AT_SEAT',
-    stateTimer: 12.5,
+    stateTimer: 14.5,
     patience: 90,
     hype: 84,
     bubble: 'CHAT',
@@ -345,18 +431,21 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#451a03',
     pantsColor: '#1e293b',
     cashSpent: 85,
+    seatPosture: 'SITTING_CHAIR',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bistro_1_chair_front',
   },
   {
-    id: 'g_table_stand_2',
+    id: 'g_seat_bistro_3',
     name: 'Maya',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: 4.92,
-    gridY: 7.18,
+    gridX: 4.14,
+    gridY: 7.52,
     path: [],
     state: 'RESTING_AT_SEAT',
-    stateTimer: 13.5,
+    stateTimer: 16,
     patience: 93,
     hype: 87,
     bubble: 'COCKTAIL',
@@ -365,18 +454,91 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#1e1b4b',
     pantsColor: '#0f172a',
     cashSpent: 105,
+    seatPosture: 'SITTING_CHAIR',
+    facingDir: 'SE',
+    assignedSlotId: 'f1_bistro_2_chair_back',
   },
   {
-    id: 'g_bar_stand_1',
-    name: 'Ezra',
+    id: 'g_seat_bistro_4',
+    name: 'Zane',
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: 6.28,
-    gridY: 2.45,
+    gridX: 4.86,
+    gridY: 7.48,
+    path: [],
+    state: 'RESTING_AT_SEAT',
+    stateTimer: 15.5,
+    patience: 92,
+    hype: 86,
+    bubble: 'MUSIC',
+    bubbleTimer: 7.0,
+    shirtColor: '#38bdf8',
+    hairColor: '#78350f',
+    pantsColor: '#1e293b',
+    cashSpent: 95,
+    seatPosture: 'SITTING_CHAIR',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bistro_2_chair_front',
+  },
+  {
+    id: 'g_table_stand_1',
+    name: 'Mia H.',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 4.54,
+    gridY: 7.96,
+    path: [],
+    state: 'RESTING_AT_SEAT',
+    stateTimer: 14.0,
+    patience: 94,
+    hype: 90,
+    bubble: 'SPARKLE',
+    bubbleTimer: 8.0,
+    shirtColor: '#a855f7',
+    hairColor: '#facc15',
+    pantsColor: '#1e1b4b',
+    cashSpent: 110,
+    seatPosture: 'STANDING_TABLE',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bistro_2_stand_front',
+  },
+  // Patrons Occupying ALL 6 Bar Stools Along the Bar Counter (7.36, gy = 1.5, 2.5, 3.5, 4.5, 5.5, 6.5)
+  {
+    id: 'g_bar_1',
+    name: 'Roxy',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 7.36,
+    gridY: 1.5,
     path: [],
     state: 'ORDERING_DRINK',
-    stateTimer: 6.5,
+    stateTimer: 11.5,
+    patience: 93,
+    hype: 86,
+    bubble: 'COCKTAIL',
+    bubbleTimer: 7,
+    shirtColor: '#38bdf8',
+    hairColor: '#111116',
+    pantsColor: '#1e293b',
+    cashSpent: 85,
+    seatPosture: 'SITTING_STOOL',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bar_front_1_stool_0',
+  },
+  {
+    id: 'g_bar_2',
+    name: 'Ivy W.',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 7.36,
+    gridY: 2.5,
+    path: [],
+    state: 'ORDERING_DRINK',
+    stateTimer: 13.0,
     patience: 92,
     hype: 85,
     bubble: 'COCKTAIL',
@@ -385,6 +547,55 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#78350f',
     pantsColor: '#1e293b',
     cashSpent: 90,
+    seatPosture: 'SITTING_STOOL',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bar_front_1_stool_1',
+  },
+  {
+    id: 'g_bar_3',
+    name: 'Jett',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 7.36,
+    gridY: 3.5,
+    path: [],
+    state: 'ORDERING_DRINK',
+    stateTimer: 10.5,
+    patience: 91,
+    hype: 87,
+    bubble: 'BEER',
+    bubbleTimer: 6.5,
+    shirtColor: '#f97316',
+    hairColor: '#451a03',
+    pantsColor: '#0f172a',
+    cashSpent: 80,
+    seatPosture: 'SITTING_STOOL',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bar_front_1_stool_2',
+  },
+  {
+    id: 'g_bar_4',
+    name: 'Lyra',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 7.36,
+    gridY: 4.5,
+    path: [],
+    state: 'ORDERING_DRINK',
+    stateTimer: 12.0,
+    patience: 95,
+    hype: 89,
+    bubble: 'CHAT',
+    bubbleTimer: 7.5,
+    shirtColor: '#a855f7',
+    hairColor: '#facc15',
+    pantsColor: '#1e1b4b',
+    cashSpent: 100,
+    seatPosture: 'SITTING_STOOL',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bar_front_2_stool_0',
   },
   {
     id: 'g_bar_stand_2',
@@ -392,11 +603,11 @@ const INITIAL_GUESTS: GuestAgent[] = [
     isCelebrity: false,
     floor: 1,
     targetFloor: 1,
-    gridX: 6.28,
-    gridY: 5.55,
+    gridX: 7.36,
+    gridY: 5.5,
     path: [],
     state: 'ORDERING_DRINK',
-    stateTimer: 6.0,
+    stateTimer: 11.0,
     patience: 94,
     hype: 88,
     bubble: 'SPARKLE',
@@ -405,6 +616,32 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#facc15',
     pantsColor: '#111116',
     cashSpent: 115,
+    seatPosture: 'SITTING_STOOL',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bar_front_2_stool_1',
+  },
+  {
+    id: 'g_bar_6',
+    name: 'Nova',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 7.36,
+    gridY: 6.5,
+    path: [],
+    state: 'ORDERING_DRINK',
+    stateTimer: 12.5,
+    patience: 93,
+    hype: 88,
+    bubble: 'COCKTAIL',
+    bubbleTimer: 8,
+    shirtColor: '#22d3ee',
+    hairColor: '#dc2626',
+    pantsColor: '#1e293b',
+    cashSpent: 95,
+    seatPosture: 'SITTING_STOOL',
+    facingDir: 'NW',
+    assignedSlotId: 'f1_bar_front_2_stool_2',
   },
   // Guests queuing outside
   {
@@ -475,13 +712,16 @@ export default function App() {
   const cashRef = useRef<number>(cash);
   cashRef.current = cash;
 
-  // Multi-Floor State
-  const [activeFloor, setActiveFloor] = useState<1 | 2>(1);
-  const [unlockedFloors, setUnlockedFloors] = useState<1 | 2>(1);
+  // Multi-Floor State (Supports Floor 1, Floor 2, and Floor 3 vertical expansion)
+  const [activeFloor, setActiveFloor] = useState<FloorLevel>(1);
+  const [unlockedFloors, setUnlockedFloors] = useState<FloorLevel>(1);
 
-  // Placed Furniture & Drinks
+  // Placed Furniture & Drinks + Live Drink Mix Prep Timer & Servings Count
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>(INITIAL_PLACED_ITEMS);
   const [activeDrinkId, setActiveDrinkId] = useState<string>('drink_electric_mule');
+  const [drinkPrepRemainingSec, setDrinkPrepRemainingSec] = useState<number>(3);
+  const [drinkServingsRemaining, setDrinkServingsRemaining] = useState<number>(48);
+  const [spriteAssetVersion, setSpriteAssetVersion] = useState<number>(0);
   const [parkingState, setParkingState] = useState<ParkingUpgradeState>({
     lotTier: 2,
     bouncerCount: 2,
@@ -551,13 +791,25 @@ export default function App() {
     [activeDrinkId]
   );
 
-  // Happy Hour Rush countdown timer
+  // Subscribe to custom PNG Sprite AssetManager updates so UI badges refresh immediately on upload
+  useEffect(() => {
+    return assetManager.subscribe(() => {
+      setSpriteAssetVersion((v) => v + 1);
+    });
+  }, []);
+
+  // Happy Hour Rush countdown timer + Tiered Drink Mix Prep Timer & Serving Counter
   useEffect(() => {
     const timer = setInterval(() => {
       setHappyHourSeconds((prev) => (prev > 1 ? prev - 1 : 180));
+      setDrinkPrepRemainingSec((prev) => {
+        if (prev > 1) return prev - 1;
+        setDrinkServingsRemaining((s) => (s > 1 ? s - 1 : 60));
+        return Math.max(1, Math.round(activeDrink.prepTimeSec));
+      });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [activeDrink.prepTimeSec]);
 
   const formattedHappyHour = useMemo(() => {
     const mins = Math.floor(happyHourSeconds / 60);
@@ -608,7 +860,7 @@ export default function App() {
 
     const hypeSegments = Math.min(3, Math.max(1, Math.floor(totalHype / 90) + 1));
     const vibeSegments = Math.min(3, Math.max(1, Math.floor(totalVibe / 85) + 1));
-    const maxGuests = 12 + parkingState.lotTier * 3 + (unlockedFloors === 2 ? 6 : 0);
+    const maxGuests = 12 + parkingState.lotTier * 3 + (unlockedFloors - 1) * 6;
 
     return {
       totalHype,
@@ -674,7 +926,7 @@ export default function App() {
           return { ...q, currentValue: upgraded };
         }
         if (q.id === 'quest_floor2') {
-          return { ...q, currentValue: unlockedFloors === 2 ? 1 : 0 };
+          return { ...q, currentValue: unlockedFloors >= 2 ? 1 : 0 };
         }
         return q;
       })
@@ -756,7 +1008,7 @@ export default function App() {
 
   const spawnStaffMemberAtGrid = (
     staffCat: StaffCatalogItem,
-    floor: 1 | 2,
+    floor: FloorLevel,
     gridX: number,
     gridY: number
   ) => {
@@ -1104,16 +1356,46 @@ export default function App() {
           age: 0,
         });
       }
+    } else if (unlockedFloors === 2 && activeFloor === 2 && cash >= 6000) {
+      setCash((c) => c - 6000);
+      setUnlockedFloors(3);
+      setActiveFloor(3);
+      setPlacedItems((prev) => [
+        ...prev,
+        { uid: `f3_bar_${Date.now()}`, catalogId: 'bar_cyber_island', floor: 3, gridX: 1, gridY: 0, rotation: 0 },
+        { uid: `f3_dj_${Date.now()}`, catalogId: 'dj_laser_stage', floor: 3, gridX: 5, gridY: 0, rotation: 0 },
+        { uid: `f3_df_${Date.now()}`, catalogId: 'dance_supernova', floor: 3, gridX: 3, gridY: 3, rotation: 0 },
+        { uid: `f3_seat_${Date.now()}`, catalogId: 'seat_champagne_pod', floor: 3, gridX: 7, gridY: 6, rotation: 0 },
+      ]);
+      addXp(450);
+      soundEngine.playUpgradeFanfare();
     } else {
-      setActiveFloor((f) => (f === 1 ? 2 : 1));
+      setActiveFloor((f) => ((f % unlockedFloors) + 1) as FloorLevel);
       soundEngine.playClick();
     }
   };
 
-  const handleLoadPreset = (preset: 'NEON_CORNER' | 'VIP_MEGA') => {
+  const handleLoadPreset = (preset: 'DIVE_BAR_LVL1' | 'NEON_CORNER' | 'VIP_MEGA') => {
     setPlacementModeStaff(null);
     setRelocatingStaffUid(null);
-    if (preset === 'NEON_CORNER') {
+    if (preset === 'DIVE_BAR_LVL1') {
+      setClubName('LVL 1 DIVE BAR');
+      setLevel(1);
+      setXp(20);
+      setCash(1250);
+      setGems(10);
+      setUnlockedFloors(1);
+      setActiveFloor(1);
+      setPlacedItems(LEVEL_1_DIVE_BAR_ITEMS);
+      setStaffMembers([INITIAL_STAFF_MEMBERS[0]].map((s) => ({ ...s, path: [] })));
+      setActiveDrinkId('drink_draft_beer');
+      setDrinkPrepRemainingSec(2);
+      setDrinkServingsRemaining(24);
+      setParkingState({ lotTier: 1, bouncerCount: 1, ropeTier: 1 });
+      guestsRef.current = INITIAL_GUESTS.slice(0, 6).map((g) => ({ ...g }));
+      soundEngine.playClick();
+    } else if (preset === 'NEON_CORNER') {
+      setClubName('CLUB NEON');
       setLevel(12);
       setXp(1140);
       setCash(14850);
@@ -1123,18 +1405,23 @@ export default function App() {
       setPlacedItems(INITIAL_PLACED_ITEMS);
       setStaffMembers(INITIAL_STAFF_MEMBERS.map((s) => ({ ...s, path: [] })));
       setActiveDrinkId('drink_electric_mule');
+      setDrinkPrepRemainingSec(3);
+      setDrinkServingsRemaining(48);
       setParkingState({ lotTier: 2, bouncerCount: 2, ropeTier: 2 });
       guestsRef.current = INITIAL_GUESTS.map((g) => ({ ...g }));
       soundEngine.playClick();
     } else {
+      setClubName('NEON SKY VIP');
       setLevel(24);
       setXp(2150);
       setCash(28450);
       setGems(65);
-      setUnlockedFloors(2);
+      setUnlockedFloors(3);
       setActiveFloor(1);
       setPlacedItems(VIP_HOTSPOT_ITEMS);
       setActiveDrinkId('drink_supernova_gold');
+      setDrinkPrepRemainingSec(5);
+      setDrinkServingsRemaining(96);
       setParkingState({ lotTier: 3, bouncerCount: 4, ropeTier: 3 });
       soundEngine.playUpgradeFanfare();
     }
@@ -1574,12 +1861,42 @@ export default function App() {
             </div>
 
             {/* Rating Counter */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 pr-3 border-r border-purple-500/30">
               <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
               <span className="text-sm font-black text-yellow-300 tabular-nums">
                 {starRating}
               </span>
             </div>
+
+            {/* Active Drink Prep Timer & Servings Pill + Quick Starter Mode Switch */}
+            <button
+              onClick={() => {
+                soundEngine.playClick();
+                setActiveDockTab('TONIGHT');
+              }}
+              title="Active Drink Mix Prep Timer & Servings Remaining"
+              className="flex items-center gap-1.5 pr-3 border-r border-purple-500/30 text-left cursor-pointer"
+            >
+              <span className="text-xs">🍸</span>
+              <div className="leading-none">
+                <div className="text-[9px] font-black text-cyan-300 uppercase">
+                  {activeDrink.name}
+                </div>
+                <div className="text-[10px] font-mono text-purple-200 mt-0.5">
+                  Prep {drinkPrepRemainingSec}s · {drinkServingsRemaining} srv
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() =>
+                handleLoadPreset(level === 1 ? 'NEON_CORNER' : 'DIVE_BAR_LVL1')
+              }
+              title="Toggle between Level 1 Dive Bar Starter & Level 12 Club Neon Showcase"
+              className="px-2.5 py-1 rounded-full bg-purple-700 hover:bg-purple-600 border border-[#0D0D14] text-[10px] font-black uppercase text-white cursor-pointer"
+            >
+              {level === 1 ? '★ Load Club Neon' : '↺ Start Lvl 1 Dive Bar'}
+            </button>
           </div>
 
           {/* ==================== TOP-RIGHT HUD CLUSTER ==================== */}
@@ -1812,7 +2129,7 @@ export default function App() {
                                 setSelectedCatalogItem(item);
                                 purchaseAndPlaceCatalogItem(item);
                               }}
-                              className={`px-2 py-0.5 rounded border border-[#111116] text-[10px] font-black cursor-pointer ${
+                              className={`px-2 py-0.5 rounded border border-[#0D0D14] text-[10px] font-black cursor-pointer ${
                                 canAfford
                                   ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
                                   : 'bg-rose-950 text-rose-300'
@@ -1824,6 +2141,90 @@ export default function App() {
                         </div>
                       );
                     })}
+                  </div>
+
+                  {/* Multi-Floor Vertical Expansion & Exterior Parking / Velvet Rope Queue Upgrades */}
+                  <div className="mt-2.5 pt-2 border-t border-purple-500/30 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      onClick={handleFloor2Action}
+                      className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-cyan-400 text-left flex items-center justify-between cursor-pointer"
+                    >
+                      <div>
+                        <div className="text-[10px] font-mono text-cyan-300 uppercase font-bold">
+                          Vertical Expansion ({unlockedFloors}/3 Floors)
+                        </div>
+                        <div className="text-xs font-black text-white">
+                          {unlockedFloors === 1
+                            ? 'Unlock Floor 2 ($2,500)'
+                            : unlockedFloors === 2
+                            ? 'Unlock Floor 3 ($6,000)'
+                            : `Switch Floor (Now F${activeFloor})`}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-emerald-400 text-slate-950 font-black text-[10px]">
+                        F{activeFloor}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        const cost = parkingState.lotTier * 650;
+                        if (parkingState.lotTier >= 3 || cash < cost) {
+                          soundEngine.playError();
+                          return;
+                        }
+                        setCash((c) => c - cost);
+                        setParkingState((p) => ({
+                          ...p,
+                          lotTier: Math.min(3, p.lotTier + 1) as 1 | 2 | 3,
+                        }));
+                        addXp(80);
+                        soundEngine.playUpgradeFanfare();
+                      }}
+                      className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-amber-400 text-left flex items-center justify-between cursor-pointer"
+                    >
+                      <div>
+                        <div className="text-[10px] font-mono text-amber-300 uppercase font-bold">
+                          Street Parking Lot (Tier {parkingState.lotTier}/3)
+                        </div>
+                        <div className="text-xs font-black text-white">
+                          {parkingState.lotTier < 3
+                            ? `Expand Taxi & Car Stalls ($${parkingState.lotTier * 650})`
+                            : 'Max Street Capacity'}
+                        </div>
+                      </div>
+                      <span className="text-sm">🚕</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        const cost = parkingState.ropeTier * 500;
+                        if (parkingState.ropeTier >= 3 || cash < cost) {
+                          soundEngine.playError();
+                          return;
+                        }
+                        setCash((c) => c - cost);
+                        setParkingState((p) => ({
+                          ...p,
+                          ropeTier: Math.min(3, p.ropeTier + 1) as 1 | 2 | 3,
+                        }));
+                        addXp(75);
+                        soundEngine.playUpgradeFanfare();
+                      }}
+                      className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-pink-400 text-left flex items-center justify-between cursor-pointer"
+                    >
+                      <div>
+                        <div className="text-[10px] font-mono text-pink-300 uppercase font-bold">
+                          Red Carpet & Stanchions (T{parkingState.ropeTier}/3)
+                        </div>
+                        <div className="text-xs font-black text-white">
+                          {parkingState.ropeTier < 3
+                            ? `Upgrade Gold Ropes ($${parkingState.ropeTier * 500})`
+                            : 'VIP Velvet Queue Maxed'}
+                        </div>
+                      </div>
+                      <span className="text-sm">🎟️</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -1943,41 +2344,70 @@ export default function App() {
                 </div>
               )}
 
-              {/* 3. TONIGHT TAB (Drink Mixes & Velvet Rope Upgrades) */}
+              {/* 3. TONIGHT TAB (Drink Mixes with Live Prep Timers & Serving Counts) */}
               {activeDockTab === 'TONIGHT' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {DRINK_MIXES.map((drink) => {
-                    const isCurrent = drink.id === activeDrinkId;
-                    return (
-                      <button
-                        key={drink.id}
-                        onClick={() => {
-                          setActiveDrinkId(drink.id);
-                          soundEngine.playCashRegister();
-                        }}
-                        className={`p-2.5 rounded-xl border-2 text-left cursor-pointer ${
-                          isCurrent
-                            ? 'bg-fuchsia-600/35 border-cyan-300'
-                            : 'bg-[#1d1436] border-[#111116] hover:border-purple-400'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs sm:text-sm font-black" style={{ color: drink.color }}>
-                            {drink.name}
-                          </span>
-                          <span className="text-xs font-mono font-bold text-emerald-300">
-                            +${drink.sellPrice}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between mt-1 text-[11px] font-mono">
-                          <span className="text-amber-300">+{drink.hypeBoost} Hype</span>
-                          <span className="font-bold text-cyan-300">
-                            {isCurrent ? '✓ SERVING TONIGHT' : 'Serve Cocktail'}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="space-y-2.5">
+                  <div className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-mono uppercase text-cyan-300 font-bold">
+                        ACTIVE BAR MIXOLOGY BATCH · {activeDrink.name}
+                      </div>
+                      <div className="text-xs font-black text-white mt-0.5">
+                        Prep Timer: <span className="text-amber-300">{drinkPrepRemainingSec}s</span> / {activeDrink.prepTimeSec}s · Servings Remaining:{' '}
+                        <span className="text-emerald-300">{drinkServingsRemaining} Glasses</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setDrinkServingsRemaining((s) => s + 30);
+                        setCash((c) => c + activeDrink.sellPrice * 4);
+                        addXp(35);
+                        soundEngine.playCashRegister();
+                      }}
+                      className="px-3 py-1 rounded-lg bg-emerald-400 hover:bg-emerald-300 border border-[#0D0D14] text-slate-950 font-black text-xs cursor-pointer"
+                    >
+                      Craft +30 Servings (+${activeDrink.sellPrice * 4})
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {DRINK_MIXES.map((drink) => {
+                      const isCurrent = drink.id === activeDrinkId;
+                      return (
+                        <button
+                          key={drink.id}
+                          onClick={() => {
+                            setActiveDrinkId(drink.id);
+                            setDrinkPrepRemainingSec(Math.max(1, Math.round(drink.prepTimeSec)));
+                            setDrinkServingsRemaining(36 + drink.tier * 16);
+                            soundEngine.playCashRegister();
+                          }}
+                          className={`p-2.5 rounded-xl border-2 text-left cursor-pointer ${
+                            isCurrent
+                              ? 'bg-fuchsia-600/35 border-cyan-300'
+                              : 'bg-[#1d1436] border-[#0D0D14] hover:border-purple-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs sm:text-sm font-black" style={{ color: drink.color }}>
+                              {drink.name}
+                            </span>
+                            <span className="text-xs font-mono font-bold text-emerald-300">
+                              +${drink.sellPrice}/glass
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-1 text-[11px] font-mono">
+                            <span className="text-amber-300">
+                              +{drink.hypeBoost} Hype · {drink.prepTimeSec}s Prep · {36 + drink.tier * 16} Srv
+                            </span>
+                            <span className="font-bold text-cyan-300">
+                              {isCurrent ? '✓ SERVING' : 'Mix Batch'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -2142,52 +2572,124 @@ export default function App() {
                 </div>
               )}
 
-              {/* 8. SETTINGS TAB */}
+              {/* 8. SETTINGS TAB (Progression Presets + Custom Transparent PNG Sprites / Assets Uploader) */}
               {activeDockTab === 'SETTINGS' && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    onClick={() => {
-                      setClubName((n) => (n === 'CLUB NEON' ? 'NEON SKY VIP' : 'CLUB NEON'));
-                      soundEngine.playClick();
-                    }}
-                    className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#111116] text-left cursor-pointer"
-                  >
-                    <div className="text-[10px] font-mono text-cyan-300">
-                      SIGNAGE · {queueCount} IN LINE
-                    </div>
-                    <div className="text-xs font-black text-white mt-0.5">{clubName}</div>
-                  </button>
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button
+                      onClick={() => handleLoadPreset('DIVE_BAR_LVL1')}
+                      className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-amber-400 text-left cursor-pointer"
+                    >
+                      <div className="text-[10px] font-mono text-amber-300">STARTER MODE</div>
+                      <div className="text-xs font-black text-white mt-0.5">Lvl 1 Dive Bar (3x3)</div>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      soundEngine.playClick();
-                      setDayNightOverrideHour((prev) => (prev === 0.75 ? null : 0.75));
-                    }}
-                    className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#111116] text-left cursor-pointer"
-                  >
-                    <div className="text-[10px] font-mono text-pink-300">
-                      {dayNightReport.formattedTime}
-                    </div>
-                    <div className="text-xs font-black text-white mt-0.5 truncate">
-                      {dayNightReport.phaseLabel}
-                    </div>
-                  </button>
+                    <button
+                      onClick={() => handleLoadPreset('NEON_CORNER')}
+                      className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-cyan-400 text-left cursor-pointer"
+                    >
+                      <div className="text-[10px] font-mono text-cyan-300">SHOWCASE MODE</div>
+                      <div className="text-xs font-black text-white mt-0.5">Nightclub City: Neon</div>
+                    </button>
 
-                  <button
-                    onClick={() => handleLoadPreset('NEON_CORNER')}
-                    className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#111116] text-left cursor-pointer"
-                  >
-                    <div className="text-[10px] font-mono text-amber-300">LAYOUT PRESET 1</div>
-                    <div className="text-xs font-black text-white mt-0.5">Nightclub City: Neon</div>
-                  </button>
+                    <button
+                      onClick={() => handleLoadPreset('VIP_MEGA')}
+                      className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-fuchsia-400 text-left cursor-pointer"
+                    >
+                      <div className="text-[10px] font-mono text-fuchsia-300">3-FLOOR EXPANSION</div>
+                      <div className="text-xs font-black text-white mt-0.5">3-Floor Mega Club</div>
+                    </button>
 
-                  <button
-                    onClick={() => handleLoadPreset('VIP_MEGA')}
-                    className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#111116] text-left cursor-pointer"
-                  >
-                    <div className="text-[10px] font-mono text-fuchsia-300">LAYOUT PRESET 2</div>
-                    <div className="text-xs font-black text-white mt-0.5">2-Floor Mega Club</div>
-                  </button>
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setDayNightOverrideHour((prev) => (prev === 0.75 ? null : 0.75));
+                      }}
+                      className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] text-left cursor-pointer"
+                    >
+                      <div className="text-[10px] font-mono text-pink-300">
+                        {dayNightReport.formattedTime} · {queueCount} IN LINE
+                      </div>
+                      <div className="text-xs font-black text-white mt-0.5 truncate">
+                        {dayNightReport.phaseLabel}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Sprites / Assets Live Transparent PNG Uploader (AssetManager) */}
+                  <div className="p-2.5 rounded-xl bg-[#191130] border-2 border-[#0D0D14]">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <div className="text-xs font-black text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Sprites / Assets — Live Transparent PNG Uploader</span>
+                        </div>
+                        <p className="text-[10px] text-purple-200">
+                          Swap in custom transparent PNGs anchored at their isometric bottom-center footprint (v{spriteAssetVersion}).
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          assetManager.clearAllSprites();
+                          soundEngine.playClick();
+                        }}
+                        className="px-2 py-1 rounded-lg bg-rose-950 hover:bg-rose-900 border border-[#0D0D14] text-[10px] font-black text-rose-200 cursor-pointer"
+                      >
+                        Reset All to Vector Art
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {SPRITE_ASSET_DEFINITIONS.map((def) => {
+                        const hasCustom = assetManager.hasSprite(def.key);
+                        return (
+                          <div
+                            key={def.key}
+                            className="px-2.5 py-1.5 rounded-lg bg-[#120b24] border border-purple-500/30 flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-black text-white truncate">
+                                {def.label}{' '}
+                                <span className="font-mono text-[9px] text-cyan-300">({def.key})</span>
+                              </div>
+                              <div className="text-[9px] text-purple-300 truncate">
+                                {hasCustom ? '✓ Custom PNG Active' : def.recommendedSize}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <label className="px-2 py-1 rounded bg-cyan-400 hover:bg-cyan-300 border border-[#0D0D14] text-slate-950 font-black text-[10px] cursor-pointer">
+                                Upload PNG
+                                <input
+                                  type="file"
+                                  accept="image/png,image/webp,image/svg+xml"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      void assetManager.uploadFile(def.key as SpriteAssetKey, file);
+                                      soundEngine.playPlaceItem();
+                                    }
+                                  }}
+                                />
+                              </label>
+                              {hasCustom && (
+                                <button
+                                  onClick={() => {
+                                    assetManager.clearSprite(def.key);
+                                    soundEngine.playClick();
+                                  }}
+                                  className="px-1.5 py-1 rounded bg-rose-900 text-white text-[9px] font-bold cursor-pointer"
+                                  title="Revert to Vector Fallback"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2363,7 +2865,13 @@ export default function App() {
           <div className="flex-1 grid grid-cols-4 sm:grid-cols-8 gap-1.5">
             {(
               [
-                { id: 'TONIGHT', label: 'TONIGHT', icon: '🍸', grad: 'from-cyan-500 to-blue-700' },
+                {
+                  id: 'TONIGHT',
+                  label: 'TONIGHT',
+                  icon: '🍸',
+                  grad: 'from-cyan-500 to-blue-700',
+                  upgradeTag: 'MIX',
+                },
                 { id: 'DRESSING', label: 'DRESSING', icon: '👕', grad: 'from-pink-500 to-rose-700' },
                 {
                   id: 'STAFF',
@@ -2371,8 +2879,15 @@ export default function App() {
                   icon: '🧑‍🍳',
                   grad: 'from-purple-500 to-indigo-800',
                   badge: staffMembers.length,
+                  upgradeTag: 'UPGRADE',
                 },
-                { id: 'DECORATE', label: 'DECORATE', icon: '🛋️', grad: 'from-emerald-400 to-teal-700' },
+                {
+                  id: 'DECORATE',
+                  label: 'DECORATE',
+                  icon: '🛋️',
+                  grad: 'from-emerald-400 to-teal-700',
+                  upgradeTag: 'UPGRADE',
+                },
                 { id: 'CELEBS', label: 'CELEBS', icon: '👑', grad: 'from-amber-400 to-orange-600' },
                 { id: 'PARTIES', label: 'PARTIES', icon: '🎉', grad: 'from-fuchsia-500 to-purple-800' },
                 {
@@ -2382,7 +2897,13 @@ export default function App() {
                   grad: 'from-yellow-400 to-amber-700',
                   badge: unclaimedQuestCount > 0 ? unclaimedQuestCount : undefined,
                 },
-                { id: 'SETTINGS', label: 'SETTINGS', icon: '⚙️', grad: 'from-slate-500 to-slate-800' },
+                {
+                  id: 'SETTINGS',
+                  label: 'SETTINGS',
+                  icon: '⚙️',
+                  grad: 'from-slate-500 to-slate-800',
+                  upgradeTag: 'PNG',
+                },
               ] as const
             ).map((tab) => {
               const isSelected = activeDockTab === tab.id;
@@ -2396,20 +2917,25 @@ export default function App() {
                   className={`relative py-1.5 px-1 rounded-xl border-2 transition-all flex flex-col items-center justify-center cursor-pointer ${
                     isSelected
                       ? 'bg-gradient-to-b from-purple-600 to-indigo-900 border-cyan-300 -translate-y-0.5 shadow-[0_0_12px_rgba(34,211,238,0.5)]'
-                      : 'bg-[#1c1333] hover:bg-[#281b47] border-[#111116] shadow-[0_3px_0_#111116]'
+                      : 'bg-[#1c1333] hover:bg-[#281b47] border-[#0D0D14] shadow-[0_3px_0_#0D0D14]'
                   }`}
                 >
+                  {'upgradeTag' in tab && tab.upgradeTag && (
+                    <span className="absolute -top-1.5 -left-1 px-1 py-0.2 rounded bg-emerald-400 border border-[#0D0D14] text-[7px] font-black text-slate-950 uppercase tracking-tight">
+                      {tab.upgradeTag}
+                    </span>
+                  )}
                   {'badge' in tab && tab.badge !== undefined && (
-                    <span className="absolute -top-1.5 -right-1 px-1.5 py-0.2 rounded-full bg-rose-500 border border-[#111116] text-[8px] font-black text-white">
+                    <span className="absolute -top-1.5 -right-1 px-1.5 py-0.2 rounded-full bg-rose-500 border border-[#0D0D14] text-[8px] font-black text-white">
                       {tab.badge}
                     </span>
                   )}
                   <div
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-b ${tab.grad} border-[1.8px] border-[#111116] flex items-center justify-center text-sm sm:text-base shadow-inner`}
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-b ${tab.grad} border-[1.8px] border-[#0D0D14] flex items-center justify-center text-sm sm:text-base shadow-inner`}
                   >
                     {tab.icon}
                   </div>
-                  <span className="text-[8px] sm:text-[9px] font-black tracking-wider text-white mt-1 truncate max-w-full drop-shadow-[0_1px_0_#111116]">
+                  <span className="text-[8px] sm:text-[9px] font-black tracking-wider text-white mt-1 truncate max-w-full drop-shadow-[0_1px_0_#0D0D14]">
                     {tab.label}
                   </span>
                 </button>

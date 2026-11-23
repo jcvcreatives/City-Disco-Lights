@@ -27,10 +27,12 @@ export interface CatalogItem {
   accentColor: string;
 }
 
+export type FloorLevel = 1 | 2 | 3;
+
 export interface PlacedItem {
   uid: string;
   catalogId: string;
-  floor: 1 | 2;
+  floor: FloorLevel;
   gridX: number;
   gridY: number;
   rotation: 0 | 90 | 180 | 270;
@@ -83,12 +85,19 @@ export type BubbleType =
   | 'ANGRY_SEAT'
   | 'VIP_CROWN';
 
+export type GuestSeatPosture =
+  | 'SITTING_CHAIR'
+  | 'SITTING_STOOL'
+  | 'SITTING_SOFA'
+  | 'STANDING_TABLE'
+  | 'STANDING_BAR';
+
 export interface GuestAgent {
   id: string;
   name: string;
   isCelebrity: boolean;
-  floor: 1 | 2;
-  targetFloor: 1 | 2;
+  floor: FloorLevel;
+  targetFloor: FloorLevel;
   gridX: number; // float for smooth interpolation
   gridY: number;
   path: Array<{ x: number; y: number }>;
@@ -105,12 +114,15 @@ export interface GuestAgent {
   danceMove?: DancerMoveVariant;
   danceMoveTimer?: number;
   dancePhaseOffset?: number;
+  seatPosture?: GuestSeatPosture;
+  facingDir?: 'NE' | 'NW' | 'SE' | 'SW';
+  assignedSlotId?: string;
 }
 
 export interface FloatingText {
   id: string;
   text: string;
-  floor: 1 | 2;
+  floor: FloorLevel;
   gridX: number;
   gridY: number;
   color: string;
@@ -533,7 +545,26 @@ export const DRINK_MIXES: DrinkMix[] = [
   },
 ];
 
-// Initial Nightclub City: Neon Layout matching uploaded reference image (IMG_1506.jpeg)
+// Level 1 Dive Bar Starter Layout (Small gritty single-floor club with 3x3 dance floor, basic bar, warm string light, and a couple of chairs)
+export const LEVEL_1_DIVE_BAR_ITEMS: PlacedItem[] = [
+  { uid: 'dive_bar_1', catalogId: 'bar_dive', floor: 1, gridX: 1, gridY: 0, rotation: 0 },
+  { uid: 'dive_dj_1', catalogId: 'dj_turntable', floor: 1, gridX: 5, gridY: 0, rotation: 0 },
+  { uid: 'dive_light_1', catalogId: 'light_string', floor: 1, gridX: 0, gridY: 1, rotation: 0 },
+  { uid: 'dive_chair_1', catalogId: 'seat_bistro', floor: 1, gridX: 1, gridY: 6, rotation: 0 },
+  { uid: 'dive_chair_2', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 3, rotation: 90 },
+  // Basic 3x3 illuminated dance floor
+  { uid: 'dive_df_1', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 3, rotation: 0 },
+  { uid: 'dive_df_2', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 3, rotation: 0 },
+  { uid: 'dive_df_3', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 3, rotation: 0 },
+  { uid: 'dive_df_4', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 4, rotation: 0 },
+  { uid: 'dive_df_5', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 4, rotation: 0 },
+  { uid: 'dive_df_6', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 4, rotation: 0 },
+  { uid: 'dive_df_7', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 5, rotation: 0 },
+  { uid: 'dive_df_8', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 5, rotation: 0 },
+  { uid: 'dive_df_9', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 5, rotation: 0 },
+];
+
+// Initial Nightclub City: Neon Layout matching uploaded reference image (IMG_1510_4d373b62.png)
 export const INITIAL_PLACED_ITEMS: PlacedItem[] = [
   // Back-left wall: Tufted purple VIP booths under "CLUB NEON" & "GOOD TIMES" neon signs
   { uid: 'init_couch_left1', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 1, rotation: 90 },
@@ -568,9 +599,25 @@ export const INITIAL_PLACED_ITEMS: PlacedItem[] = [
   { uid: 'init_table_2', catalogId: 'seat_bistro', floor: 1, gridX: 4, gridY: 7, rotation: 0 },
   // Tufted VIP lounge booth in corner
   { uid: 'init_booth_bottom', catalogId: 'seat_velvet_booth', floor: 1, gridX: 8, gridY: 7, rotation: 0 },
+
+  // Floor 2: VIP Mezannine Sky Lounge
+  { uid: 'init_f2_bar', catalogId: 'bar_neon', floor: 2, gridX: 1, gridY: 0, rotation: 0 },
+  { uid: 'init_f2_dj', catalogId: 'dj_holo_stage', floor: 2, gridX: 6, gridY: 0, rotation: 0 },
+  { uid: 'init_f2_df1', catalogId: 'dance_cyber', floor: 2, gridX: 3, gridY: 3, rotation: 0 },
+  { uid: 'init_f2_df2', catalogId: 'dance_cyber', floor: 2, gridX: 5, gridY: 3, rotation: 0 },
+  { uid: 'init_f2_pod1', catalogId: 'seat_velvet_booth', floor: 2, gridX: 0, gridY: 4, rotation: 0 },
+  { uid: 'init_f2_pod2', catalogId: 'seat_vip_pod', floor: 2, gridX: 8, gridY: 4, rotation: 0 },
+
+  // Floor 3: Penthouse Starlight Rooftop
+  { uid: 'init_f3_bar', catalogId: 'bar_wraparound', floor: 3, gridX: 1, gridY: 0, rotation: 0 },
+  { uid: 'init_f3_dj', catalogId: 'dj_holo_stage', floor: 3, gridX: 6, gridY: 0, rotation: 0 },
+  { uid: 'init_f3_df1', catalogId: 'dance_supernova', floor: 3, gridX: 3, gridY: 3, rotation: 0 },
+  { uid: 'init_f3_df2', catalogId: 'dance_supernova', floor: 3, gridX: 5, gridY: 3, rotation: 0 },
+  { uid: 'init_f3_pod1', catalogId: 'seat_vip_pod', floor: 3, gridX: 0, gridY: 4, rotation: 0 },
+  { uid: 'init_f3_pod2', catalogId: 'seat_vip_pod', floor: 3, gridX: 8, gridY: 4, rotation: 0 },
 ];
 
-// Preset VIP Hotspot Showcase layout for Floor 1 & Floor 2
+// Preset VIP Hotspot Showcase layout for Floor 1, Floor 2 & Floor 3
 export const VIP_HOTSPOT_ITEMS: PlacedItem[] = [
   // Floor 1: MassiveWraparound Bar, Hologram DJ, 4x4 Cyber/Supernova Floor, Laser trusses, Velvet booths
   { uid: 'vip_bar_1', catalogId: 'bar_wraparound', floor: 1, gridX: 1, gridY: 0, rotation: 0 },
@@ -597,6 +644,14 @@ export const VIP_HOTSPOT_ITEMS: PlacedItem[] = [
   { uid: 'vip_f2_pod2', catalogId: 'seat_vip_pod', floor: 2, gridX: 8, gridY: 4, rotation: 0 },
   { uid: 'vip_f2_orb', catalogId: 'light_disco_orb', floor: 2, gridX: 0, gridY: 1, rotation: 0 },
   { uid: 'vip_f2_laser', catalogId: 'light_laser_rig', floor: 2, gridX: 9, gridY: 1, rotation: 0 },
+
+  // Floor 3: Penthouse Starlight Sanctuary
+  { uid: 'vip_f3_bar', catalogId: 'bar_wraparound', floor: 3, gridX: 1, gridY: 0, rotation: 0 },
+  { uid: 'vip_f3_dj', catalogId: 'dj_holo_stage', floor: 3, gridX: 6, gridY: 0, rotation: 0 },
+  { uid: 'vip_f3_df1', catalogId: 'dance_supernova', floor: 3, gridX: 3, gridY: 3, rotation: 0 },
+  { uid: 'vip_f3_df2', catalogId: 'dance_supernova', floor: 3, gridX: 5, gridY: 3, rotation: 0 },
+  { uid: 'vip_f3_pod1', catalogId: 'seat_vip_pod', floor: 3, gridX: 0, gridY: 4, rotation: 0 },
+  { uid: 'vip_f3_pod2', catalogId: 'seat_vip_pod', floor: 3, gridX: 8, gridY: 4, rotation: 0 },
 ];
 
 export const INITIAL_QUESTS: QuestTask[] = [
@@ -677,7 +732,7 @@ export interface StaffMemberAgent {
   catalogId: string;
   role: StaffRole;
   name: string;
-  floor: 1 | 2;
+  floor: FloorLevel;
   postGridX: number; // Assigned isometric tile X
   postGridY: number; // Assigned isometric tile Y
   gridX: number; // Live interpolated X

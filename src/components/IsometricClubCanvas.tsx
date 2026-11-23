@@ -5,7 +5,9 @@ import {
   DancerMoveVariant,
   DrinkMix,
   FloatingText,
+  FloorLevel,
   GuestAgent,
+  GuestSeatPosture,
   ParkingUpgradeState,
   PlacedItem,
   StaffCatalogItem,
@@ -21,6 +23,7 @@ import {
   GRID_SIZE,
   STAIRS_COORD,
 } from '../utils/pathfinding';
+import { assetManager } from '../utils/assetManager';
 
 export interface ClubSimulationMetrics {
   totalHype: number;
@@ -45,8 +48,8 @@ export interface DayNightCycleReport {
 
 interface IsometricClubCanvasProps {
   isPlaying: boolean;
-  activeFloor: 1 | 2;
-  unlockedFloors: 1 | 2;
+  activeFloor: FloorLevel;
+  unlockedFloors: FloorLevel;
   playerLevel: number;
   placedItems: PlacedItem[];
   staffMembers: StaffMemberAgent[];
@@ -74,9 +77,12 @@ interface IsometricClubCanvasProps {
 
 const BASE_TILE_W = 56;
 const BASE_TILE_H = 28;
-const INK = '#111116';
+const INK = '#0D0D14';
 
 const GUEST_NAMES = [
+  'Mia J.',
+  'Ivy W.',
+  'Kira R.',
   'Mia H.',
   'Leo',
   'Zoe',
@@ -186,7 +192,7 @@ function pickRandomDancerMoveForBpm(
 }
 
 interface DancerHypeParticle {
-  floor: 1 | 2;
+  floor: FloorLevel;
   gridX: number;
   gridY: number;
   offsetX: number;
@@ -561,8 +567,20 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           const dx = nextWp.x - guest.gridX;
           const dy = nextWp.y - guest.gridY;
           const dist = Math.hypot(dx, dy);
-          // Natural, unhurried walking speed (~1.12 tiles/sec)
-          const speed = 1.12 * dt;
+
+          // Update natural isometric facing direction from movement vector
+          if (dist > 0.01) {
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              guest.facingDir = dx >= 0 ? 'SE' : 'NW';
+            } else {
+              guest.facingDir = dy >= 0 ? 'SW' : 'NE';
+            }
+          }
+
+          // Smooth, natural human walking speed with gentle ease-out arrival on the final step
+          const isFinalStep = guest.path.length === 1;
+          const arrivalEase = isFinalStep && dist < 0.45 ? Math.max(0.55, dist / 0.45) : 1.0;
+          const speed = 1.06 * arrivalEase * dt;
           if (dist <= speed) {
             guest.gridX = nextWp.x;
             guest.gridY = nextWp.y;
@@ -579,10 +597,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             guest.gridX = DOOR_COORD.x;
             guest.gridY = DOOR_COORD.y;
             guest.floor = 1;
-            const wantsFloor2 = maxFloors === 2 && Math.random() < 0.38;
-            if (wantsFloor2) {
-              guest.targetFloor = 2;
+            const wantsUpperFloor = maxFloors >= 2 && Math.random() < 0.36;
+            if (wantsUpperFloor) {
+              guest.targetFloor = (maxFloors === 3 && Math.random() < 0.45 ? 3 : 2) as FloorLevel;
               guest.state = 'CLIMBING_STAIRS';
+              guest.seatPosture = undefined;
+              guest.assignedSlotId = undefined;
               guest.path = findGridPath(
                 items,
                 1,
@@ -595,13 +615,16 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             } else {
               const barSlot = pickSeparatedBarSlot(items, guests, guest.floor, guest.id);
               guest.state = 'WALKING_TO_BAR';
+              guest.seatPosture = barSlot.posture;
+              guest.facingDir = barSlot.facingDir;
+              guest.assignedSlotId = barSlot.slotId;
               const path = findGridPath(
                 items,
                 guest.floor,
                 guest.gridX,
                 guest.gridY,
-                Math.round(barSlot.x),
-                Math.round(barSlot.y)
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.x))),
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.y)))
               );
               if (path.length > 0) {
                 path[path.length - 1] = { x: barSlot.x, y: barSlot.y };
@@ -614,18 +637,22 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               guest.stateTimer = 0.9;
             }
           } else if (guest.state === 'CLIMBING_STAIRS') {
-            guest.floor = 2;
+            const destFloor: FloorLevel = guest.targetFloor >= 2 ? guest.targetFloor : 2;
+            guest.floor = destFloor;
             guest.gridX = STAIRS_COORD.x;
             guest.gridY = STAIRS_COORD.y + 1;
             guest.state = 'WALKING_TO_BAR';
-            const barSlot2 = pickSeparatedBarSlot(items, guests, 2, guest.id);
+            const barSlot2 = pickSeparatedBarSlot(items, guests, destFloor, guest.id);
+            guest.seatPosture = barSlot2.posture;
+            guest.facingDir = barSlot2.facingDir;
+            guest.assignedSlotId = barSlot2.slotId;
             const path = findGridPath(
               items,
-              2,
+              destFloor,
               guest.gridX,
               guest.gridY,
-              Math.round(barSlot2.x),
-              Math.round(barSlot2.y)
+              Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot2.x))),
+              Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot2.y)))
             );
             if (path.length > 0) {
               path[path.length - 1] = { x: barSlot2.x, y: barSlot2.y };
@@ -638,9 +665,10 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             guest.stateTimer = 0.9;
           } else if (guest.state === 'WALKING_TO_BAR') {
             guest.state = 'ORDERING_DRINK';
-            guest.stateTimer = Math.max(1.8, (drink.prepTimeSec / metrics.maxBarTier) * 1.35);
+            // Stay seated on the bar stool enjoying a drink long enough so all bar stools stay occupied naturally
+            guest.stateTimer = 8.5 + Math.random() * 5.0;
             guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
-            guest.bubbleTimer = 3.5;
+            guest.bubbleTimer = 4.5;
           } else if (guest.state === 'ORDERING_DRINK') {
             const drinkRevenue = Math.round(
               drink.sellPrice * (1 + metrics.tipBonus * 0.5) * (guest.isCelebrity ? 2.5 : 1)
@@ -660,21 +688,24 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
 
-            // 32% of patrons head straight from the bar to sit in a chair or stand at a cocktail table
+            // 48% of patrons head from the bar to sit in an open chair / VIP booth or stand at a cocktail table
             const seats = items.filter(
               (it) =>
                 it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
             );
-            if (seats.length > 0 && Math.random() < 0.32) {
+            if (seats.length > 0 && Math.random() < 0.48) {
               const seatSlot = pickSeparatedSeatOrTableSlot(items, guests, guest.floor, guest.id);
               guest.state = 'WALKING_TO_SEAT';
+              guest.seatPosture = seatSlot.posture;
+              guest.facingDir = seatSlot.facingDir;
+              guest.assignedSlotId = seatSlot.slotId;
               const path = findGridPath(
                 items,
                 guest.floor,
                 guest.gridX,
                 guest.gridY,
-                Math.round(seatSlot.x),
-                Math.round(seatSlot.y)
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.x))),
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.y)))
               );
               if (path.length > 0) {
                 path[path.length - 1] = { x: seatSlot.x, y: seatSlot.y };
@@ -686,13 +717,15 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             } else {
               const danceSlot = pickSeparatedDanceSlot(items, guests, guest.floor, guest.id);
               guest.state = 'WALKING_TO_DANCE';
+              guest.seatPosture = undefined;
+              guest.assignedSlotId = undefined;
               const path = findGridPath(
                 items,
                 guest.floor,
                 guest.gridX,
                 guest.gridY,
-                Math.round(danceSlot.x),
-                Math.round(danceSlot.y)
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(danceSlot.x))),
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(danceSlot.y)))
               );
               if (path.length > 0) {
                 path[path.length - 1] = { x: danceSlot.x, y: danceSlot.y };
@@ -704,10 +737,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             }
           } else if (guest.state === 'WALKING_TO_DANCE') {
             guest.state = 'DANCER_MOVES';
+            guest.seatPosture = undefined;
+            guest.assignedSlotId = undefined;
             guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
             guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
             guest.dancePhaseOffset = Math.random() * Math.PI * 2;
-            guest.stateTimer = 8.5 + Math.random() * 5.0;
+            guest.stateTimer = 8.0 + Math.random() * 4.5;
             guest.bubble =
               metrics.lightingCount < 2 && Math.random() < 0.25
                 ? 'SPARKLE'
@@ -716,13 +751,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 : 'SPARKLE';
             guest.bubbleTimer = 5.5;
           } else if (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES') {
-            // 30% chance to chain into another DANCER_MOVES freestyle burst before heading to sit in a chair or stand at a table
+            // 25% chance to chain into another DANCER_MOVES freestyle burst before heading to a chair, table, or bar stool
             const danceTiles = items.filter(
               (it) =>
                 it.floor === guest.floor &&
                 getCatalogItem(it.catalogId)?.category === 'DANCE_TILE'
             );
-            if (guest.state === 'DANCING' || (danceTiles.length > 0 && Math.random() < 0.3)) {
+            if (guest.state === 'DANCING' || (danceTiles.length > 0 && Math.random() < 0.25)) {
               guest.state = 'DANCER_MOVES';
               guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
               guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
@@ -734,16 +769,45 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 (it) =>
                   it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
               );
-              if (seats.length > 0) {
-                const seatSlot = pickSeparatedSeatOrTableSlot(items, guests, guest.floor, guest.id);
-                guest.state = 'WALKING_TO_SEAT';
+              const bars = items.filter(
+                (it) =>
+                  it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
+              );
+              // Frequently refill any open bar stools or lounge chairs/VIP sofas
+              if (bars.length > 0 && Math.random() < 0.38) {
+                const barSlot = pickSeparatedBarSlot(items, guests, guest.floor, guest.id);
+                guest.state = 'WALKING_TO_BAR';
+                guest.seatPosture = barSlot.posture;
+                guest.facingDir = barSlot.facingDir;
+                guest.assignedSlotId = barSlot.slotId;
                 const path = findGridPath(
                   items,
                   guest.floor,
                   guest.gridX,
                   guest.gridY,
-                  Math.round(seatSlot.x),
-                  Math.round(seatSlot.y)
+                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.x))),
+                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.y)))
+                );
+                if (path.length > 0) {
+                  path[path.length - 1] = { x: barSlot.x, y: barSlot.y };
+                } else {
+                  path.push({ x: barSlot.x, y: barSlot.y });
+                }
+                guest.path = path;
+                guest.stateTimer = 0.8;
+              } else if (seats.length > 0) {
+                const seatSlot = pickSeparatedSeatOrTableSlot(items, guests, guest.floor, guest.id);
+                guest.state = 'WALKING_TO_SEAT';
+                guest.seatPosture = seatSlot.posture;
+                guest.facingDir = seatSlot.facingDir;
+                guest.assignedSlotId = seatSlot.slotId;
+                const path = findGridPath(
+                  items,
+                  guest.floor,
+                  guest.gridX,
+                  guest.gridY,
+                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.x))),
+                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.y)))
                 );
                 if (path.length > 0) {
                   path[path.length - 1] = { x: seatSlot.x, y: seatSlot.y };
@@ -754,6 +818,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 guest.stateTimer = 0.8;
               } else {
                 guest.state = 'LEAVING';
+                guest.seatPosture = undefined;
+                guest.assignedSlotId = undefined;
                 guest.path = findGridPath(
                   items,
                   guest.floor,
@@ -767,7 +833,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             }
           } else if (guest.state === 'WALKING_TO_SEAT') {
             guest.state = 'RESTING_AT_SEAT';
-            guest.stateTimer = 7.5 + Math.random() * 4.5;
+            guest.stateTimer = 10.5 + Math.random() * 5.5;
             guest.bubble = guest.isCelebrity ? 'VIP_CROWN' : Math.random() < 0.5 ? 'COCKTAIL' : 'CHAT';
             guest.bubbleTimer = 4.5;
           } else if (guest.state === 'RESTING_AT_SEAT') {
@@ -789,11 +855,35 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
 
-            if (guest.floor === 2) {
+            // 45% of rested guests grab another drink at the bar or hit the dance floor instead of immediately leaving
+            if (Math.random() < 0.45) {
+              const barSlot = pickSeparatedBarSlot(items, guests, guest.floor, guest.id);
+              guest.state = 'WALKING_TO_BAR';
+              guest.seatPosture = barSlot.posture;
+              guest.facingDir = barSlot.facingDir;
+              guest.assignedSlotId = barSlot.slotId;
+              const path = findGridPath(
+                items,
+                guest.floor,
+                guest.gridX,
+                guest.gridY,
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.x))),
+                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.y)))
+              );
+              if (path.length > 0) {
+                path[path.length - 1] = { x: barSlot.x, y: barSlot.y };
+              } else {
+                path.push({ x: barSlot.x, y: barSlot.y });
+              }
+              guest.path = path;
+              guest.stateTimer = 0.8;
+            } else if (guest.floor >= 2) {
               guest.state = 'DESCENDING_STAIRS';
+              guest.seatPosture = undefined;
+              guest.assignedSlotId = undefined;
               guest.path = findGridPath(
                 items,
-                2,
+                guest.floor,
                 guest.gridX,
                 guest.gridY,
                 STAIRS_COORD.x,
@@ -802,6 +892,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               guest.stateTimer = 0.8;
             } else {
               guest.state = 'LEAVING';
+              guest.seatPosture = undefined;
+              guest.assignedSlotId = undefined;
               guest.path = findGridPath(
                 items,
                 1,
@@ -819,6 +911,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             guest.gridX = STAIRS_COORD.x;
             guest.gridY = STAIRS_COORD.y + 1;
             guest.state = 'LEAVING';
+            guest.seatPosture = undefined;
+            guest.assignedSlotId = undefined;
             guest.path = findGridPath(
               items,
               1,
@@ -834,7 +928,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
-      // 2A-Bis. Continuous Personal-Space Separation Pass so patrons never stack or overlap
+      // 2A-Bis. Continuous Personal-Space Separation Pass for free-roaming/dancing patrons (never pushes seated/bar-stool guests off their chair!)
       applyGuestPersonalSpaceSeparation(guests, dt);
 
       // 2B. Update all hired Staff Members (Bartenders, Bouncers, Waiters) at 60fps
@@ -893,12 +987,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         // Role-specific automated tasks & station-to-station patrol walks when timer completes
         if (staff.taskTimer <= 0) {
           if (staff.role === 'BARTENDER') {
-            // Speed up any guest currently ordering a drink on this floor & generate automated flair mix bonus
+            // Serve drinks to patrons seated at the bar stools without prematurely kicking them off their stools
             const orderingGuests = guests.filter(
               (g) => g.floor === staff.floor && g.state === 'ORDERING_DRINK'
             );
             for (const og of orderingGuests) {
-              og.stateTimer = Math.min(og.stateTimer, 0.25);
+              og.stateTimer = Math.max(1.8, og.stateTimer - 0.65);
             }
 
             const flairTip = Math.round(18 + drink.sellPrice * 0.28);
@@ -1338,25 +1432,142 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         const cat = getCatalogItem(item.catalogId);
         if (!cat || cat.category === 'DANCE_TILE') continue;
         const fp = getRotatedFootprint(cat, item.rotation);
-        const depth = item.gridX + item.gridY + (fp.width + fp.depth) * 0.5;
-        drawables.push({
-          zIndex: 0,
-          depth,
-          draw: () =>
-            drawIllustratedFurniture(
-              ctx,
-              item,
-              cat,
-              fp,
-              originX,
-              originY,
-              tileW,
-              tileH,
-              scale,
-              t,
-              props.activeDrink
-            ),
-        });
+
+        if (cat.category === 'BAR_UNIT') {
+          // 1. Bar Counter & Tall Back-Bar Bottle Shelves
+          const barDepth = item.gridX + item.gridY + (fp.width + fp.depth) * 0.35;
+          drawables.push({
+            zIndex: 0,
+            depth: barDepth,
+            draw: () =>
+              drawBar(
+                ctx,
+                item,
+                cat,
+                fp,
+                originX,
+                originY,
+                tileW,
+                tileH,
+                scale,
+                t,
+                props.activeDrink
+              ),
+          });
+          // 2. Individual Bar Stools depth-sorted separately so each seated patron renders ON TOP of their stool
+          if (!assetManager.hasSprite('bar_counter')) {
+            const stools = getBarStoolCoords(item, fp);
+            for (const st of stools) {
+              drawables.push({
+                zIndex: 0,
+                depth: st.gx + st.gy + 0.30,
+                draw: () =>
+                  drawBarStool(ctx, st.gx, st.gy, originX, originY, tileW, tileH, scale),
+              });
+            }
+          }
+        } else if (cat.category === 'SEATING') {
+          if (cat.id === 'seat_bistro') {
+            // Split High-Top Cocktail Table into Back Chair -> Central Table -> Front Chair
+            // so seated patrons sit ON the chairs and NEVER on top of the table!
+            const chairBackGx = item.gridX + 0.14;
+            const chairBackGy = item.gridY + 0.52;
+            const chairFrontGx = item.gridX + 0.86;
+            const chairFrontGy = item.gridY + 0.48;
+
+            if (!assetManager.hasSprite('cocktail_table')) {
+              drawables.push({
+                zIndex: 0,
+                depth: chairBackGx + chairBackGy + 0.30,
+                draw: () =>
+                  drawCushionedClubChairAtGrid(
+                    ctx,
+                    chairBackGx,
+                    chairBackGy,
+                    originX,
+                    originY,
+                    tileW,
+                    tileH,
+                    scale,
+                    '#7e22ce',
+                    'SE'
+                  ),
+              });
+            }
+
+            drawables.push({
+              zIndex: 0,
+              depth: item.gridX + item.gridY + 1.38,
+              draw: () =>
+                drawTable(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t),
+            });
+
+            if (!assetManager.hasSprite('cocktail_table')) {
+              drawables.push({
+                zIndex: 0,
+                depth: chairFrontGx + chairFrontGy + 0.30,
+                draw: () =>
+                  drawCushionedClubChairAtGrid(
+                    ctx,
+                    chairFrontGx,
+                    chairFrontGy,
+                    originX,
+                    originY,
+                    tileW,
+                    tileH,
+                    scale,
+                    '#9333ea',
+                    'NW'
+                  ),
+              });
+            }
+          } else {
+            // Split VIP Lounge Booth into Tufted Purple Sofa (behind seated patrons) + Sleek Black VIP Table (in front of seated patrons' knees)
+            drawables.push({
+              zIndex: 0,
+              depth: item.gridX + item.gridY + 0.35,
+              draw: () =>
+                drawTable(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t),
+            });
+            if (!assetManager.hasSprite('vip_couch')) {
+              drawables.push({
+                zIndex: 0,
+                depth: item.gridX + item.gridY + Math.max(fp.width, fp.depth) + 0.65,
+                draw: () =>
+                  drawVipBoothForegroundTable(
+                    ctx,
+                    item,
+                    fp,
+                    originX,
+                    originY,
+                    tileW,
+                    tileH,
+                    scale
+                  ),
+              });
+            }
+          }
+        } else {
+          const depth = item.gridX + item.gridY + (fp.width + fp.depth) * 0.5;
+          drawables.push({
+            zIndex: 0,
+            depth,
+            draw: () =>
+              drawIllustratedFurniture(
+                ctx,
+                item,
+                cat,
+                fp,
+                originX,
+                originY,
+                tileW,
+                tileH,
+                scale,
+                t,
+                props.activeDrink
+              ),
+          });
+        }
       }
 
       // DJ NPC with purple headphones behind the DJ booth
@@ -2479,31 +2690,42 @@ function drawForegroundQueueCarsAndLamps(
       const px = originX + (st.gx - st.gy) * (tileW / 2);
       const py = effectiveOriginY + (st.gx + st.gy) * (tileH / 2);
 
-      // Gold Circular Stanchion Base
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.ellipse(px, py, 5 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.5 * scale;
-      ctx.stroke();
+      const usedCustomStanchion = assetManager.drawBottomCenterAnchoredSprite(
+        ctx,
+        'stanchion',
+        px,
+        py + 3 * scale,
+        18 * scale,
+        24 * scale
+      );
 
-      // Gold Vertical Pole
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 2.6 * scale;
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px, py - 19 * scale);
-      ctx.stroke();
+      if (!usedCustomStanchion) {
+        // Gold Circular Stanchion Base
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.ellipse(px, py, 5 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.8 * scale;
+        ctx.stroke();
 
-      // Gold Top Finial Ball
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.arc(px, py - 20 * scale, 2.6 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.2 * scale;
-      ctx.stroke();
+        // Gold Vertical Pole
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 2.6 * scale;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px, py - 19 * scale);
+        ctx.stroke();
+
+        // Gold Top Finial Ball
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.arc(px, py - 20 * scale, 2.6 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.5 * scale;
+        ctx.stroke();
+      }
 
       if (i < chain.length - 1) {
         const next = chain[i + 1];
@@ -2760,6 +2982,20 @@ function drawCar(
   const cy = originY + (gx + gy) * (tileH / 2) - zOffset;
   const isUnderBuilding = zIndex < 0;
   const carScale = isUnderBuilding ? scale * 0.92 : scale;
+
+  // Check AssetManager for custom uploaded car_taxi or car_sedan PNG sprite
+  if (
+    assetManager.drawBottomCenterAnchoredSprite(
+      ctx,
+      isTaxi ? 'car_taxi' : 'car_sedan',
+      cx,
+      cy + 10 * carScale,
+      62 * carScale,
+      42 * carScale
+    )
+  ) {
+    return;
+  }
 
   ctx.save();
   // Ground shadow (expanded when underneath the building overhang)
@@ -3137,8 +3373,8 @@ function drawIllustratedClubShell(
   tileH: number,
   scale: number,
   t: number,
-  activeFloor: 1 | 2,
-  unlockedFloors: 1 | 2,
+  activeFloor: FloorLevel,
+  unlockedFloors: FloorLevel,
   _playerLevel: number,
   stairsHitboxRef: React.MutableRefObject<{ x: number; y: number; w: number; h: number }>,
   sequencer: RhythmicLightingSequencerState
@@ -3453,42 +3689,145 @@ function drawIllustratedClubShell(
     }
     ctx.stroke();
 
-    // Mounted Cyan/Blue Spotlight Cans + Volumetric Light Cones
+    // Mounted Cyan/Blue Spotlight Cans (Crisp vector art — NO blurry spotlight fog cones)
     for (let sp = 0; sp < 3; sp++) {
       const ly = ty - th + (10 + sp * 16) * scale;
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = sp % 2 === 0 ? '#38bdf8' : '#22d3ee';
       ctx.beginPath();
-      ctx.arc(tx + 5 * scale, ly, 3.2 * scale, 0, Math.PI * 2);
+      ctx.arc(tx + 5 * scale, ly, 3.4 * scale, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.2 * scale;
+      ctx.lineWidth = 1.6 * scale;
       ctx.stroke();
-
-      // Translucent cyan spotlight beam cone
-      ctx.save();
-      const beamGrad = ctx.createLinearGradient(
-        tx + 5 * scale,
-        ly,
-        tx + 46 * scale,
-        ly + 32 * scale
-      );
-      beamGrad.addColorStop(0, 'rgba(56, 189, 248, 0.34)');
-      beamGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-      ctx.fillStyle = beamGrad;
-      ctx.beginPath();
-      ctx.moveTo(tx + 5 * scale, ly);
-      ctx.lineTo(tx + 48 * scale, ly + 22 * scale);
-      ctx.lineTo(tx + 36 * scale, ly + 42 * scale);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
     }
   };
 
   drawTrussTower(1.5, 0.2);
   drawTrussTower(7.2, 0.2);
 
-  // 7. TROPICAL POTTED PALM TREES & CORNER MONSTERA PLANTS (Matching IMG_1506_5bdf15ca.jpeg)
+  // 6B. "NO SLEEP" NEON SIGN, RETRO ARCADE CABINETS, GREEN POOL TABLE & CHAMPAGNE PYRAMID TABLE (Matching IMG_1510_4d373b62.png)
+  drawIsoWallSign(
+    nw.x + (sw.x - nw.x) * 0.81,
+    nw.y + (sw.y - nw.y) * 0.81 - 41 * scale,
+    isoAngleLeft,
+    'NO SLEEP',
+    '#4ade80',
+    '#dcfce7',
+    9.2,
+    0
+  );
+
+  // Retro Arcade Cabinets lined up under "NO SLEEP" along the lower-left wall (gx = 0.25, gy = 7.45..8.85)
+  const arcadeConfigs = [
+    { gx: 0.22, gy: 7.55, body: '#6b21a8', screen: '#facc15', trim: '#e879f9' },
+    { gx: 0.22, gy: 8.2, body: '#581c87', screen: '#38bdf8', trim: '#f472b6' },
+    { gx: 0.22, gy: 8.85, body: '#1e293b', screen: '#4ade80', trim: '#22d3ee' },
+  ];
+  for (const arc of arcadeConfigs) {
+    drawIsoPrism(
+      ctx,
+      arc.gx,
+      arc.gy,
+      0.55,
+      0.52,
+      0,
+      26 * scale,
+      originX,
+      originY,
+      tileW,
+      tileH,
+      arc.trim,
+      arc.body,
+      '#1e1b4b',
+      INK,
+      1.8 * scale
+    );
+    const acx = originX + (arc.gx + 0.35 - (arc.gy + 0.25)) * halfW;
+    const acy = originY + (arc.gx + 0.35 + (arc.gy + 0.25)) * halfH - 17 * scale;
+    fillStrokeRoundedRect(
+      ctx,
+      acx - 4.2 * scale,
+      acy - 4.2 * scale,
+      8.4 * scale,
+      6.2 * scale,
+      1.5 * scale,
+      arc.screen,
+      INK,
+      1.4 * scale
+    );
+  }
+
+  // Crisp Green-Felt Pool Table in the lower-left corner ("KIRA R. — Corner pocket. Watch this." in IMG_1510_4d373b62.png)
+  drawIsoPrism(
+    ctx,
+    0.15,
+    9.15,
+    0.85,
+    0.72,
+    0,
+    13 * scale,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#15803d',
+    '#451a03',
+    '#271001',
+    INK,
+    1.9 * scale
+  );
+  const poolCx = originX + (0.55 - 9.5) * halfW;
+  const poolCy = originY + (0.55 + 9.5) * halfH - 13.5 * scale;
+  for (const ball of [
+    { dx: -3.5, dy: -1, c: '#ffffff' },
+    { dx: 1.5, dy: 0.5, c: '#facc15' },
+    { dx: 4.2, dy: -1.2, c: '#ef4444' },
+  ]) {
+    ctx.fillStyle = ball.c;
+    ctx.beginPath();
+    ctx.arc(poolCx + ball.dx * scale, poolCy + ball.dy * scale, 1.5 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // White-Draped Round Champagne Glass Pyramid Table near the top corner (Matching IMG_1510_4d373b62.png)
+  const champX = originX + (1.42 - 1.12) * halfW;
+  const champY = originY + (1.42 + 1.12) * halfH;
+  fillStrokeRoundedRect(
+    ctx,
+    champX - 9.5 * scale,
+    champY - 16 * scale,
+    19 * scale,
+    16 * scale,
+    4 * scale,
+    '#f8fafc',
+    INK,
+    2 * scale
+  );
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.ellipse(champX, champY - 16 * scale, 10 * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.8 * scale;
+  ctx.stroke();
+
+  // Golden Champagne Glass Pyramid Tower on top of the white-draped table
+  for (let row = 0; row < 3; row++) {
+    const count = 3 - row;
+    for (let g = 0; g < count; g++) {
+      const gxPos = champX + (g - (count - 1) * 0.5) * 4.2 * scale;
+      const gyPos = champY - (18 + row * 4.5) * scale;
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(gxPos, gyPos, 2.1 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.1 * scale;
+      ctx.stroke();
+    }
+  }
+
+  // 7. TROPICAL POTTED PALM TREES & CORNER MONSTERA PLANTS (Matching IMG_1510_4d373b62.png)
   drawIsometricPottedPlant(ctx, 0.45, 0.45, originX, originY, tileW, tileH, scale, true);
   drawIsometricPottedPlant(ctx, 0.55, 9.25, originX, originY, tileW, tileH, scale, true);
   drawIsometricPottedPlant(ctx, 9.25, 0.65, originX, originY, tileW, tileH, scale, false);
@@ -3612,11 +3951,11 @@ function drawIllustratedClubShell(
     ctx.stroke();
   }
 
-  // 10. Compact Interactive Floor 2 / VIP Sky Lounge Neon Sign Hitbox on Back Corner
+  // 10. Compact Interactive Multi-Floor Expansion Sign Hitbox on Back Corner (Floors 1, 2 & 3)
   const signBox = {
     x: nw.x + 14 * scale,
     y: nw.y - wallH - 22 * scale,
-    w: 94 * scale,
+    w: 102 * scale,
     h: 20 * scale,
   };
   stairsHitboxRef.current = signBox;
@@ -3627,15 +3966,17 @@ function drawIllustratedClubShell(
     signBox.w,
     signBox.h,
     5 * scale,
-    'rgba(17, 17, 22, 0.88)',
-    unlockedFloors === 2 ? '#4ade80' : '#22d3ee',
+    'rgba(13, 13, 20, 0.92)',
+    unlockedFloors >= 3 ? '#4ade80' : '#22d3ee',
     1.8 * scale
   );
   ctx.fillStyle = '#67e8f9';
   ctx.font = `800 ${Math.max(7, Math.round(8.5 * scale))}px "Outfit", sans-serif`;
   ctx.textAlign = 'center';
   ctx.fillText(
-    unlockedFloors === 1 ? '▲ UNLOCK FLOOR 2' : `FLOOR ${activeFloor === 1 ? '2 ▲' : '1 ▼'}`,
+    unlockedFloors < 3
+      ? `▲ UNLOCK FLOOR ${unlockedFloors + 1}`
+      : `FLOOR ${activeFloor} / 3 ▲▼`,
     signBox.x + signBox.w / 2,
     signBox.y + 13 * scale
   );
@@ -3865,7 +4206,21 @@ function drawTile(
       const p3x = originX + (gx - (gy + subStep)) * halfW;
       const p3y = originY + (gx + (gy + subStep)) * halfH + 1.0 * scale;
 
-      // Outer tile frame with thick #111116 outline
+      // Check AssetManager for custom uploaded floor_tile PNG sprite anchored at bottom-center
+      if (
+        assetManager.drawBottomCenterAnchoredSprite(
+          ctx,
+          'floor_tile',
+          p2x,
+          p2y,
+          tileW * subStep,
+          tileH * subStep
+        )
+      ) {
+        continue;
+      }
+
+      // Outer tile frame with dark #14141F grout line & solid #0D0D14 black ink outline
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(p0x, p0y);
@@ -3875,15 +4230,18 @@ function drawTile(
       ctx.closePath();
       ctx.fillStyle = baseColor;
       ctx.globalAlpha = emissiveState.isToggledOn
-        ? Math.min(1, 0.78 + emissiveState.emissiveIntensity * 0.22)
-        : 0.48;
+        ? Math.min(1, 0.88 + emissiveState.emissiveIntensity * 0.12)
+        : 0.62;
       ctx.fill();
       ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#14141F';
+      ctx.lineWidth = 2.4 * scale;
+      ctx.stroke();
       ctx.strokeStyle = INK;
-      ctx.lineWidth = 2.0 * scale;
+      ctx.lineWidth = 1.6 * scale;
       ctx.stroke();
 
-      // Inner sunken bevel rim (brightens on active sequencer beat step)
+      // Inner sunken bevel rim (crisp cel-shaded highlight)
       const cx = p0x;
       const cy = (p0y + p2y) / 2;
       const bevelAlpha = emissiveState.isToggledOn
@@ -3977,6 +4335,23 @@ function drawBar(
   const alongY = fp.depth > fp.width;
   const lengthTiles = Math.max(fp.width, fp.depth);
 
+  // Check AssetManager for custom uploaded bar_counter PNG sprite anchored at bottom-center
+  const barFootX = originX + (item.gridX + fp.width * 0.5 - (item.gridY + fp.depth * 0.5)) * halfW;
+  const barFootY =
+    originY + (item.gridX + fp.width + (item.gridY + fp.depth)) * halfH;
+  if (
+    assetManager.drawBottomCenterAnchoredSprite(
+      ctx,
+      'bar_counter',
+      barFootX,
+      barFootY,
+      Math.max(fp.width, fp.depth) * tileW,
+      (h + 46 * scale)
+    )
+  ) {
+    return;
+  }
+
   // 1. Tall Illuminated Back-Bar Shelving Unit packed with dozens of colorful liquor bottles
   drawBackbarBottleShelves(
     ctx,
@@ -4043,7 +4418,7 @@ function drawBar(
     const cx = originX + (gx - gy) * halfW;
     const cy = originY + (gx + gy) * halfH - h;
 
-    // Silver Cocktail Shaker with #111116 outline
+    // Silver Cocktail Shaker with #0D0D14 outline
     fillStrokeRoundedRect(
       ctx,
       cx - 5 * scale,
@@ -4073,23 +4448,50 @@ function drawBar(
     ctx.lineTo(cx + 5.25 * scale, cy - 0.5 * scale);
     ctx.stroke();
   }
+}
 
-  // 5. Round Cushioned Bar Stools with Metallic Bases arranged along the front edge
+function getBarStoolCoords(
+  item: PlacedItem,
+  fp: { width: number; depth: number }
+): Array<{ slotId: string; gx: number; gy: number; facingDir: 'NE' | 'NW' | 'SE' | 'SW' }> {
+  const alongY = fp.depth > fp.width;
+  const lengthTiles = Math.max(fp.width, fp.depth);
   const numStools = Math.max(2, lengthTiles);
+  const stools: Array<{
+    slotId: string;
+    gx: number;
+    gy: number;
+    facingDir: 'NE' | 'NW' | 'SE' | 'SW';
+  }> = [];
+
   for (let s = 0; s < numStools; s++) {
-    const sxGrid = alongY ? item.gridX + fp.width + 0.36 : item.gridX + s + 0.5;
-    const syGrid = alongY ? item.gridY + s + 0.5 : item.gridY + fp.depth + 0.36;
-    drawBarStool(ctx, sxGrid, syGrid, originX, originY, tileW, tileH, scale);
+    if (alongY) {
+      const onFrontRight = item.gridX + fp.width + 0.36 <= 9.25;
+      const gx = onFrontRight ? item.gridX + fp.width + 0.36 : item.gridX - 0.36;
+      const gy = item.gridY + s + 0.5;
+      stools.push({
+        slotId: `${item.uid}_stool_${s}`,
+        gx,
+        gy,
+        facingDir: onFrontRight ? 'NW' : 'SE',
+      });
+    } else {
+      const onFrontLeft = item.gridY + fp.depth + 0.36 <= 9.25;
+      const gx = item.gridX + s + 0.5;
+      const gy = onFrontLeft ? item.gridY + fp.depth + 0.36 : item.gridY - 0.36;
+      stools.push({
+        slotId: `${item.uid}_stool_${s}`,
+        gx,
+        gy,
+        facingDir: onFrontLeft ? 'NE' : 'SW',
+      });
+    }
   }
+  return stools;
 }
 
 /**
- * Draws the DJ Booth & Stage along the back-right neon-striped wall (Matching IMG_1506_5bdf15ca.jpeg):
- * - Detailed black-and-neon console table on a low stage riser
- * - Two circular vinyl turntables with spinning record grooves & silver tonearms
- * - Central mixer with glowing faders and an angled glowing laptop
- * - Stacked black studio monitor speakers with yellow/gold & silver speaker cones
- * - Gold record plaques and a golden crown trophy mounted beside the booth
+ * Draws the DJ Booth & Stage along the back-right neon-striped wall (Matching IMG_1510_4d373b62.png)
  */
 function drawDJBooth(
   ctx: CanvasRenderingContext2D,
@@ -4120,6 +4522,22 @@ function drawDJBooth(
       scale,
       t
     );
+    return;
+  }
+
+  // Check AssetManager for custom uploaded dj_booth PNG sprite anchored at bottom-center
+  const djFootX = originX + (item.gridX + fp.width * 0.5 - (item.gridY + fp.depth * 0.5)) * halfW;
+  const djFootY = originY + (item.gridX + fp.width + (item.gridY + fp.depth)) * halfH;
+  if (
+    assetManager.drawBottomCenterAnchoredSprite(
+      ctx,
+      'dj_booth',
+      djFootX,
+      djFootY,
+      (fp.width + 1.2) * tileW,
+      78 * scale
+    )
+  ) {
     return;
   }
 
@@ -4377,6 +4795,21 @@ function drawStudioMonitorSpeakerStack(
   const halfH = tileH / 2;
   const towerH = 44 * scale;
 
+  const spkFootX = originX + (gx - gy) * halfW;
+  const spkFootY = originY + (gx + gy) * halfH - zBase + 6 * scale;
+  if (
+    assetManager.drawBottomCenterAnchoredSprite(
+      ctx,
+      'speaker_stack',
+      spkFootX,
+      spkFootY,
+      tileW * 0.9,
+      towerH + 14 * scale
+    )
+  ) {
+    return;
+  }
+
   drawIsoPrism(
     ctx,
     gx - 0.36,
@@ -4429,9 +4862,7 @@ function drawStudioMonitorSpeakerStack(
 }
 
 /**
- * Draws Detailed Tables & Seating (Matching IMG_1506_5bdf15ca.jpeg — NO plain brown rectangles!):
- * - Round high-top purple/neon cocktail tables with thin metallic pedestals and circular bases, paired with sleek cushioned club chairs
- * - Tufted purple/magenta VIP lounge booth sofas with black dining tables and glowing cocktail glasses/golden coins
+ * Draws Detailed Tables & Seating (Matching IMG_1510_4d373b62.png — NO plain brown rectangles!)
  */
 function drawTable(
   ctx: CanvasRenderingContext2D,
@@ -4449,17 +4880,26 @@ function drawTable(
   const halfH = tileH / 2;
 
   if (cat.id === 'seat_bistro') {
-    // Round High-Top Purple/Magenta Cocktail Table with Thin Metallic Pedestal, Circular Base & Cushioned Club Chairs
     const tx = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * halfW;
     const ty = originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * halfH;
 
-    // Companion Cushioned Club Chair behind table
-    drawCushionedClubChair(ctx, tx - 14 * scale, ty - 4 * scale, scale, '#7e22ce');
+    if (
+      assetManager.drawBottomCenterAnchoredSprite(
+        ctx,
+        'cocktail_table',
+        tx,
+        ty + 6 * scale,
+        tileW * 0.95,
+        36 * scale
+      )
+    ) {
+      return;
+    }
 
     // Circular Chrome Base Plate with #111116 outline
     ctx.fillStyle = '#cbd5e1';
     ctx.beginPath();
-    ctx.ellipse(tx, ty, 7.5 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(tx, ty, 7.2 * scale, 3.6 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.8 * scale;
@@ -4483,7 +4923,7 @@ function drawTable(
     // Round High-Top Purple/Neon Acrylic Tabletop with Beveled Rim
     ctx.fillStyle = '#581c87';
     ctx.beginPath();
-    ctx.ellipse(tx, ty - 15.5 * scale, 14 * scale, 7.8 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(tx, ty - 15.5 * scale, 12.2 * scale, 6.8 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
     ctx.lineWidth = 2 * scale;
@@ -4491,38 +4931,60 @@ function drawTable(
 
     ctx.fillStyle = '#9333ea';
     ctx.beginPath();
-    ctx.ellipse(tx, ty - 17 * scale, 13.5 * scale, 7.2 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(tx, ty - 17 * scale, 11.6 * scale, 6.2 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#e879f9';
     ctx.lineWidth = 1.5 * scale;
     ctx.stroke();
 
-    // Glowing cocktail glass on high-top table
+    // Glowing cocktail glasses on high-top table
     ctx.fillStyle = '#22d3ee';
     ctx.beginPath();
-    ctx.arc(tx + 2 * scale, ty - 19.5 * scale, 2.5 * scale, 0, Math.PI * 2);
+    ctx.arc(tx - 2.5 * scale, ty - 19.2 * scale, 2.3 * scale, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.1 * scale;
     ctx.stroke();
 
-    // Foreground Cushioned Club Chair
-    drawCushionedClubChair(ctx, tx + 14 * scale, ty + 2 * scale, scale, '#9333ea');
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(tx + 3.2 * scale, ty - 18.6 * scale, 2.2 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.1 * scale;
+    ctx.stroke();
   } else {
-    // Tufted Purple/Magenta VIP Lounge Sofa & Black Lounge Dining Table (Matching back-left VIP booths in IMG_1506_5bdf15ca.jpeg)
-    const seatH = 12 * scale;
-    const backH = 13 * scale;
+    const vipFootX = originX + (item.gridX + fp.width * 0.5 - (item.gridY + fp.depth * 0.5)) * halfW;
+    const vipFootY = originY + (item.gridX + fp.width + (item.gridY + fp.depth)) * halfH;
+    if (
+      assetManager.drawBottomCenterAnchoredSprite(
+        ctx,
+        'vip_couch',
+        vipFootX,
+        vipFootY,
+        Math.max(fp.width, fp.depth) * tileW,
+        52 * scale
+      )
+    ) {
+      return;
+    }
+
+    // Tufted Purple/Magenta VIP Lounge Sofa (Rendered BEFORE patrons seated on the sofa cushions!)
+    const seatH = 11.5 * scale;
+    const backH = 13.5 * scale;
     const topPurple = cat.tier >= 3 ? '#9333ea' : '#7e22ce';
     const frontPurple = cat.tier >= 3 ? '#6b21a8' : '#581c87';
     const sidePurple = '#3b0764';
+    const sofaW = fp.width >= fp.depth ? fp.width : 0.56;
+    const sofaD = fp.depth > fp.width ? fp.depth : 0.56;
 
-    // 1. Plush Cushioned Sofa Base
+    // 1. Plush Cushioned Sofa Base (strictly on the sofa side so it doesn't overlap the black VIP table!)
     drawIsoPrism(
       ctx,
       item.gridX,
       item.gridY,
-      fp.width,
-      fp.depth,
+      sofaW,
+      sofaD,
       0,
       seatH,
       originX,
@@ -4537,8 +4999,8 @@ function drawTable(
     );
 
     // 2. Tufted High Backrest with Button Tufting Dots & Neon Trim
-    const backW = fp.width >= fp.depth ? fp.width : 0.42;
-    const backD = fp.depth > fp.width ? fp.depth : 0.42;
+    const backW = fp.width >= fp.depth ? fp.width : 0.24;
+    const backD = fp.depth > fp.width ? fp.depth : 0.24;
     drawIsoPrism(
       ctx,
       item.gridX,
@@ -4562,8 +5024,8 @@ function drawTable(
     const numTufts = 4;
     for (let k = 1; k <= numTufts; k++) {
       const u = k / (numTufts + 1);
-      const tGx = item.gridX + (fp.width >= fp.depth ? u * fp.width : 0.25);
-      const tGy = item.gridY + (fp.depth > fp.width ? u * fp.depth : 0.25);
+      const tGx = item.gridX + (fp.width >= fp.depth ? u * fp.width : 0.20);
+      const tGy = item.gridY + (fp.depth > fp.width ? u * fp.depth : 0.20);
       const tx = originX + (tGx - tGy) * halfW;
       const ty = originY + (tGx + tGy) * halfH - (seatH + backH * 0.55);
       ctx.fillStyle = '#e9d5ff';
@@ -4574,43 +5036,68 @@ function drawTable(
       ctx.lineWidth = 0.9 * scale;
       ctx.stroke();
     }
-
-    // 3. Sleek Black VIP Lounge Table with Neon Gold/Cyan Rim in front of the Tufted Sofa
-    const tableGx = item.gridX + (fp.width >= fp.depth ? 0.25 : 0.52);
-    const tableGy = item.gridY + (fp.depth > fp.width ? 0.25 : 0.52);
-    const tableW = Math.max(0.55, fp.width * 0.58);
-    const tableD = Math.max(0.55, fp.depth * 0.58);
-    drawIsoPrism(
-      ctx,
-      tableGx,
-      tableGy,
-      tableW,
-      tableD,
-      0,
-      13.5 * scale,
-      originX,
-      originY,
-      tileW,
-      tileH,
-      '#1e293b',
-      '#0f172a',
-      '#090d16',
-      INK,
-      1.8 * scale
-    );
-
-    // Bottle service / glowing cocktail glasses on VIP table
-    const bx = originX + (tableGx + tableW * 0.5 - (tableGy + tableD * 0.5)) * halfW;
-    const by = originY + (tableGx + tableW * 0.5 + (tableGy + tableD * 0.5)) * halfH - 14.5 * scale;
-    ctx.fillStyle = '#22d3ee';
-    ctx.beginPath();
-    ctx.arc(bx - 3 * scale, by - 2 * scale, 2.4 * scale, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#facc15';
-    ctx.beginPath();
-    ctx.arc(bx + 3.5 * scale, by - 2.5 * scale, 2.6 * scale, 0, Math.PI * 2);
-    ctx.fill();
   }
+}
+
+/**
+ * Draws the Sleek Black VIP Lounge Table in front of the Tufted Purple VIP Sofa.
+ * Rendered as a separate foreground drawable so patrons sitting on the purple VIP sofa
+ * have their lower legs naturally behind the black VIP table and NEVER sit on top of the table!
+ */
+function drawVipBoothForegroundTable(
+  ctx: CanvasRenderingContext2D,
+  item: PlacedItem,
+  fp: { width: number; depth: number },
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  const tableGx = item.gridX + (fp.width >= fp.depth ? 0.20 : 0.66);
+  const tableGy = item.gridY + (fp.depth > fp.width ? 0.20 : 0.66);
+  const tableW = fp.width >= fp.depth ? Math.max(0.6, fp.width - 0.40) : 0.42;
+  const tableD = fp.depth > fp.width ? Math.max(0.6, fp.depth - 0.40) : 0.42;
+
+  drawIsoPrism(
+    ctx,
+    tableGx,
+    tableGy,
+    tableW,
+    tableD,
+    0,
+    13.0 * scale,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#1e293b',
+    '#0f172a',
+    '#090d16',
+    INK,
+    1.8 * scale
+  );
+
+  // Glowing Gold/Cyan Rim & Bottle Service on VIP Table
+  const bx = originX + (tableGx + tableW * 0.5 - (tableGy + tableD * 0.5)) * halfW;
+  const by = originY + (tableGx + tableW * 0.5 + (tableGy + tableD * 0.5)) * halfH - 14.0 * scale;
+  ctx.fillStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.arc(bx - 3.2 * scale, by - 1.8 * scale, 2.3 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.0 * scale;
+  ctx.stroke();
+
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.arc(bx + 3.2 * scale, by - 2.2 * scale, 2.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.0 * scale;
+  ctx.stroke();
 }
 
 function drawBarStool(
@@ -4629,31 +5116,38 @@ function drawBarStool(
   // Circular Metallic Base Plate with #111116 outline
   ctx.fillStyle = '#94a3b8';
   ctx.beginPath();
-  ctx.ellipse(sx, sy, 5.5 * scale, 2.8 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, sy, 5.8 * scale, 3.0 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 1.5 * scale;
   ctx.stroke();
 
-  // Chrome Pedestal Stem & Footrest Ring
+  // Chrome Pedestal Stem
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 4 * scale;
+  ctx.lineWidth = 4.2 * scale;
   ctx.beginPath();
   ctx.moveTo(sx, sy);
   ctx.lineTo(sx, sy - 11.5 * scale);
   ctx.stroke();
 
   ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 2 * scale;
+  ctx.lineWidth = 2.1 * scale;
   ctx.beginPath();
   ctx.moveTo(sx, sy);
   ctx.lineTo(sx, sy - 11.5 * scale);
   ctx.stroke();
 
+  // Chrome Footrest Ring around stem
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.3 * scale;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy - 5.2 * scale, 4.4 * scale, 2.1 * scale, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
   // Round Padded Neon-Purple Cushion Top with Specular Highlight
   ctx.fillStyle = '#7e22ce';
   ctx.beginPath();
-  ctx.ellipse(sx, sy - 12 * scale, 6.2 * scale, 3.6 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, sy - 12 * scale, 6.6 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 1.8 * scale;
@@ -4661,54 +5155,92 @@ function drawBarStool(
 
   ctx.fillStyle = '#c084fc';
   ctx.beginPath();
-  ctx.ellipse(sx - 1 * scale, sy - 12.8 * scale, 3.5 * scale, 1.6 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx - 1 * scale, sy - 12.8 * scale, 3.6 * scale, 1.6 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
 }
 
-function drawCushionedClubChair(
+function drawCushionedClubChairAtGrid(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
+  gx: number,
+  gy: number,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
   scale: number,
-  cushionColor: string
+  cushionColor: string,
+  facingDir: 'SE' | 'NW'
 ) {
+  const x = originX + (gx - gy) * (tileW / 2);
+  const y = originY + (gx + gy) * (tileH / 2);
+
   // Metallic pedestal base
   ctx.fillStyle = '#94a3b8';
   ctx.beginPath();
-  ctx.ellipse(x, y, 5.2 * scale, 2.6 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y, 5.6 * scale, 2.8 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.4 * scale;
+  ctx.lineWidth = 1.5 * scale;
   ctx.stroke();
 
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = 2.2 * scale;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4.0 * scale;
   ctx.beginPath();
   ctx.moveTo(x, y);
   ctx.lineTo(x, y - 9.5 * scale);
   ctx.stroke();
 
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 2.0 * scale;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 9.5 * scale);
+  ctx.stroke();
+
+  // When chair faces SE (Back-Left Chair), draw backrest behind the cushion first
+  if (facingDir === 'SE') {
+    fillStrokeRoundedRect(
+      ctx,
+      x - 6.8 * scale,
+      y - 19.2 * scale,
+      9.6 * scale,
+      8.0 * scale,
+      3.5 * scale,
+      '#a855f7',
+      INK,
+      1.7 * scale
+    );
+  }
+
   // Round cushioned seat
   ctx.fillStyle = cushionColor;
   ctx.beginPath();
-  ctx.ellipse(x, y - 10 * scale, 6.5 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y - 10 * scale, 7.0 * scale, 4.1 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.7 * scale;
+  ctx.lineWidth = 1.8 * scale;
   ctx.stroke();
 
-  // Curved padded backrest
-  fillStrokeRoundedRect(
-    ctx,
-    x - 5.5 * scale,
-    y - 18.5 * scale,
-    11 * scale,
-    7.5 * scale,
-    3.5 * scale,
-    '#a855f7',
-    INK,
-    1.7 * scale
-  );
+  // Specular cushion highlight
+  ctx.fillStyle = '#d8b4fe';
+  ctx.beginPath();
+  ctx.ellipse(x - 1.2 * scale, y - 10.7 * scale, 3.6 * scale, 1.7 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // When chair faces NW (Front-Right Chair), draw low curved backrest on the outer-right edge
+  if (facingDir === 'NW') {
+    fillStrokeRoundedRect(
+      ctx,
+      x - 1.5 * scale,
+      y - 17.8 * scale,
+      8.8 * scale,
+      7.2 * scale,
+      3.5 * scale,
+      '#a855f7',
+      INK,
+      1.7 * scale
+    );
+  }
 }
 
 function drawLightingFixture(
@@ -4766,23 +5298,20 @@ function drawLightingBeams(
   scale: number,
   t: number
 ) {
+  // Crisp thin cyan/magenta laser rays (NO blurry white fog or large translucent cones)
   const srcX = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * (tileW / 2);
   const srcY =
     originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * (tileH / 2) - 50 * scale;
-  const sweepX = originX + Math.sin(t * 1.25 + item.gridX) * 110 * scale;
-  const sweepY = originY + (130 + Math.cos(t * 0.95 + item.gridY) * 45) * scale;
+  const sweepX = originX + Math.sin(t * 1.25 + item.gridX) * 95 * scale;
+  const sweepY = originY + (120 + Math.cos(t * 0.95 + item.gridY) * 35) * scale;
 
   ctx.save();
-  const grad = ctx.createLinearGradient(srcX, srcY, sweepX, sweepY);
-  grad.addColorStop(0, 'rgba(34, 211, 238, 0.36)');
-  grad.addColorStop(1, 'rgba(236, 72, 153, 0)');
-  ctx.fillStyle = grad;
+  ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+  ctx.lineWidth = 1.6 * scale;
   ctx.beginPath();
   ctx.moveTo(srcX, srcY);
-  ctx.lineTo(sweepX - 28 * scale, sweepY);
-  ctx.lineTo(sweepX + 28 * scale, sweepY);
-  ctx.closePath();
-  ctx.fill();
+  ctx.lineTo(sweepX, sweepY);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -5265,6 +5794,20 @@ function drawCharacter(
   const px = originX + (gx - gy) * (tileW / 2);
   const py = originY + (gx + gy) * (tileH / 2);
 
+  // Check AssetManager for custom uploaded chibi_guest PNG sprite anchored at bottom-center
+  if (
+    assetManager.drawBottomCenterAnchoredSprite(
+      ctx,
+      'chibi_guest',
+      px,
+      py + 2 * scale,
+      26 * scale,
+      46 * scale
+    )
+  ) {
+    return;
+  }
+
   const isWalking = guest.path.length > 0;
   const isDancing =
     !isWalking && (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES');
@@ -5281,23 +5824,39 @@ function drawCharacter(
   const hasNeonVisor = seed % 7 === 0;
   const isDressOutfit = seed % 4 === 2;
 
-  // Detect whether this patron is Sitting in a Chair/VIP Sofa vs Standing at a High-Top Cocktail Table or Bar Counter
+  // Determine exact seated vs standing posture from guest.seatPosture (with coordinate fallback)
   const isAtChairOrSofaZone =
-    gx < 1.35 || // Left-wall tufted purple VIP lounge booths
+    gx < 0.75 || // Left-wall tufted purple VIP lounge sofa cushions
     (gx > 7.45 && gy > 6.35) || // Corner VIP velvet booth
-    // Seated club chair slot beside high-top bistro cocktail tables
-    (Math.abs(gx - 1.12) < 0.35 && Math.abs(gy - 7.42) < 0.35) ||
-    (Math.abs(gx - 4.12) < 0.35 && Math.abs(gy - 7.42) < 0.35);
+    // Seated club chair slots beside high-top bistro cocktail tables
+    (Math.abs(gx - 1.14) < 0.25 && Math.abs(gy - 7.52) < 0.25) ||
+    (Math.abs(gx - 1.86) < 0.25 && Math.abs(gy - 7.48) < 0.25) ||
+    (Math.abs(gx - 4.14) < 0.25 && Math.abs(gy - 7.52) < 0.25) ||
+    (Math.abs(gx - 4.86) < 0.25 && Math.abs(gy - 7.48) < 0.25);
+
+  const isSittingOnBarStool =
+    !isWalking &&
+    (guest.seatPosture === 'SITTING_STOOL' ||
+      (!guest.seatPosture && guest.state === 'ORDERING_DRINK' && gx > 6.8));
 
   const isSittingInChair =
     !isWalking &&
-    guest.state === 'RESTING_AT_SEAT' &&
-    (isAtChairOrSofaZone || guest.id.includes('chair') || guest.id.includes('seat'));
+    !isSittingOnBarStool &&
+    (guest.seatPosture === 'SITTING_CHAIR' ||
+      guest.seatPosture === 'SITTING_SOFA' ||
+      (!guest.seatPosture &&
+        guest.state === 'RESTING_AT_SEAT' &&
+        (isAtChairOrSofaZone || guest.id.includes('chair') || guest.id.includes('seat'))));
+
+  const isSittingAny = isSittingInChair || isSittingOnBarStool;
 
   const isStandingAtTable =
     !isWalking &&
-    !isSittingInChair &&
-    (guest.state === 'ORDERING_DRINK' || guest.state === 'RESTING_AT_SEAT');
+    !isSittingAny &&
+    (guest.seatPosture === 'STANDING_TABLE' ||
+      guest.seatPosture === 'STANDING_BAR' ||
+      guest.state === 'ORDERING_DRINK' ||
+      guest.state === 'RESTING_AT_SEAT');
 
   // Smooth, relaxed half-tempo musical groove angular frequency (~2.6 rad/sec at 124 BPM -> ~0.83 gentle bobs/sec)
   const grooveOmega = (Math.max(90, Math.min(160, clubBpm)) / 60) * Math.PI * 0.82;
@@ -5307,50 +5866,84 @@ function drawCharacter(
   const halfBeatSin = Math.sin(phase * 0.5);
 
   // Walking kinematics (calm, natural stride when moving along path)
-  const walkPhase = t * 5.8 + seed;
+  const walkPhase = t * 5.6 + seed;
   const walkSin = isWalking ? Math.sin(walkPhase) : 0;
   const walkCos = isWalking ? Math.cos(walkPhase) : 0;
 
-  // When sitting in a chair or VIP booth, lower the upper body onto the seat cushion (-6.0 * scale)
-  const seatDrop = isSittingInChair ? -6.0 * scale : 0;
+  // Vertical hip/torso offset:
+  // - Bar stool cushion is high (-12 * scale), so seatDrop = -1.6 * scale places hips right on the high bar stool cushion!
+  // - Club chair / VIP sofa cushion is lower (-10 * scale), so seatDrop = -5.4 * scale places hips right on the chair/sofa cushion!
+  const seatDrop = isSittingOnBarStool
+    ? -1.6 * scale
+    : isSittingInChair
+    ? -5.4 * scale
+    : 0;
 
   let bounce =
     (isWalking
-      ? Math.abs(walkSin) * 1.8
-      : isSittingInChair
-      ? Math.sin(t * 1.7 + seed) * 0.45
-      : Math.sin(t * 2.1 + gx) * 0.75) *
+      ? Math.abs(walkSin) * 1.65
+      : isSittingAny
+      ? Math.sin(t * 1.8 + seed) * 0.42
+      : Math.sin(t * 2.1 + gx) * 0.72) *
       scale +
     seatDrop;
-  let swayX = isStandingAtTable ? Math.sin(t * 1.5 + seed) * 0.8 * scale : 0;
+  let swayX = isStandingAtTable
+    ? Math.sin(t * 1.45 + seed) * 0.85 * scale
+    : isSittingAny
+    ? Math.sin(t * 1.2 + seed) * 0.35 * scale
+    : 0;
   let bodyScaleX = 1;
-  let leftLegDx = isWalking ? walkSin * 2.6 * scale : 0;
-  let rightLegDx = isWalking ? -walkSin * 2.6 * scale : 0;
-  let leftLegLift = isWalking ? Math.max(0, walkCos) * 1.8 * scale : 0;
-  let rightLegLift = isWalking ? Math.max(0, -walkCos) * 1.8 * scale : 0;
-  let leftHandOffsetX = (-9.5 + (isWalking ? -walkSin * 2.2 : 0)) * scale;
+  let leftLegDx = isWalking ? walkSin * 2.5 * scale : 0;
+  let rightLegDx = isWalking ? -walkSin * 2.5 * scale : 0;
+  let leftLegLift = isWalking ? Math.max(0, walkCos) * 1.7 * scale : 0;
+  let rightLegLift = isWalking ? Math.max(0, -walkCos) * 1.7 * scale : 0;
+  let leftHandOffsetX = (-9.5 + (isWalking ? -walkSin * 2.1 : 0)) * scale;
   let leftHandOffsetY = -16.5 * scale;
-  let rightHandOffsetX = (6.5 + (isWalking ? walkSin * 2.2 : 0)) * scale;
+  let rightHandOffsetX = (6.5 + (isWalking ? walkSin * 2.1 : 0)) * scale;
   let rightHandOffsetY = -16.5 * scale;
-  let headTiltX = isSittingInChair || isStandingAtTable ? Math.sin(t * 1.6 + seed) * 0.75 * scale : 0;
-  let moveRingColor = isSittingInChair
+  let headTiltX =
+    isSittingAny || isStandingAtTable
+      ? Math.sin(t * 1.55 + seed) * 0.85 * scale
+      : isWalking
+      ? (guest.facingDir === 'NW' || guest.facingDir === 'SW' ? -0.9 : 0.9) * scale
+      : 0;
+  let moveRingColor = isSittingAny
     ? '#c084fc'
     : isStandingAtTable
     ? '#38bdf8'
     : 'rgba(255, 255, 255, 0.35)';
 
-  if (isSittingInChair) {
-    // Relaxed seated arm posture: left hand resting on lap/cushion, right hand holding drink or chatting
-    leftHandOffsetX = -7.8 * scale;
-    leftHandOffsetY = -14.2 * scale;
-    rightHandOffsetX = 7.4 * scale;
-    rightHandOffsetY = (-16.8 + Math.sin(t * 2.0 + seed) * 0.9) * scale;
+  // Facing direction sign: -1 faces left/up-left (NW/SW toward bar or table), +1 faces right/down-right (SE/NE)
+  const seatDir =
+    guest.facingDir === 'NW' || guest.facingDir === 'SW'
+      ? -1
+      : guest.facingDir === 'SE' || guest.facingDir === 'NE'
+      ? 1
+      : gx < 4.5
+      ? 1
+      : -1;
+
+  if (isSittingOnBarStool) {
+    // Seated on a high cushioned bar stool facing the bar counter: one hand resting on counter/lap, other sipping cocktail
+    const sipWave = Math.max(0, Math.sin(t * 1.65 + seed)) * 2.4;
+    leftHandOffsetX = (-7.5 + seatDir * 1.5) * scale;
+    leftHandOffsetY = (-17.2 - sipWave * 0.6) * scale;
+    rightHandOffsetX = (6.8 + seatDir * 1.2) * scale;
+    rightHandOffsetY = (-18.0 - sipWave) * scale;
+  } else if (isSittingInChair) {
+    // Relaxed seated arm posture on chair or VIP sofa: left hand resting on cushion/lap, right hand holding drink or gesturing in chat
+    const chatWave = Math.sin(t * 1.9 + seed) * 1.1;
+    leftHandOffsetX = -7.6 * scale;
+    leftHandOffsetY = -14.4 * scale;
+    rightHandOffsetX = (7.2 + seatDir * 0.8) * scale;
+    rightHandOffsetY = (-16.8 + chatWave) * scale;
   } else if (isStandingAtTable) {
-    // Natural bar / high-top table standing posture: one hand resting by waist, other holding cocktail glass at table height
-    leftHandOffsetX = -8.8 * scale;
-    leftHandOffsetY = -15.8 * scale;
+    // Natural bar / high-top table standing posture: subtle weight shift, holding cocktail glass at table height & chatting
+    const gestureWave = Math.sin(t * 2.1 + seed) * 1.15;
+    leftHandOffsetX = -8.6 * scale;
+    leftHandOffsetY = (-15.8 + Math.cos(t * 1.7 + seed) * 0.6) * scale;
     rightHandOffsetX = 8.4 * scale;
-    rightHandOffsetY = (-18.5 + Math.sin(t * 2.2 + seed) * 1.1) * scale;
+    rightHandOffsetY = (-18.6 + gestureWave) * scale;
   } else if (isDancing) {
     if (!isFreestyleMove || activeMove === 'SHUFFLE_STEP') {
       // Smooth side-to-side club shuffle & gentle head bob
@@ -5414,19 +6007,33 @@ function drawCharacter(
     }
   }
 
-  // 0. Subtle Circular Floor Selection / Vibe Ring & Ground Shadow (Matching rings under patrons in IMG_1506_5bdf15ca.jpeg)
+  // 0. Subtle Circular Floor Selection / Vibe Ring & Shadow
   ctx.save();
   ctx.strokeStyle = guest.isCelebrity ? '#facc15' : moveRingColor;
   ctx.lineWidth = 1.4 * scale;
-  ctx.globalAlpha = isDancing ? 0.52 : 0.28;
+  ctx.globalAlpha = isDancing ? 0.52 : 0.26;
   ctx.beginPath();
-  ctx.ellipse(px + swayX * 0.4, py, 10.5 * scale, 5.2 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(px + swayX * 0.4, py, 10.2 * scale, 5.0 * scale, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.46)';
+  // Contact shadow: on the seat cushion when seated, or on the floor when standing/walking/dancing
+  const shadowY = isSittingOnBarStool
+    ? py - 12.2 * scale
+    : isSittingInChair
+    ? py - 9.8 * scale
+    : py;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
   ctx.beginPath();
-  ctx.ellipse(px + swayX * 0.5, py, 8.8 * scale, 4.4 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(
+    px + swayX * 0.5,
+    shadowY,
+    (isSittingAny ? 6.4 : 8.6) * scale,
+    (isSittingAny ? 3.2 : 4.3) * scale,
+    0,
+    0,
+    Math.PI * 2
+  );
   ctx.fill();
 
   const torsoW = 14.0 * scale * bodyScaleX;
@@ -5435,10 +6042,87 @@ function drawCharacter(
   // 1. Legs & Trendy Streetwear Sneakers with Thick #111116 Outlines
   const legW = 4.1 * scale * Math.max(0.75, bodyScaleX);
 
-  if (isSittingInChair) {
-    // True 2.5D Seated Posture: horizontal thighs resting on the chair/sofa cushion + bent lower calves hanging down
-    const seatDir = gx < 4.5 ? 1 : -1; // Face inward toward table / dance floor
-    const thighY = py - 8.2 * scale;
+  if (isSittingOnBarStool) {
+    // High Bar Stool Seated Posture: thighs resting on the elevated bar stool cushion (-13.0 * scale),
+    // knees bent toward the bar counter, and sneakers perched on the chrome footrest ring (-6.4 * scale)
+    const thighY = py - 13.2 * scale;
+    const leftKneeX = cx - 3.0 * scale + seatDir * 3.8 * scale;
+    const rightKneeX = cx + 1.2 * scale + seatDir * 3.8 * scale;
+
+    // Horizontal thighs on the bar stool cushion
+    fillStrokeRoundedRect(
+      ctx,
+      Math.min(cx - 3.8 * scale, leftKneeX),
+      thighY,
+      6.0 * scale,
+      3.6 * scale,
+      1.5 * scale,
+      guest.pantsColor,
+      INK,
+      1.8 * scale
+    );
+    fillStrokeRoundedRect(
+      ctx,
+      Math.min(cx + 0.4 * scale, rightKneeX),
+      thighY + 0.5 * scale,
+      6.0 * scale,
+      3.6 * scale,
+      1.5 * scale,
+      guest.pantsColor,
+      INK,
+      1.8 * scale
+    );
+
+    // Lower legs angled down to the bar stool footrest ring
+    fillStrokeRoundedRect(
+      ctx,
+      leftKneeX - 1.7 * scale,
+      thighY + 1.8 * scale,
+      3.6 * scale,
+      5.6 * scale,
+      1.4 * scale,
+      guest.pantsColor,
+      INK,
+      1.8 * scale
+    );
+    fillStrokeRoundedRect(
+      ctx,
+      rightKneeX - 1.7 * scale,
+      thighY + 2.3 * scale,
+      3.6 * scale,
+      5.6 * scale,
+      1.4 * scale,
+      guest.pantsColor,
+      INK,
+      1.8 * scale
+    );
+
+    // Sneakers resting on the bar stool's chrome footrest ring
+    fillStrokeRoundedRect(
+      ctx,
+      leftKneeX - 2.0 * scale,
+      thighY + 6.4 * scale,
+      4.6 * scale,
+      2.6 * scale,
+      1.1 * scale,
+      '#f8fafc',
+      INK,
+      1.5 * scale
+    );
+    fillStrokeRoundedRect(
+      ctx,
+      rightKneeX - 2.0 * scale,
+      thighY + 6.9 * scale,
+      4.6 * scale,
+      2.6 * scale,
+      1.1 * scale,
+      '#f8fafc',
+      INK,
+      1.5 * scale
+    );
+  } else if (isSittingInChair) {
+    // True 2.5D Seated Posture on Club Chair or VIP Sofa: horizontal thighs resting directly on the chair/sofa cushion + bent lower calves hanging down
+    const thighY = py - 9.8 * scale;
     const leftKneeX = cx - 3.2 * scale + seatDir * 4.2 * scale;
     const rightKneeX = cx + 1.4 * scale + seatDir * 4.2 * scale;
 
@@ -5470,7 +6154,7 @@ function drawCharacter(
     fillStrokeRoundedRect(
       ctx,
       leftKneeX - 1.8 * scale,
-      thighY + 1.8 * scale,
+      thighY + 2.0 * scale,
       3.8 * scale,
       5.8 * scale,
       1.5 * scale,
@@ -5481,7 +6165,7 @@ function drawCharacter(
     fillStrokeRoundedRect(
       ctx,
       rightKneeX - 1.8 * scale,
-      thighY + 2.4 * scale,
+      thighY + 2.6 * scale,
       3.8 * scale,
       5.8 * scale,
       1.5 * scale,
@@ -5494,7 +6178,7 @@ function drawCharacter(
     fillStrokeRoundedRect(
       ctx,
       leftKneeX - 2.1 * scale,
-      thighY + 6.4 * scale,
+      thighY + 6.6 * scale,
       4.8 * scale,
       2.7 * scale,
       1.1 * scale,
@@ -5505,7 +6189,7 @@ function drawCharacter(
     fillStrokeRoundedRect(
       ctx,
       rightKneeX - 2.1 * scale,
-      thighY + 7.0 * scale,
+      thighY + 7.2 * scale,
       4.8 * scale,
       2.7 * scale,
       1.1 * scale,
@@ -5616,8 +6300,8 @@ function drawCharacter(
     1.6 * scale
   );
 
-  // When Standing at a High-Top Table / Bar Counter or Seated with a Drink, draw a glowing cocktail glass in the right hand
-  if (isStandingAtTable || (isSittingInChair && seed % 2 === 0)) {
+  // When Seated on a Bar Stool, Standing at a High-Top Table / Bar Counter, or Seated with a Drink, draw a glowing cocktail glass in hand
+  if (isSittingOnBarStool || isStandingAtTable || (isSittingInChair && seed % 2 === 0)) {
     const drinkColor = seed % 3 === 0 ? '#22d3ee' : seed % 3 === 1 ? '#f43f5e' : '#facc15';
     const gxGlass = rightHandX + 2.4 * scale;
     const gyGlass = rightHandY - 2.2 * scale;
@@ -5642,7 +6326,7 @@ function drawCharacter(
     cx - torsoW * 0.5,
     py - 24.5 * scale - bounce,
     torsoW,
-    (isDressOutfit && !isSittingInChair ? 16.0 : 14.0) * scale,
+    (isDressOutfit && !isSittingAny ? 16.0 : 14.0) * scale,
     4.5 * scale,
     guest.shirtColor,
     INK,
@@ -5821,20 +6505,50 @@ function drawCharacter(
     ctx.fill();
   }
 
-  // 7. Crisp Circular Speech / Thought Bubbles & Floating Dark Patron Quote Tooltip (Matching IMG_1506_5bdf15ca.jpeg)
-  if (guest.name === 'Mia H.' || guest.id === 'g_dance_2') {
+  // 7. Crisp Circular Speech / Thought Bubbles & Floating Dark Patron Quote Tooltips (Matching IMG_1510_4d373b62.png)
+  if (guest.name === 'Kira R.' || guest.id === 'g_seat_bistro_1') {
+    drawPatronQuoteTooltip(
+      ctx,
+      headX,
+      headY - 22 * scale,
+      scale,
+      'KIRA R.',
+      'Corner pocket. Watch this.',
+      false
+    );
+  } else if (guest.name === 'Mia J.' || guest.id === 'g_dance_2') {
+    drawPatronQuoteTooltip(
+      ctx,
+      headX,
+      headY - 22 * scale,
+      scale,
+      'MIA J.',
+      'Could you play Drum & Bass?',
+      false
+    );
+  } else if (guest.name === 'Ivy W.' || guest.id === 'g_bar_2') {
+    drawPatronQuoteTooltip(
+      ctx,
+      headX,
+      headY - 22 * scale,
+      scale,
+      'IVY W.',
+      'You remembered! This is my kind of night.',
+      false
+    );
+  } else if (guest.name === 'Mia H.') {
     drawPatronQuoteTooltip(
       ctx,
       headX,
       headY - 22 * scale,
       scale,
       'MIA H.',
-      "I think I'm in love."
+      "I think I'm in love.",
+      true
     );
   } else if (guest.bubble) {
     drawIllustratedSpeechBubble(ctx, headX, headY - 20 * scale, scale, guest.bubble);
   } else if (seed % 3 === 0) {
-    // Subtle circular status badge ($, ★, or ♛) matching the overhead circles in IMG_1506_5bdf15ca.jpeg
     const badgeType: BubbleType =
       seed % 9 === 0 ? 'VIP_CROWN' : seed % 6 === 0 ? 'CASH' : 'SPARKLE';
     drawIllustratedSpeechBubble(ctx, headX, headY - 19 * scale, scale * 0.88, badgeType);
@@ -5853,11 +6567,12 @@ function drawPatronQuoteTooltip(
   y: number,
   scale: number,
   name: string,
-  quote: string
+  quote: string,
+  showHearts: boolean = false
 ) {
   ctx.save();
   const s = Math.max(0.85, scale);
-  const boxW = 86 * s;
+  const boxW = Math.max(92, Math.min(138, quote.length * 4.2)) * s;
   const boxH = 26 * s;
 
   fillStrokeRoundedRect(
@@ -5867,9 +6582,9 @@ function drawPatronQuoteTooltip(
     boxW,
     boxH,
     6 * s,
-    'rgba(17, 17, 22, 0.92)',
+    'rgba(13, 13, 20, 0.94)',
     '#38bdf8',
-    1.6 * s
+    1.8 * s
   );
 
   ctx.fillStyle = '#38bdf8';
@@ -5878,23 +6593,24 @@ function drawPatronQuoteTooltip(
   ctx.fillText(name, x, y - 3 * s);
 
   ctx.fillStyle = '#f8fafc';
-  ctx.font = `700 ${Math.max(7, Math.round(7.5 * s))}px "Outfit", sans-serif`;
+  ctx.font = `700 ${Math.max(7, Math.round(7.2 * s))}px "Outfit", sans-serif`;
   ctx.fillText(quote, x, y + 7.5 * s);
 
-  // Floating pink heart cluster below tooltip
-  const hearts = [
-    { dx: -6, dy: 18, r: 3.2 },
-    { dx: 0, dy: 15, r: 3.8 },
-    { dx: 6, dy: 18, r: 3.2 },
-  ];
-  for (const h of hearts) {
-    ctx.fillStyle = '#f472b6';
-    ctx.beginPath();
-    ctx.arc(x + h.dx * s, y + h.dy * s, h.r * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.2 * s;
-    ctx.stroke();
+  if (showHearts) {
+    const hearts = [
+      { dx: -6, dy: 18, r: 3.2 },
+      { dx: 0, dy: 15, r: 3.8 },
+      { dx: 6, dy: 18, r: 3.2 },
+    ];
+    for (const h of hearts) {
+      ctx.fillStyle = '#f472b6';
+      ctx.beginPath();
+      ctx.arc(x + h.dx * s, y + h.dy * s, h.r * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.2 * s;
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -6109,269 +6825,38 @@ function computeDayNightCycleState(rawHour: number): InternalDayNightState {
  * pools over the active dance floor and bar counter.
  */
 function drawGlobalDayNightOverlay(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  originX: number,
-  originY: number,
-  tileW: number,
-  tileH: number,
-  scale: number,
-  cycle: InternalDayNightState
+  _ctx: CanvasRenderingContext2D,
+  _width: number,
+  _height: number,
+  _originX: number,
+  _originY: number,
+  _tileW: number,
+  _tileH: number,
+  _scale: number,
+  _cycle: InternalDayNightState
 ) {
-  ctx.save();
-
-  // Center of the 6x6 Dance Floor in screen coordinates (grid 4.5, 4.5)
-  const clubCenterX = originX + (4.5 - 4.5) * (tileW / 2);
-  const clubCenterY = originY + (4.5 + 4.5) * (tileH / 2) - 10 * scale;
-
-  // Radial night darkness vignette: slightly lighter directly over the illuminated dance floor,
-  // deeper darkness across the surrounding street, walls, and skyline
-  const innerRadius = 90 * scale;
-  const outerRadius = Math.max(width, height) * 0.78;
-  const nightGrad = ctx.createRadialGradient(
-    clubCenterX,
-    clubCenterY,
-    innerRadius,
-    clubCenterX,
-    clubCenterY,
-    outerRadius
-  );
-
-  const centerDarkAlpha = (0.06 + cycle.nightIntensity * 0.24).toFixed(3);
-  const midDarkAlpha = (0.14 + cycle.nightIntensity * 0.38).toFixed(3);
-  const edgeDarkAlpha = (0.22 + cycle.nightIntensity * 0.52).toFixed(3);
-
-  nightGrad.addColorStop(0, `rgba(8, 4, 24, ${centerDarkAlpha})`);
-  nightGrad.addColorStop(0.55, `rgba(6, 3, 20, ${midDarkAlpha})`);
-  nightGrad.addColorStop(1, `rgba(3, 1, 12, ${edgeDarkAlpha})`);
-
-  ctx.fillStyle = nightGrad;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.restore();
+  // Intentionally no radial haze or vignette over the club floor so the 2D Flash/vector art
+  // remains 100% sharp, crisp, high-contrast, and clearly visible.
 }
 
 /**
- * Intensifies the neon emissive glow of all placed items (Dance Tiles, Bar Units, DJ Booths,
- * Lighting Rigs, VIP Booths/Seating) using GPU-friendly additive ('lighter') blending as night progresses.
+ * Crisp rhythmic neon accent pass (NO blurry radial gradients or white fog over the dance floor or entrance).
  */
 function drawPlacedItemsNeonEmissivePass(
-  ctx: CanvasRenderingContext2D,
-  floorItems: PlacedItem[],
-  originX: number,
-  originY: number,
-  tileW: number,
-  tileH: number,
-  scale: number,
-  t: number,
-  cycle: InternalDayNightState,
-  activeDrink: DrinkMix,
-  sequencer: RhythmicLightingSequencerState
+  _ctx: CanvasRenderingContext2D,
+  _floorItems: PlacedItem[],
+  _originX: number,
+  _originY: number,
+  _tileW: number,
+  _tileH: number,
+  _scale: number,
+  _t: number,
+  _cycle: InternalDayNightState,
+  _activeDrink: DrinkMix,
+  _sequencer: RhythmicLightingSequencerState
 ) {
-  // Base emissive intensity scales with nightIntensity and the BPM-synced rhythmic sequencer pulse
-  const baseNightGlow = Math.min(1.0, 0.24 + cycle.nightIntensity * 0.76);
-  if (baseNightGlow <= 0.05) return;
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-
-  // 0. Central Dance Floor BPM-Synced Pulsing Light Wash & Expanding Beat Ring
-  const dfCenterGx = 4.0;
-  const dfCenterGy = 4.0;
-  const dfCx = originX + (dfCenterGx - dfCenterGy) * (tileW / 2);
-  const dfCy = originY + (dfCenterGx + dfCenterGy) * (tileH / 2);
-  const dfPulseRadius = (105 + sequencer.danceFloorPulse * 38) * scale;
-  const dfWash = ctx.createRadialGradient(dfCx, dfCy, 4 * scale, dfCx, dfCy, dfPulseRadius);
-  const washColors = [
-    ['34, 211, 238', '236, 72, 153'],
-    ['236, 72, 153', '168, 85, 247'],
-    ['74, 222, 128', '34, 211, 238'],
-    ['250, 204, 21', '236, 72, 153'],
-  ];
-  const [primaryRgb, secondaryRgb] = washColors[sequencer.barStep4 % washColors.length];
-  const washAlpha = (0.14 + sequencer.danceFloorPulse * 0.22) * baseNightGlow;
-  dfWash.addColorStop(0, `rgba(${primaryRgb}, ${washAlpha.toFixed(3)})`);
-  dfWash.addColorStop(0.55, `rgba(${secondaryRgb}, ${(washAlpha * 0.52).toFixed(3)})`);
-  dfWash.addColorStop(1, `rgba(${primaryRgb}, 0)`);
-  ctx.fillStyle = dfWash;
-  ctx.beginPath();
-  ctx.ellipse(dfCx, dfCy, dfPulseRadius, dfPulseRadius * 0.52, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 1. Exterior Streetlamps & Skyline Neon Sign Additive Bloom at Night
-  const lampPositions = [
-    { gx: -2.1, gy: 4.0 },
-    { gx: -2.1, gy: 7.4 },
-    { gx: 2.0, gy: 11.4 },
-  ];
-  for (const lp of lampPositions) {
-    const lx = originX + (lp.gx - lp.gy) * (tileW / 2);
-    const ly = originY + (lp.gx + lp.gy) * (tileH / 2);
-    const lampPool = ctx.createRadialGradient(lx, ly, 2 * scale, lx, ly, 42 * scale);
-    lampPool.addColorStop(0, `rgba(56, 189, 248, ${(0.22 * baseNightGlow).toFixed(3)})`);
-    lampPool.addColorStop(0.5, `rgba(250, 204, 21, ${(0.1 * baseNightGlow).toFixed(3)})`);
-    lampPool.addColorStop(1, 'rgba(56, 189, 248, 0)');
-    ctx.fillStyle = lampPool;
-    ctx.beginPath();
-    ctx.ellipse(lx, ly, 42 * scale, 22 * scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 2. Placed Items Emissive Neon Glow (Toggled & modulated in sync with the club BPM sequencer)
-  for (let i = 0; i < floorItems.length; i++) {
-    const item = floorItems[i];
-    const cat = getCatalogItem(item.catalogId);
-    if (!cat) continue;
-
-    const fp = getRotatedFootprint(cat, item.rotation);
-    const centerGx = item.gridX + fp.width * 0.5;
-    const centerGy = item.gridY + fp.depth * 0.5;
-    const cx = originX + (centerGx - centerGy) * (tileW / 2);
-    const cy = originY + (centerGx + centerGy) * (tileH / 2);
-    const tierBoost = 0.85 + cat.tier * 0.22;
-
-    const itemSeq = sequencer.getDecorEmissiveState(item.gridX, item.gridY, i);
-    const glowStrength =
-      baseNightGlow *
-      (itemSeq.isToggledOn
-        ? 0.55 + itemSeq.emissiveIntensity * 0.72
-        : 0.16);
-
-    if (cat.category === 'DANCE_TILE') {
-      // Radiant upward disco floor bloom that toggles and pulses on the BPM beat grid
-      const rx = Math.max(1, fp.width) * tileW * (0.64 + sequencer.danceFloorPulse * 0.24);
-      const ry = Math.max(1, fp.depth) * tileH * (0.64 + sequencer.danceFloorPulse * 0.24);
-      const colorPhase = (item.gridX * 3 + item.gridY * 5 + sequencer.barStep4) % 3;
-      const neonRgb =
-        colorPhase === 0
-          ? '34, 211, 238' // cyan
-          : colorPhase === 1
-          ? '244, 114, 182' // magenta pink
-          : '168, 85, 247'; // electric purple
-
-      const tileGlow = ctx.createRadialGradient(cx, cy - 4 * scale, 2 * scale, cx, cy - 4 * scale, rx);
-      tileGlow.addColorStop(
-        0,
-        `rgba(${neonRgb}, ${Math.min(0.85, 0.22 * glowStrength * tierBoost).toFixed(3)})`
-      );
-      tileGlow.addColorStop(
-        0.55,
-        `rgba(${neonRgb}, ${Math.min(0.6, 0.1 * glowStrength * tierBoost).toFixed(3)})`
-      );
-      tileGlow.addColorStop(1, `rgba(${neonRgb}, 0)`);
-
-      ctx.fillStyle = tileGlow;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 4 * scale, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (cat.category === 'BAR_UNIT') {
-      // Under-counter LED strip & glowing top bar counter aura pulsing with BPM
-      const barRx = Math.max(fp.width, fp.depth) * tileW * 0.65;
-      const barGlow = ctx.createRadialGradient(
-        cx,
-        cy - 14 * scale,
-        4 * scale,
-        cx,
-        cy - 14 * scale,
-        barRx
-      );
-      barGlow.addColorStop(
-        0,
-        `rgba(56, 189, 248, ${Math.min(0.85, 0.28 * glowStrength * tierBoost).toFixed(3)})`
-      );
-      barGlow.addColorStop(
-        0.5,
-        `rgba(236, 72, 153, ${Math.min(0.65, 0.14 * glowStrength * tierBoost).toFixed(3)})`
-      );
-      barGlow.addColorStop(1, 'rgba(56, 189, 248, 0)');
-
-      ctx.fillStyle = barGlow;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 14 * scale, barRx, barRx * 0.55, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glowing drink mix orb highlight on bar counter
-      ctx.fillStyle = activeDrink.color;
-      ctx.globalAlpha = Math.min(0.85, 0.35 * glowStrength * tierBoost);
-      ctx.beginPath();
-      ctx.arc(cx + 12 * scale, cy - 24 * scale, 7 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    } else if (cat.category === 'DJ_BOOTH') {
-      // Intense Magenta & Cyan Stage Console Neon Bloom synced to downbeat kick
-      const djRadius = (60 + sequencer.kickEnvelope * 18) * scale * tierBoost;
-      const djGlow = ctx.createRadialGradient(
-        cx,
-        cy - 20 * scale,
-        3 * scale,
-        cx,
-        cy - 20 * scale,
-        djRadius
-      );
-      djGlow.addColorStop(0, `rgba(244, 114, 182, ${Math.min(0.9, 0.38 * glowStrength).toFixed(3)})`);
-      djGlow.addColorStop(0.45, `rgba(56, 189, 248, ${Math.min(0.7, 0.2 * glowStrength).toFixed(3)})`);
-      djGlow.addColorStop(1, 'rgba(244, 114, 182, 0)');
-
-      ctx.fillStyle = djGlow;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 20 * scale, djRadius, djRadius * 0.62, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (cat.category === 'LIGHTING') {
-      // High-intensity overhead fixture orb bloom + sweeping floor spotlight pool
-      const orbY = cy - 50 * scale;
-      const orbRadius = (26 + cat.tier * 10 + sequencer.kickEnvelope * 8) * scale;
-      const orbGlow = ctx.createRadialGradient(cx, orbY, 2 * scale, cx, orbY, orbRadius);
-      orbGlow.addColorStop(0, `rgba(255, 255, 255, ${Math.min(0.95, 0.5 * glowStrength).toFixed(3)})`);
-      orbGlow.addColorStop(0.35, `rgba(34, 211, 238, ${Math.min(0.8, 0.34 * glowStrength).toFixed(3)})`);
-      orbGlow.addColorStop(1, 'rgba(34, 211, 238, 0)');
-
-      ctx.fillStyle = orbGlow;
-      ctx.beginPath();
-      ctx.arc(cx, orbY, orbRadius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Floor spotlight pool directly beneath or sweeping from light fixture
-      const poolX = cx + Math.sin(t * 2.1 + item.gridX) * 24 * scale;
-      const poolY = cy + Math.cos(t * 1.7 + item.gridY) * 12 * scale;
-      const poolR = (34 + cat.tier * 11 + sequencer.danceFloorPulse * 12) * scale;
-      const poolGrad = ctx.createRadialGradient(poolX, poolY, 2 * scale, poolX, poolY, poolR);
-      poolGrad.addColorStop(0, `rgba(236, 72, 153, ${Math.min(0.8, 0.3 * glowStrength).toFixed(3)})`);
-      poolGrad.addColorStop(0.5, `rgba(34, 211, 238, ${Math.min(0.5, 0.15 * glowStrength).toFixed(3)})`);
-      poolGrad.addColorStop(1, 'rgba(34, 211, 238, 0)');
-
-      ctx.fillStyle = poolGrad;
-      ctx.beginPath();
-      ctx.ellipse(poolX, poolY, poolR, poolR * 0.52, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (cat.category === 'SEATING') {
-      // Under-booth neon rim aura & warm tabletop coaster glow
-      const seatR = Math.max(fp.width, fp.depth) * 28 * scale;
-      const seatGlow = ctx.createRadialGradient(
-        cx,
-        cy - 8 * scale,
-        2 * scale,
-        cx,
-        cy - 8 * scale,
-        seatR
-      );
-      if (cat.tier >= 2) {
-        seatGlow.addColorStop(0, `rgba(192, 132, 252, ${Math.min(0.75, 0.28 * glowStrength).toFixed(3)})`);
-        seatGlow.addColorStop(0.55, `rgba(56, 189, 248, ${Math.min(0.45, 0.12 * glowStrength).toFixed(3)})`);
-        seatGlow.addColorStop(1, 'rgba(192, 132, 252, 0)');
-      } else {
-        seatGlow.addColorStop(0, `rgba(251, 191, 36, ${Math.min(0.6, 0.2 * glowStrength).toFixed(3)})`);
-        seatGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
-      }
-
-      ctx.fillStyle = seatGlow;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 8 * scale, seatR, seatR * 0.55, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  ctx.restore();
+  // All BPM-synced rhythmic emissive states are rendered directly as crisp cel-shaded tile colors,
+  // wall neon strips, and sharp laser lines without blurry radial bloom washes.
 }
 
 /**
@@ -6461,10 +6946,77 @@ function computeRhythmicLightingSequencer(
 /**
  * Slot-selection & Personal-Space Separation Helpers for Natural Bar, Table, Chair, and Dance Floor Behavior
  */
+interface FurnitureSlotCandidate {
+  slotId: string;
+  x: number;
+  y: number;
+  posture: GuestSeatPosture;
+  facingDir: 'NE' | 'NW' | 'SE' | 'SW';
+  priority: number; // Higher priority = seated stool/chair/sofa; lower priority = standing overflow
+}
+
+function pickBestFurnitureSlot(
+  candidates: FurnitureSlotCandidate[],
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string
+): FurnitureSlotCandidate {
+  if (candidates.length === 0) {
+    return {
+      slotId: 'fallback_slot',
+      x: 4.0,
+      y: 4.0,
+      posture: 'STANDING_TABLE',
+      facingDir: 'SE',
+      priority: 0,
+    };
+  }
+
+  const floorGuests = guests.filter(
+    (g) => g.floor === floor && g.id !== excludeGuestId && g.state !== 'QUEUEING'
+  );
+
+  // Separate unoccupied vs occupied slots so every bar stool and chair gets filled before any slot doubles up
+  let bestCandidate = candidates[0];
+  let bestScore = -Infinity;
+
+  for (const cand of candidates) {
+    let minDist = Infinity;
+    let isClaimedBySlotId = false;
+
+    for (const fg of floorGuests) {
+      if (fg.assignedSlotId && fg.assignedSlotId === cand.slotId) {
+        isClaimedBySlotId = true;
+      }
+      const targetPt =
+        fg.path.length > 0 ? fg.path[fg.path.length - 1] : { x: fg.gridX, y: fg.gridY };
+      const dCurrent = Math.hypot(cand.x - fg.gridX, cand.y - fg.gridY);
+      const dTarget = Math.hypot(cand.x - targetPt.x, cand.y - targetPt.y);
+      const d = Math.min(dCurrent, dTarget);
+      if (d < minDist) minDist = d;
+    }
+
+    const isOccupied = isClaimedBySlotId || minDist < 0.42;
+    // Unoccupied seated stools/chairs get a huge bonus (+100) so patrons occupy ALL available seats!
+    const unoccupiedBonus = isOccupied ? -50 : 100;
+    const priorityBonus = cand.priority * 18;
+    const spacingScore = Math.min(minDist, 2.2) * 4;
+    const jitter = Math.random() * 3.5;
+    const totalScore = unoccupiedBonus + priorityBonus + spacingScore + jitter;
+
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      bestCandidate = cand;
+    }
+  }
+
+  return bestCandidate;
+}
+
 function pickMostSeparatedSlot(
   candidates: Array<{ x: number; y: number }>,
   guests: GuestAgent[],
-  floor: 1 | 2,
+  floor: FloorLevel,
   excludeGuestId: string
 ): { x: number; y: number } {
   if (candidates.length === 0) return { x: 4.0, y: 4.0 };
@@ -6475,7 +7027,6 @@ function pickMostSeparatedSlot(
     return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
-  // Score each candidate slot by its minimum distance to any other patron or their target destination
   let bestSlot = candidates[0];
   let bestScore = -Infinity;
 
@@ -6488,7 +7039,6 @@ function pickMostSeparatedSlot(
       const d = Math.min(dCurrent, dTarget);
       if (d < minDist) minDist = d;
     }
-    // Add slight random jitter so ties pick naturally varied spots
     const score = minDist + Math.random() * 0.18;
     if (score > bestScore) {
       bestScore = score;
@@ -6502,55 +7052,81 @@ function pickMostSeparatedSlot(
 function pickSeparatedBarSlot(
   items: PlacedItem[],
   guests: GuestAgent[],
-  floor: 1 | 2,
+  floor: FloorLevel,
   excludeGuestId: string
-): { x: number; y: number } {
+): FurnitureSlotCandidate {
   const barItems = items.filter(
     (it) => it.floor === floor && getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
   );
-  const candidates: Array<{ x: number; y: number }> = [];
+  const candidates: FurnitureSlotCandidate[] = [];
 
   for (const bar of barItems) {
     const cat = getCatalogItem(bar.catalogId);
     if (!cat) continue;
     const fp = getRotatedFootprint(cat, bar.rotation);
-    if (fp.width >= fp.depth) {
-      // Horizontal bar along back wall: customer standing/stool spots in front of counter
-      for (let step = 0.25; step < fp.width; step += 1.05) {
-        candidates.push({
-          x: Math.min(9.1, Math.max(0.4, bar.gridX + step)),
-          y: Math.min(9.1, Math.max(0.4, bar.gridY + fp.depth + 0.18)),
-        });
-      }
+
+    // 1. Add a high-priority SITTING_STOOL slot for EVERY single bar stool drawn by getBarStoolCoords
+    const stools = getBarStoolCoords(bar, fp);
+    for (const st of stools) {
+      candidates.push({
+        slotId: st.slotId,
+        x: st.gx,
+        y: st.gy,
+        posture: 'SITTING_STOOL',
+        facingDir: st.facingDir,
+        priority: 2,
+      });
+    }
+
+    // 2. Add natural STANDING_BAR slots at the ends of the bar counter when all stools are full
+    const alongY = fp.depth > fp.width;
+    if (alongY) {
+      const standX = bar.gridX + fp.width + 0.52 <= 9.25 ? bar.gridX + fp.width + 0.52 : bar.gridX - 0.45;
+      candidates.push({
+        slotId: `${bar.uid}_stand_end`,
+        x: standX,
+        y: Math.min(9.1, bar.gridY + fp.depth + 0.15),
+        posture: 'STANDING_BAR',
+        facingDir: 'NW',
+        priority: 1,
+      });
     } else {
-      // Vertical bar along right side: customer standing/stool spots on the interior side of the counter
-      const customerX = bar.gridX > 4 ? bar.gridX - 0.72 : bar.gridX + fp.width + 0.22;
-      for (let step = 0.25; step < fp.depth; step += 1.08) {
-        candidates.push({
-          x: Math.min(9.1, Math.max(0.4, customerX)),
-          y: Math.min(9.1, Math.max(0.4, bar.gridY + step)),
-        });
-      }
+      const standY = bar.gridY + fp.depth + 0.52 <= 9.25 ? bar.gridY + fp.depth + 0.52 : bar.gridY - 0.45;
+      candidates.push({
+        slotId: `${bar.uid}_stand_end`,
+        x: Math.min(9.1, bar.gridX + fp.width + 0.15),
+        y: standY,
+        posture: 'STANDING_BAR',
+        facingDir: 'NE',
+        priority: 1,
+      });
     }
   }
 
   if (candidates.length === 0) {
-    candidates.push({ x: 6.28, y: 2.35 }, { x: 6.28, y: 3.55 }, { x: 6.28, y: 5.35 }, { x: 1.45, y: 1.2 });
+    candidates.push(
+      { slotId: 'def_stool_1', x: 7.36, y: 1.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
+      { slotId: 'def_stool_2', x: 7.36, y: 2.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
+      { slotId: 'def_stool_3', x: 7.36, y: 3.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
+      { slotId: 'def_stool_4', x: 7.36, y: 4.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
+      { slotId: 'def_stool_5', x: 7.36, y: 5.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
+      { slotId: 'def_stool_6', x: 7.36, y: 6.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 }
+    );
   }
 
-  return pickMostSeparatedSlot(candidates, guests, floor, excludeGuestId);
+  return pickBestFurnitureSlot(candidates, guests, floor, excludeGuestId);
 }
 
 function pickSeparatedSeatOrTableSlot(
   items: PlacedItem[],
   guests: GuestAgent[],
-  floor: 1 | 2,
+  floor: FloorLevel,
   excludeGuestId: string
-): { x: number; y: number } {
+): FurnitureSlotCandidate {
   const seatItems = items.filter(
     (it) => it.floor === floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
   );
-  const candidates: Array<{ x: number; y: number }> = [];
+  const candidates: FurnitureSlotCandidate[] = [];
 
   for (const seat of seatItems) {
     const cat = getCatalogItem(seat.catalogId);
@@ -6558,39 +7134,92 @@ function pickSeparatedSeatOrTableSlot(
     const fp = getRotatedFootprint(cat, seat.rotation);
 
     if (cat.id === 'seat_bistro') {
-      // High-top cocktail table:
-      // 1) Seated slot directly on the cushioned club chair
-      candidates.push({ x: seat.gridX + 0.12, y: seat.gridY + 0.42 });
-      // 2) Standing slots naturally spaced beside the high-top cocktail table
-      candidates.push({ x: seat.gridX + 0.92, y: seat.gridY + 0.18 });
-      candidates.push({ x: seat.gridX + 0.68, y: seat.gridY + 0.96 });
+      // High-top cocktail table at (seat.gridX + 0.50, seat.gridY + 0.50):
+      // 1) Back-Left Cushioned Club Chair at exact chair coordinate (seat.gridX + 0.14, seat.gridY + 0.52)
+      candidates.push({
+        slotId: `${seat.uid}_chair_back`,
+        x: seat.gridX + 0.14,
+        y: seat.gridY + 0.52,
+        posture: 'SITTING_CHAIR',
+        facingDir: 'SE',
+        priority: 2,
+      });
+      // 2) Front-Right Cushioned Club Chair at exact chair coordinate (seat.gridX + 0.86, seat.gridY + 0.48)
+      candidates.push({
+        slotId: `${seat.uid}_chair_front`,
+        x: seat.gridX + 0.86,
+        y: seat.gridY + 0.48,
+        posture: 'SITTING_CHAIR',
+        facingDir: 'NW',
+        priority: 2,
+      });
+      // 3) Standing Cocktail Table Companion Slot cleanly in front of the table (never on top of the table!)
+      candidates.push({
+        slotId: `${seat.uid}_stand_front`,
+        x: seat.gridX + 0.54,
+        y: Math.min(9.2, seat.gridY + 0.96),
+        posture: 'STANDING_TABLE',
+        facingDir: 'NW',
+        priority: 1,
+      });
     } else {
-      // Tufted VIP lounge booth / couch: well-separated cushion slots along the sofa
+      // Tufted Purple VIP Lounge Booth / Couch: distinct sofa cushion slots strictly on the purple sofa cushion (behind the black VIP table)
       if (fp.depth >= fp.width) {
-        candidates.push({ x: seat.gridX + 0.35, y: seat.gridY + 0.28 });
+        candidates.push({
+          slotId: `${seat.uid}_sofa_0`,
+          x: seat.gridX + 0.28,
+          y: seat.gridY + 0.46,
+          posture: 'SITTING_SOFA',
+          facingDir: 'SE',
+          priority: 2,
+        });
         if (fp.depth > 1) {
-          candidates.push({ x: seat.gridX + 0.35, y: seat.gridY + 1.38 });
+          candidates.push({
+            slotId: `${seat.uid}_sofa_1`,
+            x: seat.gridX + 0.28,
+            y: seat.gridY + 1.46,
+            posture: 'SITTING_SOFA',
+            facingDir: 'SE',
+            priority: 2,
+          });
         }
       } else {
-        candidates.push({ x: seat.gridX + 0.28, y: seat.gridY + 0.35 });
+        candidates.push({
+          slotId: `${seat.uid}_sofa_0`,
+          x: seat.gridX + 0.46,
+          y: seat.gridY + 0.28,
+          posture: 'SITTING_SOFA',
+          facingDir: 'SW',
+          priority: 2,
+        });
         if (fp.width > 1) {
-          candidates.push({ x: seat.gridX + 1.38, y: seat.gridY + 0.35 });
+          candidates.push({
+            slotId: `${seat.uid}_sofa_1`,
+            x: seat.gridX + 1.46,
+            y: seat.gridY + 0.28,
+            posture: 'SITTING_SOFA',
+            facingDir: 'SW',
+            priority: 2,
+          });
         }
       }
     }
   }
 
   if (candidates.length === 0) {
-    candidates.push({ x: 0.35, y: 1.3 }, { x: 1.12, y: 7.42 }, { x: 4.92, y: 7.18 });
+    candidates.push(
+      { slotId: 'def_sofa_1', x: 0.28, y: 1.46, posture: 'SITTING_SOFA', facingDir: 'SE', priority: 2 },
+      { slotId: 'def_chair_1', x: 1.14, y: 7.52, posture: 'SITTING_CHAIR', facingDir: 'SE', priority: 2 }
+    );
   }
 
-  return pickMostSeparatedSlot(candidates, guests, floor, excludeGuestId);
+  return pickBestFurnitureSlot(candidates, guests, floor, excludeGuestId);
 }
 
 function pickSeparatedDanceSlot(
   items: PlacedItem[],
   guests: GuestAgent[],
-  floor: 1 | 2,
+  floor: FloorLevel,
   excludeGuestId: string
 ): { x: number; y: number } {
   const danceTiles = items.filter(
@@ -6600,8 +7229,8 @@ function pickSeparatedDanceSlot(
 
   for (const dt of danceTiles) {
     candidates.push({
-      x: dt.gridX + 0.18 + ((dt.gridY * 3) % 5) * 0.12,
-      y: dt.gridY + 0.18 + ((dt.gridX * 3) % 5) * 0.12,
+      x: dt.gridX + 0.22 + ((dt.gridY * 3) % 5) * 0.11,
+      y: dt.gridY + 0.22 + ((dt.gridX * 3) % 5) * 0.11,
     });
   }
 
@@ -6613,16 +7242,23 @@ function pickSeparatedDanceSlot(
 }
 
 function applyGuestPersonalSpaceSeparation(guests: GuestAgent[], dt: number) {
-  const minSpacing = 0.92; // Minimum comfortable personal space in grid tiles
-  const pushRate = Math.min(0.25, dt * 1.85);
+  const minSpacing = 0.88; // Comfortable personal space on the dance floor
+  const pushRate = Math.min(0.22, dt * 1.65);
 
   for (let i = 0; i < guests.length; i++) {
     const a = guests[i];
     if (a.state === 'QUEUEING' || a.path.length > 0) continue;
+    // Patrons seated on a chair, bar stool, VIP sofa, or standing at an assigned table slot are locked in place
+    // so personal-space separation NEVER pushes them off their chair onto a table!
+    const aLocked = a.state === 'RESTING_AT_SEAT' || a.state === 'ORDERING_DRINK';
 
     for (let j = i + 1; j < guests.length; j++) {
       const b = guests[j];
       if (b.floor !== a.floor || b.state === 'QUEUEING' || b.path.length > 0) continue;
+      const bLocked = b.state === 'RESTING_AT_SEAT' || b.state === 'ORDERING_DRINK';
+
+      // If both patrons are locked into their respective chair/bar-stool slots, keep them on their exact seats
+      if (aLocked && bLocked) continue;
 
       const dx = b.gridX - a.gridX;
       const dy = b.gridY - a.gridY;
@@ -6630,17 +7266,26 @@ function applyGuestPersonalSpaceSeparation(guests: GuestAgent[], dt: number) {
 
       if (dist < minSpacing) {
         const overlap = (minSpacing - dist) * pushRate;
-        const angle = dist > 0.001 ? Math.atan2(dy, dx) : (i * 1.7 + j * 2.3);
-        const ux = Math.cos(angle) * overlap * 0.5;
-        const uy = Math.sin(angle) * overlap * 0.5;
+        const angle = dist > 0.001 ? Math.atan2(dy, dx) : i * 1.7 + j * 2.3;
+        const ux = Math.cos(angle) * overlap;
+        const uy = Math.sin(angle) * overlap;
 
-        a.gridX = Math.max(0.28, Math.min(9.2, a.gridX - ux));
-        a.gridY = Math.max(0.28, Math.min(9.2, a.gridY - uy));
-        b.gridX = Math.max(0.28, Math.min(9.2, b.gridX + ux));
-        b.gridY = Math.max(0.28, Math.min(9.2, b.gridY + uy));
+        if (!aLocked && !bLocked) {
+          a.gridX = Math.max(0.28, Math.min(9.2, a.gridX - ux * 0.5));
+          a.gridY = Math.max(0.28, Math.min(9.2, a.gridY - uy * 0.5));
+          b.gridX = Math.max(0.28, Math.min(9.2, b.gridX + ux * 0.5));
+          b.gridY = Math.max(0.28, Math.min(9.2, b.gridY + uy * 0.5));
+        } else if (!aLocked) {
+          a.gridX = Math.max(0.28, Math.min(9.2, a.gridX - ux));
+          a.gridY = Math.max(0.28, Math.min(9.2, a.gridY - uy));
+        } else if (!bLocked) {
+          b.gridX = Math.max(0.28, Math.min(9.2, b.gridX + ux));
+          b.gridY = Math.max(0.28, Math.min(9.2, b.gridY + uy));
+        }
       }
     }
   }
 }
+
 
 

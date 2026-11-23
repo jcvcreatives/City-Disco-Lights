@@ -26,7 +26,7 @@ export function getRotatedFootprint(
 export function canPlaceItem(
   placedItems: PlacedItem[],
   catalogItem: CatalogItem,
-  floor: 1 | 2,
+  floor: 1 | 2 | 3,
   gridX: number,
   gridY: number,
   rotation: 0 | 90 | 180 | 270,
@@ -75,7 +75,7 @@ export function canPlaceItem(
  * Builds a walkability matrix for a given floor.
  * Dance tiles are walkable; bars, couches, DJ booths, and light pillars are obstacles.
  */
-export function buildWalkableMatrix(placedItems: PlacedItem[], floor: 1 | 2): boolean[][] {
+export function buildWalkableMatrix(placedItems: PlacedItem[], floor: 1 | 2 | 3): boolean[][] {
   const matrix: boolean[][] = Array.from({ length: GRID_SIZE }, () =>
     Array.from({ length: GRID_SIZE }, () => true)
   );
@@ -142,7 +142,7 @@ export function findNearestWalkableTile(
  */
 export function findGridPath(
   placedItems: PlacedItem[],
-  floor: 1 | 2,
+  floor: 1 | 2 | 3,
   startX: number,
   startY: number,
   goalX: number,
@@ -232,7 +232,7 @@ export function findGridPath(
  */
 export function buildStaffStationPath(
   placedItems: PlacedItem[],
-  floor: 1 | 2,
+  floor: 1 | 2 | 3,
   startX: number,
   startY: number,
   goalX: number,
