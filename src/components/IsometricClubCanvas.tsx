@@ -74,10 +74,10 @@ interface IsometricClubCanvasProps {
 
 const BASE_TILE_W = 56;
 const BASE_TILE_H = 28;
-const INK = '#150d2a';
+const INK = '#111116';
 
 const GUEST_NAMES = [
-  'Maya',
+  'Mia H.',
   'Leo',
   'Zoe',
   'Kai',
@@ -89,6 +89,8 @@ const GUEST_NAMES = [
   'Ezra',
   'Sienna',
   'Dante',
+  'Noel',
+  'Tori',
 ];
 
 const CELEBRITY_NAMES = [
@@ -98,9 +100,28 @@ const CELEBRITY_NAMES = [
   'Luna Eclipse (Supermodel)',
 ];
 
-const SHIRT_COLORS = ['#dc2626', '#6366f1', '#475569', '#e11d48', '#9333ea', '#0284c7', '#10b981'];
-const HAIR_COLORS = ['#1e1b4b', '#78350f', '#92400e', '#451a03', '#3b0764'];
-const PANTS_COLORS = ['#1e3a8a', '#1e293b', '#312e81', '#334155', '#3b0764'];
+const SHIRT_COLORS = [
+  '#22d3ee',
+  '#ec4899',
+  '#a855f7',
+  '#10b981',
+  '#f43f5e',
+  '#3b82f6',
+  '#eab308',
+  '#f97316',
+];
+const HAIR_COLORS = [
+  '#111116',
+  '#ec4899',
+  '#22d3ee',
+  '#facc15',
+  '#7c2d12',
+  '#a855f7',
+  '#f97316',
+  '#e2e8f0',
+];
+const PANTS_COLORS = ['#1e293b', '#1e3a8a', '#312e81', '#111827', '#3b0764'];
+const SKIN_TONES = ['#f5cba7', '#e0ac69', '#8d5524', '#c68642', '#ffdbac', '#5c3818'];
 const MAX_HYPE_PARTICLE_COLORS = [
   '#22d3ee',
   '#f43f5e',
@@ -523,15 +544,14 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           if (guest.state === 'DANCING' && guest.stateTimer < 6.5) {
             guest.state = 'DANCER_MOVES';
             guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-            guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 3));
+            guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 4));
           }
           if (guest.state === 'DANCER_MOVES') {
-            guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 4) - dt;
+            guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 8) - dt;
             if (guest.danceMoveTimer <= 0) {
-              // Randomize next dance sprite animation move on a musical phrase boundary (4-beat or 8-beat bar)
+              // Randomize next dance sprite animation move on a relaxed 8-beat musical phrase boundary
               guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-              guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 4));
-              guest.dancePhaseOffset = Math.random() * Math.PI * 2;
+              guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
             }
           }
         }
@@ -541,7 +561,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           const dx = nextWp.x - guest.gridX;
           const dy = nextWp.y - guest.gridY;
           const dist = Math.hypot(dx, dy);
-          const speed = 2.25 * dt;
+          // Natural, unhurried walking speed (~1.12 tiles/sec)
+          const speed = 1.12 * dt;
           if (dist <= speed) {
             guest.gridX = nextWp.x;
             guest.gridY = nextWp.y;
@@ -646,9 +667,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           } else if (guest.state === 'WALKING_TO_DANCE') {
             guest.state = 'DANCER_MOVES';
             guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
-            guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 4));
+            guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
             guest.dancePhaseOffset = Math.random() * Math.PI * 2;
-            guest.stateTimer = 6 + Math.random() * 4.5;
+            guest.stateTimer = 9 + Math.random() * 5.5;
             guest.bubble =
               metrics.lightingCount < 2 && Math.random() < 0.25
                 ? 'SPARKLE'
@@ -666,8 +687,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             if (guest.state === 'DANCING' || (danceTiles.length > 0 && Math.random() < 0.35)) {
               guest.state = 'DANCER_MOVES';
               guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-              guest.danceMoveTimer = beatDurationSec * (3 + Math.floor(Math.random() * 4));
-              guest.stateTimer = 4.5 + Math.random() * 3.5;
+              guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
+              guest.stateTimer = 7.5 + Math.random() * 4.5;
               guest.bubble = Math.random() < 0.5 ? 'MUSIC' : 'SPARKLE';
               guest.bubbleTimer = 4.0;
             } else {
@@ -781,14 +802,14 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           if (staff.bubbleTimer <= 0) staff.actionBubble = null;
         }
 
-        // Smooth 60fps walking transition along A* waypoints between stations
+        // Smooth 60fps natural walking transition along A* waypoints between stations
         if (staff.path.length > 0) {
           const nextWp = staff.path[0];
           const dx = nextWp.x - staff.gridX;
           const dy = nextWp.y - staff.gridY;
           const dist = Math.hypot(dx, dy);
-          const speed = 2.35 * dt;
-          staff.walkCycle = (staff.walkCycle ?? 0) + dt * 14.5;
+          const speed = 1.18 * dt;
+          staff.walkCycle = (staff.walkCycle ?? 0) + dt * 6.5;
           if (dist > 0.001) {
             staff.facingX = dx / dist;
             staff.facingY = dy / dist;
@@ -1978,8 +1999,13 @@ function drawIllustratedCitySkyline(
 }
 
 /**
- * Draws the outside asphalt parking lot in front of the screen (gy = 10..15, gx = -3..11)
- * with white diagonal parking stall lines, front sidewalk pavement, curb strips, and VIP entrance carpet.
+ * Draws the Nightclub City: Neon open-air city street corner surrounding the club platform:
+ * - Dark asphalt roads on all four sides with speckled night grit
+ * - White crosswalk stripes at top-left, top-right, and front street intersections
+ * - Concrete sidewalk curbs bordering the open-air isometric club slab
+ * - Draped warm-white string lights on poles running along the upper-left and upper-right sidewalks
+ * - Orange traffic cones, purple/dark manhole covers, stray cardboard boxes, green street dumpster, fire hydrant, and rounded street trees
+ * - Red carpet entrance runner with gold stanchions leading to the glowing purple/cyan doorway on the back-left wall
  */
 function drawIllustratedParkingAndStreet(
   ctx: CanvasRenderingContext2D,
@@ -1988,176 +2014,368 @@ function drawIllustratedParkingAndStreet(
   tileW: number,
   tileH: number,
   scale: number,
-  _t: number,
+  t: number,
   _parkingState: ParkingUpgradeState,
   _guests: GuestAgent[]
 ) {
-  // 1. Front & Left-Front Slate/Indigo Asphalt Parking Lot Base (directly in front of the club at gy = 10..15)
-  const lotPoly = [
-    { gx: -4.5, gy: 5.5 },
-    { gx: 0, gy: 5.5 },
-    { gx: 0, gy: 10 },
-    { gx: 10.5, gy: 10 },
-    { gx: 10.5, gy: 15.2 },
-    { gx: -4.5, gy: 15.2 },
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  // 1. Dark Asphalt City Street Corner surrounding the entire isometric club slab
+  const streetPoly = [
+    { gx: -5.5, gy: -5.5 },
+    { gx: 15.5, gy: -5.5 },
+    { gx: 15.5, gy: 16.0 },
+    { gx: -5.5, gy: 16.0 },
   ];
   ctx.beginPath();
-  lotPoly.forEach((pt, idx) => {
-    const sx = originX + (pt.gx - pt.gy) * (tileW / 2);
-    const sy = originY + (pt.gx + pt.gy) * (tileH / 2);
+  streetPoly.forEach((pt, idx) => {
+    const sx = originX + (pt.gx - pt.gy) * halfW;
+    const sy = originY + (pt.gx + pt.gy) * halfH;
     if (idx === 0) ctx.moveTo(sx, sy);
     else ctx.lineTo(sx, sy);
   });
   ctx.closePath();
-  ctx.fillStyle = '#1f1a36';
+  ctx.fillStyle = '#15151e';
   ctx.fill();
 
-  // 2. Front Sidewalk Pavement along the front entrance wall (gy = 10, gx = -2..10) & left corner (gx = -1, gy = 7..10)
-  for (let gy = 7; gy < GRID_SIZE; gy++) {
-    drawIsoTilePolygon(
-      ctx,
-      -1,
-      gy,
-      0,
-      originX,
-      originY,
-      tileW,
-      tileH,
-      '#382f57',
-      '#241d3d',
-      1.2
-    );
-  }
-  for (let gx = -2; gx < GRID_SIZE; gx++) {
-    const isDoorway = gx === 2 || gx === 1;
-    drawIsoTilePolygon(
-      ctx,
-      gx,
-      GRID_SIZE,
-      0,
-      originX,
-      originY,
-      tileW,
-      tileH,
-      isDoorway ? '#4c1d95' : '#3a3159',
-      '#231c3d',
-      1.2
-    );
+  // Subtle asphalt grain pebbles matching reference image street texture
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  const pebbles = [
+    { gx: 11.2, gy: 7.4 },
+    { gx: 12.6, gy: 9.1 },
+    { gx: 8.8, gy: 11.8 },
+    { gx: 5.5, gy: 13.4 },
+    { gx: 2.1, gy: 13.9 },
+    { gx: -2.4, gy: 8.5 },
+    { gx: -3.2, gy: 4.1 },
+    { gx: 11.8, gy: 2.6 },
+    { gx: 7.2, gy: 12.9 },
+  ];
+  for (const pb of pebbles) {
+    const px = originX + (pb.gx - pb.gy) * halfW;
+    const py = originY + (pb.gx + pb.gy) * halfH;
+    ctx.beginPath();
+    ctx.arc(px, py, 1.5 * scale, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // 3. VIP Entrance Red/Magenta Carpet Runner at the Front Door (gx = 1.7..3.1, gy = 9.95..11.15)
-  const carpetPts = [
-    { gx: 1.65, gy: 9.95 },
-    { gx: 3.15, gy: 9.95 },
-    { gx: 3.15, gy: 11.15 },
-    { gx: 1.65, gy: 11.15 },
+  // 2. Concrete Sidewalk Apron framing the 10x10 Club Platform (-1.4..11.4)
+  const sidewalkOuter = [
+    { gx: -1.35, gy: -1.35 },
+    { gx: 11.35, gy: -1.35 },
+    { gx: 11.35, gy: 11.35 },
+    { gx: -1.35, gy: 11.35 },
   ];
   ctx.beginPath();
-  carpetPts.forEach((pt, idx) => {
-    const sx = originX + (pt.gx - pt.gy) * (tileW / 2);
-    const sy = originY + (pt.gx + pt.gy) * (tileH / 2);
+  sidewalkOuter.forEach((pt, idx) => {
+    const sx = originX + (pt.gx - pt.gy) * halfW;
+    const sy = originY + (pt.gx + pt.gy) * halfH;
     if (idx === 0) ctx.moveTo(sx, sy);
     else ctx.lineTo(sx, sy);
   });
   ctx.closePath();
-  ctx.fillStyle = '#be185d';
+  ctx.fillStyle = '#242331';
   ctx.fill();
-  ctx.strokeStyle = '#facc15';
-  ctx.lineWidth = 2 * scale;
+  ctx.strokeStyle = '#38364a';
+  ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // 4. Diagonal White Parking Stall Lines across the Front Parking Lot (gy = 11.15..13.5, gx = -2.2..9.2)
-  ctx.strokeStyle = 'rgba(226, 232, 240, 0.42)';
-  ctx.lineWidth = 2.2 * scale;
-  for (let stallGx = -2.0; stallGx <= 8.8; stallGx += 2.15) {
-    const p1x = originX + (stallGx - 11.15) * (tileW / 2);
-    const p1y = originY + (stallGx + 11.15) * (tileH / 2);
-    const p2x = originX + (stallGx - 0.5 - 13.35) * (tileW / 2);
-    const p2y = originY + (stallGx - 0.5 + 13.35) * (tileH / 2);
+  // 3. White Crosswalk Stripes at Top-Left, Top-Right, and Front Intersections
+  const drawCrosswalk = (
+    baseGx: number,
+    baseGy: number,
+    stepGx: number,
+    stepGy: number,
+    stripeW: number,
+    stripeD: number,
+    count: number
+  ) => {
+    for (let i = 0; i < count; i++) {
+      const gx0 = baseGx + i * stepGx;
+      const gy0 = baseGy + i * stepGy;
+      const pts = [
+        { gx: gx0, gy: gy0 },
+        { gx: gx0 + stripeW, gy: gy0 },
+        { gx: gx0 + stripeW, gy: gy0 + stripeD },
+        { gx: gx0, gy: gy0 + stripeD },
+      ];
+      ctx.beginPath();
+      pts.forEach((p, idx) => {
+        const sx = originX + (p.gx - p.gy) * halfW;
+        const sy = originY + (p.gx + p.gy) * halfH;
+        if (idx === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1 * scale;
+      ctx.stroke();
+    }
+  };
+
+  // Top-left crosswalk, top-right crosswalk, and front pedestrian crosswalk
+  drawCrosswalk(-3.8, -1.1, 0, 0.42, 1.1, 0.22, 5);
+  drawCrosswalk(11.6, -1.1, 0, 0.42, 1.1, 0.22, 5);
+  drawCrosswalk(1.9, 11.55, 0, 0.38, 1.15, 0.2, 5);
+
+  // 4. Diagonal White Parking Stall Lines across the Front Asphalt Road (gy = 11.45..13.5)
+  ctx.strokeStyle = 'rgba(226, 232, 240, 0.36)';
+  ctx.lineWidth = 2 * scale;
+  for (let stallGx = -1.8; stallGx <= 8.8; stallGx += 2.15) {
+    const p1x = originX + (stallGx - 11.45) * halfW;
+    const p1y = originY + (stallGx + 11.45) * halfH;
+    const p2x = originX + (stallGx - 0.5 - 13.45) * halfW;
+    const p2y = originY + (stallGx - 0.5 + 13.45) * halfH;
     ctx.beginPath();
     ctx.moveTo(p1x, p1y);
     ctx.lineTo(p2x, p2y);
     ctx.stroke();
   }
 
-  // 5. Pedestrian Zebra Crosswalk leading across the front asphalt to the VIP Entrance (gx = 1.85..3.05, gy = 11.15..13.15)
-  for (let stripe = 0; stripe < 5; stripe++) {
-    const gy0 = 11.25 + stripe * 0.38;
-    const gy1 = gy0 + 0.22;
-    const cwPts = [
-      { gx: 1.95, gy: gy0 },
-      { gx: 2.95, gy: gy0 },
-      { gx: 2.95, gy: gy1 },
-      { gx: 1.95, gy: gy1 },
+  // 5. Red Carpet Runner leading to the Back-Left Entrance Doorway & Front VIP Entry
+  const drawRedCarpet = (gx0: number, gy0: number, gx1: number, gy1: number) => {
+    const carpetPts = [
+      { gx: gx0, gy: gy0 },
+      { gx: gx1, gy: gy0 },
+      { gx: gx1, gy: gy1 },
+      { gx: gx0, gy: gy1 },
     ];
     ctx.beginPath();
-    cwPts.forEach((pt, idx) => {
-      const sx = originX + (pt.gx - pt.gy) * (tileW / 2);
-      const sy = originY + (pt.gx + pt.gy) * (tileH / 2);
+    carpetPts.forEach((pt, idx) => {
+      const sx = originX + (pt.gx - pt.gy) * halfW;
+      const sy = originY + (pt.gx + pt.gy) * halfH;
       if (idx === 0) ctx.moveTo(sx, sy);
       else ctx.lineTo(sx, sy);
     });
     ctx.closePath();
-    ctx.fillStyle = 'rgba(241, 245, 249, 0.78)';
+    ctx.fillStyle = '#be123c';
+    ctx.fill();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.8 * scale;
+    ctx.stroke();
+  };
+
+  // Back-left wall entrance red carpet runner + front VIP carpet runner
+  drawRedCarpet(-1.3, 6.1, 0.05, 7.35);
+  drawRedCarpet(1.65, 10.0, 3.15, 11.3);
+
+  // 6. Exterior Street Props (Matching IMG_1506_5bdf15ca.jpeg):
+  // 6A. Purple/Magenta Circular Manhole Cover on Bottom-Right Asphalt (gx=11.7, gy=7.8)
+  const mhX = originX + (11.7 - 7.8) * halfW;
+  const mhY = originY + (11.7 + 7.8) * halfH;
+  ctx.fillStyle = '#581c87';
+  ctx.beginPath();
+  ctx.ellipse(mhX, mhY, 13 * scale, 6.5 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+  ctx.strokeStyle = '#a855f7';
+  ctx.lineWidth = 1.1 * scale;
+  ctx.beginPath();
+  ctx.ellipse(mhX, mhY, 9.5 * scale, 4.5 * scale, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 6B. Stray Stacked Cardboard Boxes on Right Sidewalk/Street (gx=12.6, gy=6.9)
+  drawIsoPrism(
+    ctx,
+    12.3,
+    6.7,
+    0.85,
+    0.85,
+    0,
+    9 * scale,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#b47b44',
+    '#8c5a2b',
+    '#6e441f',
+    INK,
+    1.6 * scale
+  );
+  drawIsoPrism(
+    ctx,
+    12.42,
+    6.82,
+    0.55,
+    0.55,
+    9 * scale,
+    6 * scale,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#c88d55',
+    '#9c6735',
+    '#784d25',
+    INK,
+    1.4 * scale
+  );
+
+  // 6C. Green Street Dumpster Bin on Far-Right Sidewalk (gx=11.4, gy=4.5)
+  drawIsoPrism(
+    ctx,
+    11.35,
+    4.3,
+    0.95,
+    1.25,
+    0,
+    17 * scale,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#15803d',
+    '#166534',
+    '#14532d',
+    INK,
+    1.8 * scale
+  );
+
+  // 6D. Orange Traffic Cones on Street Corners
+  const cones = [
+    { gx: -1.7, gy: 8.6 },
+    { gx: 10.9, gy: 10.7 },
+    { gx: 11.4, gy: 1.5 },
+  ];
+  for (const c of cones) {
+    const cx = originX + (c.gx - c.gy) * halfW;
+    const cy = originY + (c.gx + c.gy) * halfH;
+    // Square base
+    ctx.fillStyle = '#ea580c';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 5 * scale, 2.6 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1 * scale;
+    ctx.lineWidth = 1.4 * scale;
     ctx.stroke();
-  }
-
-  // 6. Outdoor Chain-Link Perimeter Fence along the left exterior sidewalk border (gx = -1.9, gy = 6.2..10.2)
-  const fenceStart = {
-    x: originX + (-1.95 - 6.2) * (tileW / 2),
-    y: originY + (-1.95 + 6.2) * (tileH / 2),
-  };
-  const fenceEnd = {
-    x: originX + (-1.95 - 10.2) * (tileW / 2),
-    y: originY + (-1.95 + 10.2) * (tileH / 2),
-  };
-  const fenceH = 22 * scale;
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(fenceStart.x, fenceStart.y);
-  ctx.lineTo(fenceEnd.x, fenceEnd.y);
-  ctx.lineTo(fenceEnd.x, fenceEnd.y - fenceH);
-  ctx.lineTo(fenceStart.x, fenceStart.y - fenceH);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(148, 163, 184, 0.14)';
-  ctx.fill();
-  ctx.strokeStyle = '#64748b';
-  ctx.lineWidth = 1.8 * scale;
-  ctx.stroke();
-
-  // Chain-link diagonal diamond mesh & vertical posts
-  const posts = 5;
-  for (let p = 0; p <= posts; p++) {
-    const u = p / posts;
-    const px = fenceStart.x + (fenceEnd.x - fenceStart.x) * u;
-    const py = fenceStart.y + (fenceEnd.y - fenceStart.y) * u;
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 2 * scale;
+    // Cone body
     ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px, py - fenceH - 2 * scale);
+    ctx.moveTo(cx - 3.8 * scale, cy);
+    ctx.lineTo(cx, cy - 11.5 * scale);
+    ctx.lineTo(cx + 3.8 * scale, cy);
+    ctx.closePath();
+    ctx.fillStyle = '#f97316';
+    ctx.fill();
     ctx.stroke();
+    // White reflective collar stripe
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(cx - 2 * scale, cy - 6.5 * scale, 4 * scale, 2.2 * scale);
   }
-  ctx.restore();
 
-  // Front Sidewalk Curb Line separating sidewalk (gy = 11.0) from asphalt parking stalls
-  const curbStart = {
-    x: originX + (-2.2 - 11.05) * (tileW / 2),
-    y: originY + (-2.2 + 11.05) * (tileH / 2),
+  // 6E. Red Fire Hydrant & Street Trees on Upper-Right Sidewalk (Matching top-right of IMG_1506_5bdf15ca.jpeg)
+  const hydX = originX + (4.2 - -3.1) * halfW;
+  const hydY = originY + (4.2 + -3.1) * halfH;
+  fillStrokeRoundedRect(
+    ctx,
+    hydX - 3 * scale,
+    hydY - 10 * scale,
+    6 * scale,
+    10 * scale,
+    2.5 * scale,
+    '#ef4444',
+    INK,
+    1.5 * scale
+  );
+
+  const streetTrees = [
+    { gx: 2.5, gy: -3.8 },
+    { gx: 6.4, gy: -2.9 },
+  ];
+  for (const tr of streetTrees) {
+    const tx = originX + (tr.gx - tr.gy) * halfW;
+    const ty = originY + (tr.gx + tr.gy) * halfH;
+    // Tree trunk
+    fillStrokeRoundedRect(
+      ctx,
+      tx - 2.5 * scale,
+      ty - 22 * scale,
+      5 * scale,
+      22 * scale,
+      1.5 * scale,
+      '#5c3a21',
+      INK,
+      1.6 * scale
+    );
+    // Rounded cartoon canopy clusters
+    for (const leaf of [
+      { dx: -7, dy: -26, r: 9, c: '#166534' },
+      { dx: 7, dy: -26, r: 9, c: '#14532d' },
+      { dx: 0, dy: -33, r: 10.5, c: '#15803d' },
+    ]) {
+      ctx.fillStyle = leaf.c;
+      ctx.beginPath();
+      ctx.arc(tx + leaf.dx * scale, ty + leaf.dy * scale, leaf.r * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.8 * scale;
+      ctx.stroke();
+    }
+  }
+
+  // 7. Draped Warm-White String Lights on Poles along Both Upper Sidewalks (Matching IMG_1506_5bdf15ca.jpeg)
+  const drawPoleStringLights = (poles: Array<{ gx: number; gy: number }>) => {
+    const poleTops: Array<{ x: number; y: number }> = [];
+    for (const p of poles) {
+      const px = originX + (p.gx - p.gy) * halfW;
+      const py = originY + (p.gx + p.gy) * halfH;
+      const topY = py - 46 * scale;
+      poleTops.push({ x: px, y: topY });
+
+      // Ground warm light pool
+      const pool = ctx.createRadialGradient(px, py, 2 * scale, px, py, 24 * scale);
+      pool.addColorStop(0, 'rgba(254, 240, 138, 0.22)');
+      pool.addColorStop(1, 'rgba(254, 240, 138, 0)');
+      ctx.fillStyle = pool;
+      ctx.beginPath();
+      ctx.ellipse(px, py, 24 * scale, 12 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Dark metal pole
+      ctx.strokeStyle = '#3f3f46';
+      ctx.lineWidth = 2.6 * scale;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px, topY);
+      ctx.stroke();
+
+      // Glowing pole top bulb
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(px, topY, 3 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (let i = 0; i < poleTops.length - 1; i++) {
+      drawWallStringLights(
+        ctx,
+        poleTops[i].x,
+        poleTops[i].y,
+        poleTops[i + 1].x,
+        poleTops[i + 1].y,
+        scale,
+        t
+      );
+    }
   };
-  const curbEnd = {
-    x: originX + (9.8 - 11.05) * (tileW / 2),
-    y: originY + (9.8 + 11.05) * (tileH / 2),
-  };
-  ctx.strokeStyle = '#64748b';
-  ctx.lineWidth = 3 * scale;
-  ctx.beginPath();
-  ctx.moveTo(curbStart.x, curbStart.y);
-  ctx.lineTo(curbEnd.x, curbEnd.y);
-  ctx.stroke();
+
+  // Left-back sidewalk string light poles & Right-back sidewalk string light poles
+  drawPoleStringLights([
+    { gx: -1.15, gy: 9.2 },
+    { gx: -1.15, gy: 4.6 },
+    { gx: -1.15, gy: 0.0 },
+  ]);
+  drawPoleStringLights([
+    { gx: 0.4, gy: -1.15 },
+    { gx: 3.6, gy: -1.15 },
+    { gx: 6.8, gy: -1.15 },
+    { gx: 10.0, gy: -1.15 },
+  ]);
 }
 
 /**
@@ -2183,10 +2401,15 @@ function drawForegroundQueueCarsAndLamps(
     parkingState.ropeTier === 3
       ? '#facc15'
       : parkingState.ropeTier === 2
-      ? '#f43f5e'
-      : '#c026d3';
+      ? '#e11d48'
+      : '#dc2626';
 
-  // 1. Front Sidewalk Velvet Rope Stanchions guarding the front queue line (gy = 10.82, gx = -1.6..1.85)
+  // 1. Gold Stanchions & Red Velvet Ropes at Back-Left Doorway & Front Queue Line
+  const backLeftDoorStanchions = [
+    { gx: -1.25, gy: 6.15 },
+    { gx: -0.65, gy: 6.15 },
+    { gx: -0.08, gy: 6.15 },
+  ];
   const leftQueueStanchions = [
     { gx: -1.55, gy: 10.82 },
     { gx: -0.4, gy: 10.82 },
@@ -2205,54 +2428,61 @@ function drawForegroundQueueCarsAndLamps(
       const px = originX + (st.gx - st.gy) * (tileW / 2);
       const py = effectiveOriginY + (st.gx + st.gy) * (tileH / 2);
 
-      // Gold/Chrome Base & Pole
-      ctx.fillStyle = parkingState.ropeTier >= 2 ? '#facc15' : '#94a3b8';
+      // Gold Circular Stanchion Base
+      ctx.fillStyle = '#facc15';
       ctx.beginPath();
       ctx.ellipse(px, py, 5 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.3 * scale;
+      ctx.lineWidth = 1.5 * scale;
       ctx.stroke();
 
-      ctx.strokeStyle = parkingState.ropeTier >= 2 ? '#fef08a' : '#e2e8f0';
+      // Gold Vertical Pole
+      ctx.strokeStyle = '#fde047';
       ctx.lineWidth = 2.6 * scale;
       ctx.beginPath();
       ctx.moveTo(px, py);
-      ctx.lineTo(px, py - 20 * scale);
+      ctx.lineTo(px, py - 19 * scale);
       ctx.stroke();
 
-      // Top finial ball
-      ctx.fillStyle = parkingState.ropeTier >= 2 ? '#facc15' : '#cbd5e1';
+      // Gold Top Finial Ball
+      ctx.fillStyle = '#facc15';
       ctx.beginPath();
-      ctx.arc(px, py - 21 * scale, 2.5 * scale, 0, Math.PI * 2);
+      ctx.arc(px, py - 20 * scale, 2.6 * scale, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.2 * scale;
+      ctx.stroke();
 
       if (i < chain.length - 1) {
         const next = chain[i + 1];
         const nx = originX + (next.gx - next.gy) * (tileW / 2);
         const ny = effectiveOriginY + (next.gx + next.gy) * (tileH / 2);
-        ctx.strokeStyle = ropeColor;
-        ctx.lineWidth = 3.4 * scale;
+        // Dark rope outline
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 5 * scale;
         ctx.beginPath();
-        ctx.moveTo(px, py - 15 * scale);
-        ctx.quadraticCurveTo((px + nx) / 2, (py + ny) / 2 - 5 * scale, nx, ny - 15 * scale);
+        ctx.moveTo(px, py - 14.5 * scale);
+        ctx.quadraticCurveTo((px + nx) / 2, (py + ny) / 2 - 4.5 * scale, nx, ny - 14.5 * scale);
+        ctx.stroke();
+        // Velvet rope inner fill
+        ctx.strokeStyle = ropeColor;
+        ctx.lineWidth = 3 * scale;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 14.5 * scale);
+        ctx.quadraticCurveTo((px + nx) / 2, (py + ny) / 2 - 4.5 * scale, nx, ny - 14.5 * scale);
         ctx.stroke();
       }
     }
   };
 
+  drawStanchionChain(backLeftDoorStanchions);
   drawStanchionChain(leftQueueStanchions);
   drawStanchionChain(rightVipStanchions);
 
-  // 1B. Outdoor Isometric Potted Club Plants flanking the VIP Entrance Archway
-  drawIsometricPottedPlant(ctx, 1.15, 10.15, originX, effectiveOriginY, tileW, tileH, scale);
-  drawIsometricPottedPlant(ctx, 3.65, 10.15, originX, effectiveOriginY, tileW, tileH, scale);
-
   // 2. Front Parked Vehicles in Foreground Stalls with Negative Z-Index & Negative Z-Offset relative to Floor 2+
-  // When isUnderBuilding (activeFloor >= 2, zIndex < 0), vehicles shift slightly closer under the building overhang
-  // and render with a building shadow cast across their hoods/roofs so they visually sit underneath the building.
   const underBuildingGyShift = isUnderBuilding ? -0.95 : 0;
-  drawIllustratedSedan(
+  drawCar(
     ctx,
     -0.65,
     11.85 + underBuildingGyShift,
@@ -2267,8 +2497,8 @@ function drawForegroundQueueCarsAndLamps(
     zOffset,
     zIndex
   );
-  // Stylized Boxy Yellow Taxi Cab right by the front crosswalk!
-  drawIllustratedSedan(
+  // Stylized Boxy Yellow Taxi Cab right by the front crosswalk
+  drawCar(
     ctx,
     1.55,
     12.15 + underBuildingGyShift,
@@ -2283,7 +2513,7 @@ function drawForegroundQueueCarsAndLamps(
     zOffset,
     zIndex
   );
-  drawIllustratedSedan(
+  drawCar(
     ctx,
     3.85,
     12.15 + underBuildingGyShift,
@@ -2299,7 +2529,7 @@ function drawForegroundQueueCarsAndLamps(
     zIndex
   );
   if (parkingState.lotTier >= 2) {
-    drawIllustratedSedan(
+    drawCar(
       ctx,
       6.1,
       12.15 + underBuildingGyShift,
@@ -2316,7 +2546,7 @@ function drawForegroundQueueCarsAndLamps(
     );
   }
   if (parkingState.lotTier >= 3) {
-    drawIllustratedSedan(
+    drawCar(
       ctx,
       8.2,
       12.1 + underBuildingGyShift,
@@ -2332,61 +2562,12 @@ function drawForegroundQueueCarsAndLamps(
       zIndex
     );
   }
-
-  // 3. Curved Foreground Streetlamps casting warm golden light cones over the queue & front parking lot
-  const lamps = [
-    { gx: -1.75, gy: 11.1 },
-    { gx: 1.35, gy: 11.1 },
-    { gx: 4.85, gy: 11.1 },
-    { gx: 8.15, gy: 11.1 },
-  ];
-  for (let i = 0; i < lamps.length; i++) {
-    const l = lamps[i];
-    const lx = originX + (l.gx - l.gy) * (tileW / 2);
-    const ly = effectiveOriginY + (l.gx + l.gy) * (tileH / 2);
-
-    // Pole base
-    ctx.fillStyle = '#334155';
-    ctx.beginPath();
-    ctx.ellipse(lx, ly, 4.5 * scale, 2.2 * scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Curved Pole
-    ctx.strokeStyle = '#64748b';
-    ctx.lineWidth = 3 * scale;
-    ctx.beginPath();
-    ctx.moveTo(lx, ly);
-    ctx.lineTo(lx, ly - 52 * scale);
-    ctx.quadraticCurveTo(lx, ly - 60 * scale, lx - 12 * scale, ly - 58 * scale);
-    ctx.stroke();
-
-    // Lamp Hood
-    ctx.fillStyle = '#cbd5e1';
-    ctx.beginPath();
-    ctx.ellipse(lx - 13 * scale, ly - 58 * scale, 5 * scale, 2.5 * scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Warm Golden Cone of Light
-    ctx.save();
-    const coneGrad = ctx.createLinearGradient(
-      lx - 13 * scale,
-      ly - 58 * scale,
-      lx - 13 * scale,
-      ly - 3 * scale
-    );
-    coneGrad.addColorStop(0, 'rgba(253, 224, 71, 0.5)');
-    coneGrad.addColorStop(1, 'rgba(253, 224, 71, 0)');
-    ctx.fillStyle = coneGrad;
-    ctx.beginPath();
-    ctx.moveTo(lx - 13 * scale, ly - 58 * scale);
-    ctx.lineTo(lx - 36 * scale, ly - 3 * scale);
-    ctx.lineTo(lx + 12 * scale, ly - 3 * scale);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
 }
 
+/**
+ * Draws a tropical palm tree or lush club plant in a crisp white cylindrical pot with thick #111116 outlines
+ * (matching the potted palm trees at the corners of Nightclub City: Neon in IMG_1506_5bdf15ca.jpeg).
+ */
 function drawIsometricPottedPlant(
   ctx: CanvasRenderingContext2D,
   gx: number,
@@ -2395,41 +2576,121 @@ function drawIsometricPottedPlant(
   originY: number,
   tileW: number,
   tileH: number,
-  scale: number
+  scale: number,
+  isPalmTree: boolean = false
 ) {
   const px = originX + (gx - gy) * (tileW / 2);
   const py = originY + (gx + gy) * (tileH / 2);
 
-  // Dark slate planter pot with thick hand-drawn outline
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + 1 * scale, 10 * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crisp White Cylindrical Planter Pot with cel-shaded grey side and #111116 outline
   fillStrokeRoundedRect(
     ctx,
-    px - 7 * scale,
-    py - 12 * scale,
+    px - 7.5 * scale,
+    py - 14 * scale,
+    15 * scale,
     14 * scale,
-    12 * scale,
-    3 * scale,
-    '#334155',
+    3.5 * scale,
+    '#f1f5f9',
     INK,
     2 * scale
   );
-  // Lush vibrant lime/emerald foliage clusters
-  const leaves = [
-    { dx: -5, dy: -16, r: 5.5, c: '#22c55e' },
-    { dx: 5, dy: -16, r: 5.5, c: '#16a34a' },
-    { dx: 0, dy: -21, r: 6.5, c: '#4ade80' },
-  ];
-  for (const lf of leaves) {
-    ctx.fillStyle = lf.c;
-    ctx.beginPath();
-    ctx.arc(px + lf.dx * scale, py + lf.dy * scale, lf.r * scale, 0, Math.PI * 2);
-    ctx.fill();
+  // Dark soil rim at top of white pot
+  ctx.fillStyle = '#334155';
+  ctx.beginPath();
+  ctx.ellipse(px, py - 13.5 * scale, 7 * scale, 3 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.5 * scale;
+  ctx.stroke();
+
+  if (isPalmTree) {
+    // Tall slender segmented palm trunk curving upward
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.6 * scale;
+    ctx.lineWidth = 6.2 * scale;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px, py - 14 * scale);
+    ctx.quadraticCurveTo(px - 3 * scale, py - 38 * scale, px + 1 * scale, py - 60 * scale);
     ctx.stroke();
+
+    ctx.strokeStyle = '#92400e';
+    ctx.lineWidth = 3.6 * scale;
+    ctx.beginPath();
+    ctx.moveTo(px, py - 14 * scale);
+    ctx.quadraticCurveTo(px - 3 * scale, py - 38 * scale, px + 1 * scale, py - 60 * scale);
+    ctx.stroke();
+
+    // Spreading Tropical Palm Fronds at top (crown)
+    const crownX = px + 1 * scale;
+    const crownY = py - 60 * scale;
+    const fronds = [
+      { dx: -22, dy: -6, cx: -12, cy: -14, c: '#22c55e' },
+      { dx: -18, dy: 8, cx: -10, cy: -2, c: '#16a34a' },
+      { dx: 22, dy: -6, cx: 12, cy: -14, c: '#4ade80' },
+      { dx: 19, dy: 8, cx: 11, cy: -2, c: '#16a34a' },
+      { dx: 0, dy: -16, cx: -3, cy: -10, c: '#4ade80' },
+    ];
+    for (const fr of fronds) {
+      ctx.beginPath();
+      ctx.moveTo(crownX, crownY);
+      ctx.quadraticCurveTo(
+        crownX + fr.cx * scale,
+        crownY + fr.cy * scale,
+        crownX + fr.dx * scale,
+        crownY + fr.dy * scale
+      );
+      ctx.quadraticCurveTo(
+        crownX + fr.cx * 0.7 * scale,
+        crownY + (fr.cy + 5) * scale,
+        crownX,
+        crownY
+      );
+      ctx.closePath();
+      ctx.fillStyle = fr.c;
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.6 * scale;
+      ctx.stroke();
+    }
+  } else {
+    // Lush Multi-Stalk Tropical Club Shrub in White Pot (matching right corner plant in IMG_1506_5bdf15ca.jpeg)
+    const stalks = [
+      { dx: -6, dy: -22, r: 6.2, c: '#16a34a' },
+      { dx: 6, dy: -22, r: 6.2, c: '#15803d' },
+      { dx: -9, dy: -28, r: 5.5, c: '#22c55e' },
+      { dx: 9, dy: -28, r: 5.5, c: '#22c55e' },
+      { dx: 0, dy: -31, r: 7.2, c: '#4ade80' },
+    ];
+    for (const lf of stalks) {
+      ctx.strokeStyle = '#14532d';
+      ctx.lineWidth = 2 * scale;
+      ctx.beginPath();
+      ctx.moveTo(px, py - 14 * scale);
+      ctx.lineTo(px + lf.dx * scale, py + lf.dy * scale);
+      ctx.stroke();
+
+      ctx.fillStyle = lf.c;
+      ctx.beginPath();
+      ctx.arc(px + lf.dx * scale, py + lf.dy * scale, lf.r * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.7 * scale;
+      ctx.stroke();
+    }
   }
 }
 
-function drawIllustratedSedan(
+/**
+ * Draws a boxy retro-cartoon vector sedan or yellow taxi cab with thick #111116 dark outlines,
+ * cel-shaded glass highlights, alloy rims, and glowing headlights.
+ */
+function drawCar(
   ctx: CanvasRenderingContext2D,
   gx: number,
   gy: number,
@@ -2444,22 +2705,19 @@ function drawIllustratedSedan(
   zOffset: number = 0,
   zIndex: number = 100
 ) {
-  // Apply negative zOffset (cy = originY + (gx + gy) * (tileH / 2) - zOffset)
-  // When zOffset < 0 on Floor 2+, the car projects vertically down to street level underneath the building.
   const cx = originX + (gx - gy) * (tileW / 2);
   const cy = originY + (gx + gy) * (tileH / 2) - zOffset;
   const isUnderBuilding = zIndex < 0;
-  // Slightly foreshorten scale when viewed from elevated Floor 2+ above street level
   const carScale = isUnderBuilding ? scale * 0.92 : scale;
 
   ctx.save();
   // Ground shadow (expanded when underneath the building overhang)
-  ctx.fillStyle = isUnderBuilding ? 'rgba(6, 3, 18, 0.62)' : 'rgba(0, 0, 0, 0.45)';
+  ctx.fillStyle = isUnderBuilding ? 'rgba(6, 3, 18, 0.62)' : 'rgba(0, 0, 0, 0.48)';
   ctx.beginPath();
   ctx.ellipse(cx, cy + 3 * carScale, 33 * carScale, 15.5 * carScale, -0.35, 0, Math.PI * 2);
   ctx.fill();
 
-  // Lower Car Body (Boxy retro-digital chassis with thick hand-drawn ink border)
+  // Lower Car Body (Boxy retro-cartoon chassis with thick #111116 border)
   fillStrokeRoundedRect(
     ctx,
     cx - 28 * carScale,
@@ -2469,13 +2727,21 @@ function drawIllustratedSedan(
     6 * carScale,
     bodyColor,
     INK,
-    2.4 * carScale
+    2.5 * carScale
   );
+
+  // Specular top fender highlight strip
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.lineWidth = 2 * carScale;
+  ctx.beginPath();
+  ctx.moveTo(cx - 23 * carScale, cy - 11.5 * carScale);
+  ctx.lineTo(cx + 22 * carScale, cy - 11.5 * carScale);
+  ctx.stroke();
 
   // Taxi Checkered Side Stripe
   if (isTaxi) {
     for (let sq = 0; sq < 7; sq++) {
-      ctx.fillStyle = sq % 2 === 0 ? '#150d2a' : '#ffffff';
+      ctx.fillStyle = sq % 2 === 0 ? INK : '#ffffff';
       ctx.fillRect(
         cx - 21 * carScale + sq * 6 * carScale,
         cy - 4 * carScale,
@@ -2495,7 +2761,7 @@ function drawIllustratedSedan(
     4.5 * carScale,
     shadeColor,
     INK,
-    2.2 * carScale
+    2.3 * carScale
   );
 
   // Cel-shaded Windshield & Side Glass with hard white specular highlight
@@ -2508,11 +2774,10 @@ function drawIllustratedSedan(
     2.5 * carScale,
     '#38bdf8',
     INK,
-    1.5 * carScale
+    1.6 * carScale
   );
-  // Crisp flat specular slash on glass
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.lineWidth = 1.6 * carScale;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.lineWidth = 1.7 * carScale;
   ctx.beginPath();
   ctx.moveTo(cx - 11 * carScale, cy - 21.5 * carScale);
   ctx.lineTo(cx - 6 * carScale, cy - 16 * carScale);
@@ -2527,7 +2792,7 @@ function drawIllustratedSedan(
     2.5 * carScale,
     '#0284c7',
     INK,
-    1.5 * carScale
+    1.6 * carScale
   );
 
   // Glowing Roof "TAXI" Sign on Boxy Yellow Taxi Cab
@@ -2543,13 +2808,13 @@ function drawIllustratedSedan(
       INK,
       1.6 * carScale
     );
-    ctx.fillStyle = '#150d2a';
+    ctx.fillStyle = INK;
     ctx.font = `900 ${Math.max(6, Math.round(6 * carScale))}px "JetBrains Mono", monospace`;
     ctx.textAlign = 'center';
     ctx.fillText('TAXI', cx, cy - 27 * carScale);
   }
 
-  // Wheels
+  // Wheels with thick dark outlines
   const wheels = [
     { wx: cx - 15 * carScale, wy: cy + 7 * carScale },
     { wx: cx + 14 * carScale, wy: cy + 5 * carScale },
@@ -2560,22 +2825,25 @@ function drawIllustratedSedan(
     ctx.arc(w.wx, w.wy, 6.8 * carScale, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.8 * carScale;
+    ctx.lineWidth = 2 * carScale;
     ctx.stroke();
 
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = '#e2e8f0';
     ctx.beginPath();
     ctx.arc(w.wx, w.wy, 3 * carScale, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Glowing Yellow Headlights
+  // Glowing Yellow Headlights & Taillights
   ctx.fillStyle = '#fde047';
   ctx.beginPath();
   ctx.arc(cx - 25 * carScale, cy - 3 * carScale, 3 * carScale, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = '#f43f5e';
+  ctx.beginPath();
+  ctx.arc(cx + 25 * carScale, cy - 4 * carScale, 2.5 * carScale, 0, Math.PI * 2);
+  ctx.fill();
 
-  // Conditional Under-Building Ambient Shadow Tint when zIndex < 0 (Floors 2+)
   if (isUnderBuilding) {
     fillStrokeRoundedRect(
       ctx,
@@ -2592,6 +2860,8 @@ function drawIllustratedSedan(
 
   ctx.restore();
 }
+
+const drawIllustratedSedan = drawCar;
 
 /**
  * Draws the 3D lower-story exterior building understructure when viewing Floor 2+,
@@ -2612,7 +2882,6 @@ function drawLowerBuildingUnderstructure(
   const halfW = tileW / 2;
   const halfH = tileH / 2;
 
-  // Front-left corner (gx=0, gy=10), Front-center apex (gx=10, gy=10), Front-right corner (gx=10, gy=0)
   const sw = {
     x: originX - GRID_SIZE * halfW,
     y: originY + GRID_SIZE * halfH,
@@ -2649,7 +2918,7 @@ function drawLowerBuildingUnderstructure(
   ctx.closePath();
   ctx.fill();
 
-  // 1. LEFT FRONT EXTERIOR BUILDING FACADE (gx = 0..10 along gy = 10, facing the front parking lot & entrance)
+  // 1. LEFT FRONT EXTERIOR BUILDING FACADE
   ctx.beginPath();
   ctx.moveTo(sw.x, sw.y);
   ctx.lineTo(s.x, s.y);
@@ -2662,7 +2931,7 @@ function drawLowerBuildingUnderstructure(
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // 2. RIGHT FRONT EXTERIOR BUILDING FACADE (gy = 10..0 along gx = 10, facing the right street side)
+  // 2. RIGHT FRONT EXTERIOR BUILDING FACADE
   ctx.beginPath();
   ctx.moveTo(s.x, s.y);
   ctx.lineTo(se.x, se.y);
@@ -2675,10 +2944,9 @@ function drawLowerBuildingUnderstructure(
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // 3. Structural Vertical Concrete Pilasters & Horizontal Brick Courses on Both Lower Facades
+  // 3. Structural Vertical Pilasters
   for (let i = 1; i <= 4; i++) {
     const frac = i / 5;
-    // Left facade pilaster
     const lx = sw.x + (s.x - sw.x) * frac;
     const ly = sw.y + (s.y - sw.y) * frac;
     ctx.strokeStyle = '#332457';
@@ -2688,7 +2956,6 @@ function drawLowerBuildingUnderstructure(
     ctx.lineTo(lx, ly + floorDropH - 2 * scale);
     ctx.stroke();
 
-    // Right facade pilaster
     const rx = s.x + (se.x - s.x) * frac;
     const ry = s.y + (se.y - s.y) * frac;
     ctx.strokeStyle = '#281b47';
@@ -2699,10 +2966,9 @@ function drawLowerBuildingUnderstructure(
     ctx.stroke();
   }
 
-  // 4. Glowing 1st-Floor Frosted Club Windows on the Lower Building Facades (showing Floor 1 disco pulse below)
+  // 4. Glowing 1st-Floor Frosted Club Windows on the Lower Building Facades
   const windowColors = ['#22d3ee', '#f43f5e', '#a855f7', '#38bdf8'];
   for (let w = 0; w < 3; w++) {
-    // Left facade windows (avoiding the ground floor main entrance doorway near gx=1.5..3.5)
     const fracL = 0.46 + w * 0.19;
     const wxL = sw.x + (s.x - sw.x) * fracL;
     const wyL = sw.y + (s.y - sw.y) * fracL + floorDropH * 0.32;
@@ -2722,13 +2988,11 @@ function drawLowerBuildingUnderstructure(
     ctx.lineWidth = 1.8 * scale;
     ctx.stroke();
 
-    // Inner neon window glow
     ctx.fillStyle = glowColor;
     ctx.globalAlpha = 0.28 + 0.15 * Math.sin(t * 4 + w);
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    // Right facade windows
     const fracR = 0.2 + w * 0.26;
     const wxR = s.x + (se.x - s.x) * fracR;
     const wyR = s.y + (se.y - s.y) * fracR + floorDropH * 0.32;
@@ -2778,7 +3042,6 @@ function drawLowerBuildingUnderstructure(
   ctx.lineWidth = 2 * scale;
   ctx.stroke();
 
-  // Neon Cyan & Magenta Architectural Trim Strips Separating Upper Floor Slab from Lower Building Story
   ctx.strokeStyle = '#22d3ee';
   ctx.lineWidth = 2.6 * scale;
   ctx.beginPath();
@@ -2787,7 +3050,6 @@ function drawLowerBuildingUnderstructure(
   ctx.lineTo(se.x, se.y + ledgeH + 1.5 * scale);
   ctx.stroke();
 
-  // Badge on the front corner beam showing elevated story level above street parking
   fillStrokeRoundedRect(
     ctx,
     s.x - 54 * scale,
@@ -2808,9 +3070,13 @@ function drawLowerBuildingUnderstructure(
 }
 
 /**
- * Draws the cutaway nightclub walls with grey stone top caps, exposed red-brown brick cracks,
- * draped warm string lights, 3-tier backbar bottle shelf, staircase with padlock, wooden scaffolding,
- * yellow/black hazard barrier, and glowing "BUY FLOOR 2" + "LOCKED - LEVEL 20" neon signs.
+ * Draws the Open-Air Nightclub City: Neon platform & low neon-trimmed walls (Matching IMG_1506_5bdf15ca.jpeg):
+ * - Open-air dark marble/slate tile floor slab sitting directly on the dark city street corner
+ * - Glowing magenta/pink neon tube border framing the entire isometric diamond platform
+ * - Low-to-medium back-left and back-right purple walls (64px) with vertical glowing cyan/magenta neon light strips
+ * - Glowingpurple/cyan Entrance Doorway on the back-left wall
+ * - Neon wall signs ("GOOD TIMES", "CLUB NEON" on back-left wall; "LOVE THE BASS", "COCKTAILS" on back-right wall)
+ * - Pink/magenta metal lighting truss towers with cyan spotlight cones, tropical potted palm trees, and gold dance cages
  */
 function drawIllustratedClubShell(
   ctx: CanvasRenderingContext2D,
@@ -2822,24 +3088,57 @@ function drawIllustratedClubShell(
   t: number,
   activeFloor: 1 | 2,
   unlockedFloors: 1 | 2,
-  playerLevel: number,
+  _playerLevel: number,
   stairsHitboxRef: React.MutableRefObject<{ x: number; y: number; w: number; h: number }>
 ) {
-  const wallH = 112 * scale;
-  const wallThickness = 9 * scale;
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  // Low-to-medium open-air walls matching IMG_1506_5bdf15ca.jpeg (no tall enclosing walls blocking view!)
+  const wallH = 64 * scale;
+  const slabThickness = 7 * scale;
 
-  // 1. Interior 10x10 Purple-Slate Club Floor
+  const nw = { x: originX, y: originY };
+  const sw = {
+    x: originX - GRID_SIZE * halfW,
+    y: originY + GRID_SIZE * halfH,
+  };
+  const s = {
+    x: originX,
+    y: originY + GRID_SIZE * tileH,
+  };
+  const se = {
+    x: originX + GRID_SIZE * halfW,
+    y: originY + GRID_SIZE * halfH,
+  };
+
+  // 1. Open-Air Isometric Concrete/Marble Floor Slab sitting on the street corner
+  // Front-left & front-right slab lip thickness
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.y);
+  ctx.lineTo(s.x, s.y);
+  ctx.lineTo(se.x, se.y);
+  ctx.lineTo(se.x, se.y + slabThickness);
+  ctx.lineTo(s.x, s.y + slabThickness);
+  ctx.lineTo(sw.x, sw.y + slabThickness);
+  ctx.closePath();
+  ctx.fillStyle = '#18112b';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+
+  // Interior 10x10 Dark Polished Marble Club Floor Tiles with Subtle White/Lavender Stone Veining
   for (let gx = 0; gx < GRID_SIZE; gx++) {
     for (let gy = 0; gy < GRID_SIZE; gy++) {
       const isAlt = (gx + gy) % 2 === 0;
       const fill =
         activeFloor === 2
           ? isAlt
-            ? '#332554'
-            : '#2c1f4a'
+            ? '#1d1636'
+            : '#17112b'
           : isAlt
-          ? '#463b5c'
-          : '#3f3554';
+          ? '#1c182b'
+          : '#161324';
       drawIsoTilePolygon(
         ctx,
         gx,
@@ -2850,383 +3149,533 @@ function drawIllustratedClubShell(
         tileW,
         tileH,
         fill,
-        'rgba(21, 13, 42, 0.35)',
+        'rgba(17, 17, 22, 0.55)',
         1
       );
+
+      // Subtle cel-shaded marble vein lines on alternating tiles (matching dark veined floor in IMG_1506_5bdf15ca.jpeg)
+      if ((gx * 3 + gy * 5) % 4 === 0) {
+        const cx = originX + (gx + 0.5 - (gy + 0.5)) * halfW;
+        const cy = originY + (gx + 0.5 + (gy + 0.5)) * halfH;
+        ctx.strokeStyle = 'rgba(216, 180, 254, 0.14)';
+        ctx.lineWidth = 1.1 * scale;
+        ctx.beginPath();
+        ctx.moveTo(cx - 10 * scale, cy - 2 * scale);
+        ctx.lineTo(cx - 2 * scale, cy + 1.5 * scale);
+        ctx.lineTo(cx + 9 * scale, cy - 3 * scale);
+        ctx.stroke();
+      }
     }
   }
 
-  const nw = { x: originX, y: originY };
-  const sw = {
-    x: originX - GRID_SIZE * (tileW / 2),
-    y: originY + GRID_SIZE * (tileH / 2),
-  };
-  const se = {
-    x: originX + GRID_SIZE * (tileW / 2),
-    y: originY + GRID_SIZE * (tileH / 2),
-  };
+  // Glowing Neon Pink/Magenta Perimeter Border Tube around the open-air slab front edges
+  ctx.save();
+  ctx.strokeStyle = '#f472b6';
+  ctx.lineWidth = 2.8 * scale;
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.y);
+  ctx.lineTo(s.x, s.y);
+  ctx.lineTo(se.x, se.y);
+  ctx.stroke();
+  ctx.restore();
 
-  // 2. LEFT BACK WALL (gy = 0..10 along gx = 0)
+  // 2. LOW-TO-MEDIUM BACK-LEFT WALL (gy = 0..10 along gx = 0) with Neon Pink Trim & Vertical Light Strips
   ctx.beginPath();
   ctx.moveTo(nw.x, nw.y);
   ctx.lineTo(sw.x, sw.y);
   ctx.lineTo(sw.x, sw.y - wallH);
   ctx.lineTo(nw.x, nw.y - wallH);
   ctx.closePath();
-  ctx.fillStyle = activeFloor === 2 ? '#3b2763' : '#53415e';
+  const leftWallGrad = ctx.createLinearGradient(nw.x, nw.y - wallH, sw.x, sw.y);
+  leftWallGrad.addColorStop(0, '#2a164d');
+  leftWallGrad.addColorStop(0.5, '#1e113a');
+  leftWallGrad.addColorStop(1, '#150c2b');
+  ctx.fillStyle = leftWallGrad;
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.2 * scale;
+  ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // Left Wall Thick Stone Top Cap
-  ctx.beginPath();
-  ctx.moveTo(nw.x, nw.y - wallH);
-  ctx.lineTo(sw.x, sw.y - wallH);
-  ctx.lineTo(sw.x - wallThickness, sw.y - wallH - wallThickness * 0.5);
-  ctx.lineTo(nw.x, nw.y - wallH - wallThickness);
-  ctx.closePath();
-  ctx.fillStyle = '#645375';
-  ctx.fill();
-  ctx.stroke();
-
-  // 3. RIGHT BACK WALL (gx = 0..10 along gy = 0)
+  // 3. LOW-TO-MEDIUM BACK-RIGHT WALL (gx = 0..10 along gy = 0) with Neon Pink Trim & Vertical Light Strips
   ctx.beginPath();
   ctx.moveTo(nw.x, nw.y);
   ctx.lineTo(se.x, se.y);
   ctx.lineTo(se.x, se.y - wallH);
   ctx.lineTo(nw.x, nw.y - wallH);
   ctx.closePath();
-  ctx.fillStyle = activeFloor === 2 ? '#2e1d52' : '#463652';
+  const rightWallGrad = ctx.createLinearGradient(nw.x, nw.y - wallH, se.x, se.y);
+  rightWallGrad.addColorStop(0, '#231342');
+  rightWallGrad.addColorStop(0.5, '#1a0e33');
+  rightWallGrad.addColorStop(1, '#120924');
+  ctx.fillStyle = rightWallGrad;
   ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // Right Wall Thick Stone Top Cap
-  ctx.beginPath();
-  ctx.moveTo(nw.x, nw.y - wallH);
-  ctx.lineTo(se.x, se.y - wallH);
-  ctx.lineTo(se.x + wallThickness, se.y - wallH - wallThickness * 0.5);
-  ctx.lineTo(nw.x, nw.y - wallH - wallThickness);
-  ctx.closePath();
-  ctx.fillStyle = '#5a4a6b';
-  ctx.fill();
-  ctx.stroke();
-
-  // 4. EXPOSED CRACKED BRICK PATCHES ON WALLS + GLOWING NEON STRIPE SIGNS & DIGITAL GRAPHIC BACKDROP
-  drawExposedBrickPatch(ctx, sw.x + 28 * scale, sw.y - 68 * scale, scale, false);
-  drawExposedBrickPatch(ctx, nw.x - 24 * scale, nw.y - 96 * scale, scale, true);
-  drawExposedBrickPatch(ctx, se.x - 95 * scale, se.y - 65 * scale, scale, false);
-
-  // 4B. Glowing Cyber-Neon Stripe Signs & Digital Equalizer Graphic Backdrop on Right Wall (image_5.png spec)
-  const backdropX = se.x - 74 * scale;
-  const backdropY = se.y - 78 * scale;
-  fillStrokeRoundedRect(
-    ctx,
-    backdropX,
-    backdropY,
-    56 * scale,
-    30 * scale,
-    4 * scale,
-    '#0f0722',
-    '#22d3ee',
-    2 * scale
-  );
-  // Digital Equalizer Bars inside Graphic Backdrop
-  const eqColors = ['#f43f5e', '#22d3ee', '#84cc16', '#facc15', '#a855f7', '#ec4899'];
-  for (let b = 0; b < 6; b++) {
-    const barH = (8 + Math.abs(Math.sin(t * 6 + b * 1.1)) * 16) * scale;
-    ctx.fillStyle = eqColors[b % eqColors.length];
-    ctx.fillRect(
-      backdropX + (6 + b * 8) * scale,
-      backdropY + 26 * scale - barH,
-      5.5 * scale,
-      barH
-    );
-  }
-  // Dual Glowing Neon Stripe Tubes along Left & Right Back Walls
+  // Glowing Magenta/Pink Neon Top & Base Trim Strips along both Back Walls
   ctx.save();
-  ctx.strokeStyle = '#f43f5e';
+  ctx.strokeStyle = '#f472b6';
   ctx.lineWidth = 2.6 * scale;
   ctx.beginPath();
-  ctx.moveTo(sw.x + 12 * scale, sw.y - 84 * scale);
-  ctx.lineTo(sw.x + 74 * scale, sw.y - 115 * scale);
+  ctx.moveTo(sw.x, sw.y - wallH);
+  ctx.lineTo(nw.x, nw.y - wallH);
+  ctx.lineTo(se.x, se.y - wallH);
   ctx.stroke();
 
-  ctx.strokeStyle = '#22d3ee';
+  ctx.strokeStyle = '#ec4899';
+  ctx.lineWidth = 2 * scale;
   ctx.beginPath();
-  ctx.moveTo(sw.x + 12 * scale, sw.y - 78 * scale);
-  ctx.lineTo(sw.x + 74 * scale, sw.y - 109 * scale);
+  ctx.moveTo(sw.x, sw.y - 1.5 * scale);
+  ctx.lineTo(nw.x, nw.y - 1.5 * scale);
+  ctx.lineTo(se.x, se.y - 1.5 * scale);
   ctx.stroke();
+
+  // Vertical Glowing Cyan & Magenta Neon Light Strips along both Back Walls
+  const leftStrips = [0.18, 0.34, 0.56, 0.84];
+  for (let i = 0; i < leftStrips.length; i++) {
+    const u = leftStrips[i];
+    const sx = nw.x + (sw.x - nw.x) * u;
+    const sy = nw.y + (sw.y - nw.y) * u;
+    ctx.strokeStyle = i % 2 === 0 ? '#22d3ee' : '#f472b6';
+    ctx.lineWidth = 2.2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - 6 * scale);
+    ctx.lineTo(sx, sy - wallH + 6 * scale);
+    ctx.stroke();
+  }
+
+  const rightStrips = [0.16, 0.36, 0.62, 0.84];
+  for (let i = 0; i < rightStrips.length; i++) {
+    const u = rightStrips[i];
+    const sx = nw.x + (se.x - nw.x) * u;
+    const sy = nw.y + (se.y - nw.y) * u;
+    ctx.strokeStyle = i % 2 === 0 ? '#f472b6' : '#22d3ee';
+    ctx.lineWidth = 2.2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - 6 * scale);
+    ctx.lineTo(sx, sy - wallH + 6 * scale);
+    ctx.stroke();
+  }
   ctx.restore();
 
-  // 4C. Indoor Isometric Potted Plants flanking the back corner & lounge
-  drawIsometricPottedPlant(ctx, 0.55, 8.85, originX, originY, tileW, tileH, scale);
-  drawIsometricPottedPlant(ctx, 8.85, 0.65, originX, originY, tileW, tileH, scale);
-
-  // 5. 3-TIER WOODEN BACKBAR BOTTLE SHELVING ON LEFT WALL (With colorful liquor bottles)
-  drawBackbarBottleShelves(ctx, originX, originY, tileW, tileH, scale);
-
-  // 6. DRAPED WARM EDISON STRING LIGHTS ON BOTH WALLS
-  drawWallStringLights(
-    ctx,
-    sw.x + 15 * scale,
-    sw.y - wallH + 22 * scale,
-    nw.x - 25 * scale,
-    nw.y - wallH + 18 * scale,
-    scale,
-    t
-  );
-  drawWallStringLights(
-    ctx,
-    nw.x + 155 * scale,
-    nw.y - wallH + 85 * scale,
-    se.x - 12 * scale,
-    se.y - wallH + 22 * scale,
-    scale,
-    t
-  );
-
-  // 7. BACK-CORNER STAIRCASE, PADLOCK, SCAFFOLDING, HAZARD STRIPE & NEON SIGNS (Matching top-center of IMG_1503.jpeg)
-  const stairBaseX = originX + 1.8 * (tileW / 2);
-  const stairBaseY = originY + 1.8 * (tileH / 2);
-
-  // Stone Stair Steps ascending right-to-left
-  for (let s = 0; s < 7; s++) {
-    const stepX = stairBaseX + (36 - s * 7) * scale;
-    const stepY = stairBaseY - (26 + s * 11) * scale;
-    fillStrokeRoundedRect(
-      ctx,
-      stepX,
-      stepY,
-      44 * scale,
-      11 * scale,
-      2 * scale,
-      s % 2 === 0 ? '#524763' : '#3f364e',
-      INK,
-      1.5 * scale
-    );
-  }
-
-  // Padlock Icon on Staircase when Floor 2 is locked
-  if (unlockedFloors === 1) {
-    const lockX = stairBaseX + 20 * scale;
-    const lockY = stairBaseY - 62 * scale;
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 2.5 * scale;
-    ctx.beginPath();
-    ctx.arc(lockX, lockY - 6 * scale, 5 * scale, Math.PI, 0);
-    ctx.stroke();
-    fillStrokeRoundedRect(
-      ctx,
-      lockX - 7 * scale,
-      lockY - 6 * scale,
-      14 * scale,
-      12 * scale,
-      3 * scale,
-      '#64748b',
-      INK,
-      1.5 * scale
-    );
-  }
-
-  // Wooden Construction Scaffolding behind DJ booth (Top Right)
-  const scaffX = stairBaseX + 76 * scale;
-  const scaffY = stairBaseY - 98 * scale;
-  ctx.strokeStyle = '#78350f';
-  ctx.lineWidth = 3 * scale;
-  ctx.strokeRect(scaffX, scaffY, 54 * scale, 65 * scale);
+  // 4. SINGLE GLOWING PURPLE/CYAN ENTRANCE DOORWAY ON THE BACK-LEFT WALL (gy = 6.2..7.3 along gx = 0)
+  const doorTopA = {
+    x: originX + (0 - 6.15) * halfW,
+    y: originY + (0 + 6.15) * halfH,
+  };
+  const doorTopB = {
+    x: originX + (0 - 7.35) * halfW,
+    y: originY + (0 + 7.35) * halfH,
+  };
+  const doorH = 44 * scale;
   ctx.beginPath();
-  ctx.moveTo(scaffX, scaffY);
-  ctx.lineTo(scaffX + 54 * scale, scaffY + 65 * scale);
-  ctx.moveTo(scaffX + 54 * scale, scaffY);
-  ctx.lineTo(scaffX, scaffY + 65 * scale);
+  ctx.moveTo(doorTopA.x, doorTopA.y);
+  ctx.lineTo(doorTopB.x, doorTopB.y);
+  ctx.lineTo(doorTopB.x, doorTopB.y - doorH);
+  ctx.lineTo(doorTopA.x, doorTopA.y - doorH);
+  ctx.closePath();
+  const doorGrad = ctx.createLinearGradient(doorTopA.x, doorTopA.y - doorH, doorTopB.x, doorTopB.y);
+  doorGrad.addColorStop(0, '#22d3ee');
+  doorGrad.addColorStop(0.5, '#7e22ce');
+  doorGrad.addColorStop(1, '#090514');
+  ctx.fillStyle = doorGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // Yellow & Black Hazard Construction Barrier below "BUY FLOOR 2"
-  const barX = stairBaseX + 32 * scale;
-  const barY = stairBaseY - 30 * scale;
-  fillStrokeRoundedRect(
-    ctx,
-    barX,
-    barY,
-    62 * scale,
-    18 * scale,
-    3 * scale,
-    '#d97706',
-    INK,
-    1.8 * scale
+  // 5. GLOWING ISOMETRIC WALL NEON SIGNS (Matching IMG_1506_5bdf15ca.jpeg):
+  // - Back-Left Wall: "GOOD TIMES" (purple/pink) & "CLUB NEON" (bright cyan/white)
+  // - Back-Right Wall: "LOVE THE BASS" (bright cyan) & "COCKTAILS" (glowing pink/purple)
+  const drawIsoWallSign = (
+    wx: number,
+    wy: number,
+    angleRad: number,
+    text: string,
+    glowColor: string,
+    textColor: string,
+    fontSize: number
+  ) => {
+    ctx.save();
+    ctx.translate(wx, wy);
+    ctx.rotate(angleRad);
+    ctx.font = `900 ${Math.max(8, Math.round(fontSize * scale))}px "Outfit", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Neon outer glow backing
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 3.5 * scale;
+    ctx.globalAlpha = 0.45 + 0.15 * Math.sin(t * 4);
+    ctx.strokeText(text, 0, 0);
+    ctx.globalAlpha = 1;
+    // Crisp dark ink outline + bright core
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.6 * scale;
+    ctx.strokeText(text, 0, 0);
+    ctx.fillStyle = textColor;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  };
+
+  const isoAngleLeft = -Math.atan2(halfH, halfW);
+  const isoAngleRight = Math.atan2(halfH, halfW);
+
+  // Back-left wall neon signs
+  drawIsoWallSign(
+    nw.x + (sw.x - nw.x) * 0.25,
+    nw.y + (sw.y - nw.y) * 0.25 - 40 * scale,
+    isoAngleLeft,
+    'CLUB NEON',
+    '#22d3ee',
+    '#e0f2fe',
+    12.5
   );
-  ctx.fillStyle = '#1e1b4b';
-  for (let k = 0; k < 4; k++) {
-    ctx.fillRect(barX + (6 + k * 15) * scale, barY + 2 * scale, 7 * scale, 14 * scale);
+  drawIsoWallSign(
+    nw.x + (sw.x - nw.x) * 0.56,
+    nw.y + (sw.y - nw.y) * 0.56 - 42 * scale,
+    isoAngleLeft,
+    'GOOD TIMES',
+    '#a855f7',
+    '#f3e8ff',
+    9.5
+  );
+
+  // Back-right wall neon signs
+  drawIsoWallSign(
+    nw.x + (se.x - nw.x) * 0.44,
+    nw.y + (se.x - nw.x) * 0.22 - 44 * scale,
+    isoAngleRight,
+    'LOVE THE BASS',
+    '#06b6d4',
+    '#67e8f9',
+    11.0
+  );
+  drawIsoWallSign(
+    nw.x + (se.x - nw.x) * 0.83,
+    nw.y + (se.y - nw.y) * 0.83 - 38 * scale,
+    isoAngleRight,
+    'COCKTAILS',
+    '#ec4899',
+    '#fbcfe8',
+    10.5
+  );
+
+  // 6. VERTICAL PINK/MAGENTA LIGHTING TRUSS TOWERS WITH CYAN SPOTLIGHT CONES (Matching IMG_1506_5bdf15ca.jpeg)
+  const drawTrussTower = (gx: number, gy: number) => {
+    const tx = originX + (gx - gy) * halfW;
+    const ty = originY + (gx + gy) * halfH;
+    const th = 72 * scale;
+    const tw = 9 * scale;
+
+    // Truss frame rails
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 3.2 * scale;
+    ctx.strokeRect(tx - tw / 2, ty - th, tw, th);
+
+    ctx.strokeStyle = '#f43f5e';
+    ctx.lineWidth = 1.8 * scale;
+    ctx.strokeRect(tx - tw / 2, ty - th, tw, th);
+
+    // Cross-bracing zig-zag bars
+    ctx.beginPath();
+    for (let z = 0; z < 6; z++) {
+      const y0 = ty - z * (th / 6);
+      const y1 = ty - (z + 1) * (th / 6);
+      ctx.moveTo(tx - tw / 2, y0);
+      ctx.lineTo(tx + tw / 2, y1);
+      ctx.moveTo(tx + tw / 2, y0);
+      ctx.lineTo(tx - tw / 2, y1);
+    }
+    ctx.stroke();
+
+    // Mounted Cyan/Blue Spotlight Cans + Volumetric Light Cones
+    for (let sp = 0; sp < 3; sp++) {
+      const ly = ty - th + (10 + sp * 16) * scale;
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(tx + 5 * scale, ly, 3.2 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.2 * scale;
+      ctx.stroke();
+
+      // Translucent cyan spotlight beam cone
+      ctx.save();
+      const beamGrad = ctx.createLinearGradient(
+        tx + 5 * scale,
+        ly,
+        tx + 46 * scale,
+        ly + 32 * scale
+      );
+      beamGrad.addColorStop(0, 'rgba(56, 189, 248, 0.34)');
+      beamGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = beamGrad;
+      ctx.beginPath();
+      ctx.moveTo(tx + 5 * scale, ly);
+      ctx.lineTo(tx + 48 * scale, ly + 22 * scale);
+      ctx.lineTo(tx + 36 * scale, ly + 42 * scale);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+
+  drawTrussTower(1.5, 0.2);
+  drawTrussTower(7.2, 0.2);
+
+  // 7. TROPICAL POTTED PALM TREES & CORNER MONSTERA PLANTS (Matching IMG_1506_5bdf15ca.jpeg)
+  drawIsometricPottedPlant(ctx, 0.45, 0.45, originX, originY, tileW, tileH, scale, true);
+  drawIsometricPottedPlant(ctx, 0.55, 9.25, originX, originY, tileW, tileH, scale, true);
+  drawIsometricPottedPlant(ctx, 9.25, 0.65, originX, originY, tileW, tileH, scale, false);
+
+  // 8. GOLDEN CYLINDRICAL DANCE CAGES (Matching left and lower-center cages in IMG_1506_5bdf15ca.jpeg)
+  const drawGoldenDanceCage = (gx: number, gy: number) => {
+    const cx = originX + (gx - gy) * halfW;
+    const cy = originY + (gx + gy) * halfH;
+    const rx = 14 * scale;
+    const ry = 7 * scale;
+    const cageH = 38 * scale;
+
+    // Gold circular podium base
+    ctx.fillStyle = '#ca8a04';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.stroke();
+
+    // Vertical golden cage bars
+    for (let b = -2; b <= 2; b++) {
+      const bx = cx + b * 5.2 * scale;
+      const byOffset = Math.sqrt(Math.max(0, 1 - (b / 2.4) * (b / 2.4))) * ry;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3 * scale;
+      ctx.beginPath();
+      ctx.moveTo(bx, cy + byOffset);
+      ctx.lineTo(bx, cy - cageH + byOffset);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 1.6 * scale;
+      ctx.beginPath();
+      ctx.moveTo(bx, cy + byOffset);
+      ctx.lineTo(bx, cy - cageH + byOffset);
+      ctx.stroke();
+    }
+
+    // Mid and top gold rings
+    for (const hFrac of [0.5, 1.0]) {
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3.2 * scale;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - cageH * hFrac, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1.8 * scale;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - cageH * hFrac, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  };
+
+  drawGoldenDanceCage(0.85, 7.85);
+  drawGoldenDanceCage(5.2, 6.2);
+
+  // 9. OVERHEAD SILVER MIRROR DISCO BALL & VOLUMETRIC LASER PYRAMID CONE (Centerpiece of IMG_1506_5bdf15ca.jpeg)
+  const discoX = originX + (3.2 - 3.6) * halfW;
+  const discoY = originY + (3.2 + 3.6) * halfH - 86 * scale;
+  const apexY = discoY - 26 * scale;
+
+  // Volumetric multi-ray laser pyramid radiating from above the disco ball down across the dance floor
+  ctx.save();
+  const rayTargets = [
+    { dx: -75, dy: 92, c: 'rgba(34, 211, 238, 0.55)' },
+    { dx: -42, dy: 112, c: 'rgba(250, 204, 21, 0.5)' },
+    { dx: -12, dy: 120, c: 'rgba(34, 211, 238, 0.6)' },
+    { dx: 22, dy: 115, c: 'rgba(244, 114, 182, 0.5)' },
+    { dx: 58, dy: 98, c: 'rgba(56, 189, 248, 0.55)' },
+    { dx: 138, dy: 72, c: 'rgba(250, 204, 21, 0.45)' },
+  ];
+  for (let r = 0; r < rayTargets.length; r++) {
+    const rt = rayTargets[r];
+    const wobble = Math.sin(t * 2.4 + r) * 6 * scale;
+    ctx.strokeStyle = rt.c;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.beginPath();
+    ctx.moveTo(discoX, apexY);
+    ctx.lineTo(discoX + rt.dx * scale + wobble, discoY + rt.dy * scale);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Faceted Silver Mirror Disco Ball with #111116 outline & grid facets
+  const ballR = 11.5 * scale;
+  const ballGrad = ctx.createRadialGradient(
+    discoX - 3 * scale,
+    discoY - 3 * scale,
+    2 * scale,
+    discoX,
+    discoY,
+    ballR
+  );
+  ballGrad.addColorStop(0, '#ffffff');
+  ballGrad.addColorStop(0.55, '#cbd5e1');
+  ballGrad.addColorStop(1, '#475569');
+  ctx.fillStyle = ballGrad;
+  ctx.beginPath();
+  ctx.arc(discoX, discoY, ballR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+
+  // Mirror tile grid lines on disco ball
+  ctx.strokeStyle = 'rgba(17, 17, 22, 0.45)';
+  ctx.lineWidth = 1 * scale;
+  for (const lat of [-4.5, 0, 4.5]) {
+    ctx.beginPath();
+    ctx.moveTo(discoX - ballR * 0.85, discoY + lat * scale);
+    ctx.lineTo(discoX + ballR * 0.85, discoY + lat * scale);
+    ctx.stroke();
+  }
+  for (const lon of [-4.5, 0, 4.5]) {
+    ctx.beginPath();
+    ctx.moveTo(discoX + lon * scale, discoY - ballR * 0.85);
+    ctx.lineTo(discoX + lon * scale, discoY + ballR * 0.85);
+    ctx.stroke();
   }
 
-  // Glowing Cyan "BUY FLOOR 2" Sign + Pink "LOCKED - LEVEL 20" Neon Sign
+  // 10. Compact Interactive Floor 2 / VIP Sky Lounge Neon Sign Hitbox on Back Corner
   const signBox = {
-    x: stairBaseX + 26 * scale,
-    y: stairBaseY - 66 * scale,
-    w: 155 * scale,
-    h: 56 * scale,
+    x: nw.x + 14 * scale,
+    y: nw.y - wallH - 22 * scale,
+    w: 94 * scale,
+    h: 20 * scale,
   };
   stairsHitboxRef.current = signBox;
-
-  // Cyan "BUY FLOOR 2" Box
   fillStrokeRoundedRect(
     ctx,
     signBox.x,
     signBox.y,
-    74 * scale,
-    26 * scale,
+    signBox.w,
+    signBox.h,
     5 * scale,
-    'rgba(8, 51, 68, 0.92)',
-    '#22d3ee',
-    2.2 * scale
+    'rgba(17, 17, 22, 0.88)',
+    unlockedFloors === 2 ? '#4ade80' : '#22d3ee',
+    1.8 * scale
   );
   ctx.fillStyle = '#67e8f9';
-  ctx.font = `800 ${Math.max(8, Math.round(10 * scale))}px "Outfit", sans-serif`;
+  ctx.font = `800 ${Math.max(7, Math.round(8.5 * scale))}px "Outfit", sans-serif`;
   ctx.textAlign = 'center';
   ctx.fillText(
-    unlockedFloors === 1 ? 'BUY FLOOR 2' : `FLOOR ${activeFloor === 1 ? '2 ▲' : '1 ▼'}`,
-    signBox.x + 37 * scale,
-    signBox.y + 16 * scale
+    unlockedFloors === 1 ? '▲ UNLOCK FLOOR 2' : `FLOOR ${activeFloor === 1 ? '2 ▲' : '1 ▼'}`,
+    signBox.x + signBox.w / 2,
+    signBox.y + 13 * scale
   );
-
-  // Pink/Cyan "LOCKED - LEVEL 20" Box right next to it
-  fillStrokeRoundedRect(
-    ctx,
-    signBox.x + 80 * scale,
-    signBox.y + 8 * scale,
-    76 * scale,
-    38 * scale,
-    6 * scale,
-    'rgba(59, 7, 100, 0.92)',
-    unlockedFloors === 2 ? '#4ade80' : '#f472b6',
-    2.2 * scale
-  );
-  ctx.fillStyle = unlockedFloors === 2 ? '#4ade80' : '#f472b6';
-  ctx.font = `800 ${Math.max(8, Math.round(10.5 * scale))}px "Outfit", sans-serif`;
-  ctx.fillText(
-    unlockedFloors === 2 ? 'VIP OPEN' : 'LOCKED',
-    signBox.x + 118 * scale,
-    signBox.y + 24 * scale
-  );
-  ctx.fillStyle = '#22d3ee';
-  ctx.font = `700 ${Math.max(7, Math.round(8.5 * scale))}px "JetBrains Mono", monospace`;
-  ctx.fillText(
-    unlockedFloors === 2 ? 'TAP TO SWITCH' : '- LEVEL 20',
-    signBox.x + 118 * scale,
-    signBox.y + 38 * scale
-  );
-}
-
-function drawExposedBrickPatch(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  scale: number,
-  tall: boolean
-) {
-  ctx.save();
-  const rows = tall ? 6 : 3;
-  const cols = tall ? 3 : 4;
-  const bw = 13 * scale;
-  const bh = 6.5 * scale;
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const bx = x + (c * bw + (r % 2 === 1 ? bw * 0.5 : 0));
-      const by = y + r * bh;
-      fillStrokeRoundedRect(
-        ctx,
-        bx,
-        by,
-        bw - 1.5 * scale,
-        bh - 1.5 * scale,
-        1.5 * scale,
-        (r + c) % 2 === 0 ? '#7c3f38' : '#63312c',
-        INK,
-        1 * scale
-      );
-    }
-  }
-  ctx.restore();
 }
 
 /**
- * Draws the 3-tier wooden liquor shelving unit mounted on the left brick wall behind the bartender,
- * stocked with colorful glowing bottles (matching IMG_1503.jpeg).
+ * Draws the illuminated back-bar liquor shelving unit packed with dozens of tiny, brightly colored
+ * liquor bottles, cocktail shakers, and glowing neon sign accents.
  */
 function drawBackbarBottleShelves(
   ctx: CanvasRenderingContext2D,
+  gx: number,
+  gy: number,
+  lengthTiles: number,
+  alongY: boolean,
   originX: number,
   originY: number,
   tileW: number,
   tileH: number,
   scale: number
 ) {
-  // Mounted along gx = 0.15, gy = 1.2..5.2
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  const endGx = alongY ? gx : gx + lengthTiles;
+  const endGy = alongY ? gy + lengthTiles : gy;
+
   const pStart = {
-    x: originX + (0.15 - 1.2) * (tileW / 2),
-    y: originY + (0.15 + 1.2) * (tileH / 2),
+    x: originX + (gx - gy) * halfW,
+    y: originY + (gx + gy) * halfH,
   };
   const pEnd = {
-    x: originX + (0.15 - 5.2) * (tileW / 2),
-    y: originY + (0.15 + 5.2) * (tileH / 2),
+    x: originX + (endGx - endGy) * halfW,
+    y: originY + (endGx + endGy) * halfH,
   };
 
-  // Backboard
+  // Illuminated dark purple/slate back-bar cabinet frame with #111116 outline
   ctx.beginPath();
-  ctx.moveTo(pStart.x, pStart.y - 18 * scale);
-  ctx.lineTo(pEnd.x, pEnd.y - 18 * scale);
-  ctx.lineTo(pEnd.x, pEnd.y - 74 * scale);
-  ctx.lineTo(pStart.x, pStart.y - 74 * scale);
+  ctx.moveTo(pStart.x, pStart.y - 12 * scale);
+  ctx.lineTo(pEnd.x, pEnd.y - 12 * scale);
+  ctx.lineTo(pEnd.x, pEnd.y - 44 * scale);
+  ctx.lineTo(pStart.x, pStart.y - 44 * scale);
   ctx.closePath();
-  ctx.fillStyle = '#4a2c1d';
+  ctx.fillStyle = '#1e1638';
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2 * scale;
   ctx.stroke();
 
-  const bottleColors = ['#38bdf8', '#f43f5e', '#4ade80', '#facc15', '#c084fc', '#fb923c'];
+  // Under-lit cyan/magenta LED back-panel glow
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 1.6 * scale;
+  ctx.beginPath();
+  ctx.moveTo(pStart.x, pStart.y - 43 * scale);
+  ctx.lineTo(pEnd.x, pEnd.y - 43 * scale);
+  ctx.stroke();
 
-  // 3 Shelves + Tiny Bottles
-  for (let tier = 0; tier < 3; tier++) {
-    const zOffset = (24 + tier * 17) * scale;
-    ctx.strokeStyle = '#78482f';
-    ctx.lineWidth = 3 * scale;
+  const bottleColors = [
+    '#22d3ee',
+    '#f43f5e',
+    '#4ade80',
+    '#facc15',
+    '#c084fc',
+    '#fb923c',
+    '#38bdf8',
+    '#ec4899',
+  ];
+
+  // 2 Packed Tiers of Tiny Brightly Colored Liquor Bottles & Silver Cocktail Shakers
+  for (let tier = 0; tier < 2; tier++) {
+    const zOffset = (16 + tier * 13) * scale;
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 2.2 * scale;
     ctx.beginPath();
     ctx.moveTo(pStart.x, pStart.y - zOffset);
     ctx.lineTo(pEnd.x, pEnd.y - zOffset);
     ctx.stroke();
 
-    const numBottles = 10;
+    const numBottles = Math.max(8, Math.round(lengthTiles * 4.5));
     for (let b = 1; b < numBottles; b++) {
       const u = b / numBottles;
       const bx = pStart.x + (pEnd.x - pStart.x) * u;
       const by = pStart.y + (pEnd.y - pStart.y) * u - zOffset;
-      const bColor = bottleColors[(b + tier * 2) % bottleColors.length];
+      const bColor = bottleColors[(b + tier * 3) % bottleColors.length];
 
       fillStrokeRoundedRect(
         ctx,
-        bx - 2.2 * scale,
-        by - 10 * scale,
-        4.4 * scale,
-        9 * scale,
-        1.5 * scale,
+        bx - 1.9 * scale,
+        by - 8.5 * scale,
+        3.8 * scale,
+        7.8 * scale,
+        1.2 * scale,
         bColor,
         INK,
         1 * scale
       );
-      // Bottle neck
+      // Tiny bottle neck & cap
       ctx.fillStyle = '#fef08a';
-      ctx.fillRect(bx - 1 * scale, by - 13 * scale, 2 * scale, 3 * scale);
+      ctx.fillRect(bx - 0.8 * scale, by - 10.8 * scale, 1.6 * scale, 2.3 * scale);
     }
   }
 }
 
 /**
- * Draws the front entrance archway with twin neon pillars and an illuminated "CLUB ENTRANCE" header
- * right at the front boundary (gy = 10, gx = 1.45..3.35) where queued guests walk into the club.
+ * Compact doorway accent helper (kept non-obstructive for the open-air layout).
  */
 function drawEntranceArchwayCutaway(
   ctx: CanvasRenderingContext2D,
@@ -3237,68 +3686,22 @@ function drawEntranceArchwayCutaway(
   scale: number
 ) {
   const gy = 10;
-  const leftPillarA = {
-    x: originX + (1.3 - gy) * (tileW / 2),
-    y: originY + (1.3 + gy) * (tileH / 2),
+  const doorLeft = {
+    x: originX + (1.65 - gy) * (tileW / 2),
+    y: originY + (1.65 + gy) * (tileH / 2),
   };
-  const leftPillarB = {
-    x: originX + (1.85 - gy) * (tileW / 2),
-    y: originY + (1.85 + gy) * (tileH / 2),
+  const doorRight = {
+    x: originX + (3.15 - gy) * (tileW / 2),
+    y: originY + (3.15 + gy) * (tileH / 2),
   };
-  const rightPillarA = {
-    x: originX + (2.95 - gy) * (tileW / 2),
-    y: originY + (2.95 + gy) * (tileH / 2),
-  };
-  const rightPillarB = {
-    x: originX + (3.5 - gy) * (tileW / 2),
-    y: originY + (3.5 + gy) * (tileH / 2),
-  };
-  const h = 58 * scale;
-
-  // Left Entrance Pillar
+  ctx.save();
+  ctx.strokeStyle = '#22d3ee';
+  ctx.lineWidth = 2.6 * scale;
   ctx.beginPath();
-  ctx.moveTo(leftPillarA.x, leftPillarA.y);
-  ctx.lineTo(leftPillarB.x, leftPillarB.y);
-  ctx.lineTo(leftPillarB.x, leftPillarB.y - h);
-  ctx.lineTo(leftPillarA.x, leftPillarA.y - h);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(59, 43, 84, 0.92)';
-  ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2 * scale;
+  ctx.moveTo(doorLeft.x, doorLeft.y);
+  ctx.lineTo(doorRight.x, doorRight.y);
   ctx.stroke();
-
-  // Right Entrance Pillar
-  ctx.beginPath();
-  ctx.moveTo(rightPillarA.x, rightPillarA.y);
-  ctx.lineTo(rightPillarB.x, rightPillarB.y);
-  ctx.lineTo(rightPillarB.x, rightPillarB.y - h);
-  ctx.lineTo(rightPillarA.x, rightPillarA.y - h);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(59, 43, 84, 0.92)';
-  ctx.fill();
-  ctx.stroke();
-
-  // Overhead Archway Lintel Beam connecting the two pillars
-  ctx.beginPath();
-  ctx.moveTo(leftPillarA.x, leftPillarA.y - h);
-  ctx.lineTo(rightPillarB.x, rightPillarB.y - h);
-  ctx.lineTo(rightPillarB.x, rightPillarB.y - h - 15 * scale);
-  ctx.lineTo(leftPillarA.x, leftPillarA.y - h - 15 * scale);
-  ctx.closePath();
-  ctx.fillStyle = '#311042';
-  ctx.fill();
-  ctx.strokeStyle = '#f472b6';
-  ctx.lineWidth = 2.2 * scale;
-  ctx.stroke();
-
-  // Glowing Neon "ENTRANCE" Sign centered on the lintel
-  const midX = (leftPillarA.x + rightPillarB.x) / 2;
-  const midY = (leftPillarA.y + rightPillarB.y) / 2 - h - 4 * scale;
-  ctx.fillStyle = '#67e8f9';
-  ctx.font = `900 ${Math.max(8, Math.round(9.5 * scale))}px "Outfit", sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.fillText('★ VIP ENTRANCE ★', midX, midY);
+  ctx.restore();
 }
 
 function drawWallStringLights(
@@ -3311,39 +3714,37 @@ function drawWallStringLights(
   t: number
 ) {
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.6 * scale;
+  ctx.lineWidth = 1.5 * scale;
   ctx.beginPath();
   ctx.moveTo(x1, y1);
-  ctx.quadraticCurveTo((x1 + x2) / 2, (y1 + y2) / 2 + 22 * scale, x2, y2);
+  ctx.quadraticCurveTo((x1 + x2) / 2, (y1 + y2) / 2 + 16 * scale, x2, y2);
   ctx.stroke();
 
-  const bulbs = 11;
+  const bulbs = 8;
   for (let i = 1; i < bulbs; i++) {
     const u = i / bulbs;
     const bx = (1 - u) * (1 - u) * x1 + 2 * (1 - u) * u * ((x1 + x2) / 2) + u * u * x2;
     const by =
-      (1 - u) * (1 - u) * y1 + 2 * (1 - u) * u * ((y1 + y2) / 2 + 22 * scale) + u * u * y2;
-    const twinkle = 0.72 + 0.28 * Math.sin(t * 4.5 + i * 1.4);
+      (1 - u) * (1 - u) * y1 + 2 * (1 - u) * u * ((y1 + y2) / 2 + 16 * scale) + u * u * y2;
+    const twinkle = 0.78 + 0.22 * Math.sin(t * 3.5 + i * 1.3);
 
-    // Warm outer halo
-    ctx.fillStyle = `rgba(251, 191, 36, ${twinkle * 0.38})`;
+    ctx.fillStyle = `rgba(253, 224, 71, ${twinkle * 0.35})`;
     ctx.beginPath();
-    ctx.arc(bx, by, 6.5 * scale, 0, Math.PI * 2);
+    ctx.arc(bx, by, 5.5 * scale, 0, Math.PI * 2);
     ctx.fill();
 
-    // Bulb core
-    ctx.fillStyle = `rgba(254, 240, 138, ${twinkle})`;
+    ctx.fillStyle = `rgba(254, 249, 195, ${twinkle})`;
     ctx.beginPath();
-    ctx.arc(bx, by, 2.8 * scale, 0, Math.PI * 2);
+    ctx.arc(bx, by, 2.4 * scale, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
 /**
- * Draws the vibrant multicolored checkerboard dance floor (green, electric blue, cyber pink, rich yellow)
- * with dark hand-drawn borders and flat cel-shaded inner specular squares (matching image_5.png & IMG_1503.jpeg).
+ * Draws the sunken-look grid of glowing square dance floor tiles cycling smoothly through
+ * cyan, magenta, lime green, yellow, and orange with a thick #111116 dark outline and subtle inner bevel.
  */
-function drawIllustratedDanceTile(
+function drawTile(
   ctx: CanvasRenderingContext2D,
   item: PlacedItem,
   cat: CatalogItem,
@@ -3355,18 +3756,20 @@ function drawIllustratedDanceTile(
   t: number
 ) {
   const fp = getRotatedFootprint(cat, item.rotation);
-  // Classic 4-color cyber-neon checkerboard palette: Green, Electric Blue, Cyber Pink, Rich Yellow
-  const checkerColors = [
-    '#4ade80', // neon lime green
-    '#38bdf8', // electric blue
-    '#f472b6', // cyber pink
-    '#fde047', // rich disco yellow
-    '#c084fc', // electric purple accent
+  const palette = [
+    '#22d3ee', // glowing cyan
+    '#38bdf8', // electric aqua
+    '#e879f9', // vibrant magenta
+    '#4ade80', // lime green
+    '#fde047', // sunny yellow
+    '#fb923c', // neon orange
   ];
 
-  // Subdivide each 1x1 grid cell into 2x2 glowing checkerboard sub-squares (3x3 tiles = 6x6 illuminated squares!)
+  // Subdivide each 1x1 grid cell into 2x2 sunken beveled LED sub-squares
   const subDiv = 2;
   const subStep = 1 / subDiv;
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
 
   for (let dx = 0; dx < fp.width; dx += subStep) {
     for (let dy = 0; dy < fp.depth; dy += subStep) {
@@ -3375,54 +3778,69 @@ function drawIllustratedDanceTile(
 
       const ix = Math.round(gx * 2);
       const iy = Math.round(gy * 2);
-      const beatShift = Math.floor(t * 2.2);
-      const checkerIdx = Math.abs(ix * 3 + iy * 5 + beatShift) % checkerColors.length;
-      const baseColor = checkerColors[checkerIdx];
+      const slowCycle = Math.floor(t * 1.35);
+      const isCyanBase = (ix + iy) % 2 === 0;
+      const colorIdx = isCyanBase
+        ? (ix + iy + slowCycle) % 2
+        : Math.abs(ix * 3 + iy * 5 + slowCycle) % palette.length;
+      const baseColor = palette[colorIdx];
 
-      const halfW = tileW / 2;
-      const halfH = tileH / 2;
+      // Sunken recess offset (+1.2 * scale below floor level)
       const p0x = originX + (gx - gy) * halfW;
-      const p0y = originY + (gx + gy) * halfH - 1.5 * scale;
+      const p0y = originY + (gx + gy) * halfH + 1.0 * scale;
       const p1x = originX + (gx + subStep - gy) * halfW;
-      const p1y = originY + (gx + subStep + gy) * halfH - 1.5 * scale;
+      const p1y = originY + (gx + subStep + gy) * halfH + 1.0 * scale;
       const p2x = originX + (gx - gy) * halfW;
-      const p2y = originY + (gx + subStep + (gy + subStep)) * halfH - 1.5 * scale;
+      const p2y = originY + (gx + subStep + (gy + subStep)) * halfH + 1.0 * scale;
       const p3x = originX + (gx - (gy + subStep)) * halfW;
-      const p3y = originY + (gx + (gy + subStep)) * halfH - 1.5 * scale;
+      const p3y = originY + (gx + (gy + subStep)) * halfH + 1.0 * scale;
 
+      // Outer tile frame with thick #111116 outline
       ctx.beginPath();
       ctx.moveTo(p0x, p0y);
       ctx.lineTo(p1x, p1y);
       ctx.lineTo(p2x, p2y);
       ctx.lineTo(p3x, p3y);
       ctx.closePath();
-
       ctx.fillStyle = baseColor;
       ctx.fill();
-      ctx.strokeStyle = '#150d2a';
-      ctx.lineWidth = 1.8 * scale;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2.0 * scale;
       ctx.stroke();
 
-      // Flat cel-shaded inner specular diamond highlight
+      // Inner sunken bevel rim
       const cx = p0x;
       const cy = (p0y + p2y) / 2;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.52)';
+      ctx.lineWidth = 1.1 * scale;
       ctx.beginPath();
-      ctx.moveTo(cx, cy - tileH * 0.13);
-      ctx.lineTo(cx + tileW * 0.13, cy);
-      ctx.lineTo(cx, cy + tileH * 0.13);
-      ctx.lineTo(cx - tileW * 0.13, cy);
+      ctx.moveTo(cx, cy - tileH * 0.17);
+      ctx.lineTo(cx + tileW * 0.17, cy);
+      ctx.lineTo(cx, cy + tileH * 0.17);
+      ctx.lineTo(cx - tileW * 0.17, cy);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Specular center glow core
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.36)';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - tileH * 0.12);
+      ctx.lineTo(cx + tileW * 0.12, cy);
+      ctx.lineTo(cx, cy + tileH * 0.12);
+      ctx.lineTo(cx - tileW * 0.12, cy);
       ctx.closePath();
       ctx.fill();
     }
   }
 }
 
+const drawIllustratedDanceTile = drawTile;
+
 /**
- * Draws detailed 2.5D illustrated furniture:
- * - Bar Units with wooden paneling, bar stools in front, beer tap/register, and glowing drinks
- * - DJ Booth on a dark concrete stage platform with purple neon front symbol and dual spinning turntables
- * - Patched brown leather couches, low grey coffee tables, round wooden bistro tables & chairs, and purple corner VIP booth
+ * Dispatches furniture rendering to the detailed multi-layered vector art renderers:
+ * - drawBar: Padded neon-trimmed bar counter, glossy white top, round cushioned bar stools, and tall liquor bottle shelving
+ * - drawDJBooth: Black-and-neon console table, two circular vinyl turntables, central mixer with glowing faders, angled laptop, stacked black studio monitor speakers with gold/silver cones, gold record plaques & golden crown trophy
+ * - drawTable: Round high-top cocktail tables with metallic pedestals & circular bases, cushioned club chairs, and tufted purple VIP lounge booth sofas
  */
 function drawIllustratedFurniture(
   ctx: CanvasRenderingContext2D,
@@ -3438,11 +3856,582 @@ function drawIllustratedFurniture(
   activeDrink: DrinkMix
 ) {
   if (cat.category === 'BAR_UNIT') {
-    const h = (cat.tier === 3 ? 27 : 23) * scale;
-    const topColor = cat.tier === 1 ? '#8c583a' : cat.accentColor;
-    const sideColor = cat.tier === 1 ? '#5c3824' : cat.primaryColor;
+    drawBar(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t, activeDrink);
+  } else if (cat.category === 'DJ_BOOTH') {
+    drawDJBooth(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t);
+  } else if (cat.category === 'SEATING') {
+    drawTable(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t);
+  } else if (cat.category === 'LIGHTING') {
+    drawLightingFixture(ctx, item, cat, originX, originY, tileW, tileH, scale, t);
+  }
+}
 
-    // Main bar counter
+/**
+ * Draws the detailed Bar Counter & Liquor Shelves (Matching IMG_1506_5bdf15ca.jpeg):
+ * - Sleek bar counter with padded purple/magenta neon-trimmed beveled panels and thick #111116 outlines
+ * - Glossy white marble/acrylic countertop with specular reflection streaks
+ * - Tall back-bar shelving unit packed with dozens of tiny, brightly colored liquor bottles & cocktail shakers
+ * - Round cushioned bar stools with metallic pedestals & circular bases
+ */
+function drawBar(
+  ctx: CanvasRenderingContext2D,
+  item: PlacedItem,
+  cat: CatalogItem,
+  fp: { width: number; depth: number },
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  _t: number,
+  activeDrink: DrinkMix
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  const h = (cat.tier === 3 ? 25 : 22) * scale;
+  const alongY = fp.depth > fp.width;
+  const lengthTiles = Math.max(fp.width, fp.depth);
+
+  // 1. Tall Illuminated Back-Bar Shelving Unit packed with dozens of colorful liquor bottles
+  drawBackbarBottleShelves(
+    ctx,
+    item.gridX,
+    item.gridY,
+    lengthTiles,
+    alongY,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale
+  );
+
+  // 2. Main Bar Counter Chassis with Padded Purple/Magenta Panels & Glossy White Countertop
+  drawIsoPrism(
+    ctx,
+    item.gridX,
+    item.gridY,
+    fp.width,
+    fp.depth,
+    0,
+    h,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#f8fafc', // glossy white marble/acrylic bar top
+    '#581c87', // padded deep purple front-left panel
+    '#3b0764', // shaded dark violet side panel
+    INK,
+    2.2 * scale
+  );
+
+  // 3. Glowing Neon Magenta/Cyan Beveled Trim Inset on the Front Face of the Bar Counter
+  const panelStartGx = item.gridX + 0.15;
+  const panelStartGy = item.gridY + fp.depth;
+  const panelEndGx = item.gridX + fp.width - 0.15;
+  const panelEndGy = item.gridY + fp.depth;
+
+  const p1x = originX + (panelStartGx - panelStartGy) * halfW;
+  const p1y = originY + (panelStartGx + panelStartGy) * halfH;
+  const p2x = originX + (panelEndGx - panelEndGy) * halfW;
+  const p2y = originY + (panelEndGx + panelEndGy) * halfH;
+
+  ctx.save();
+  ctx.strokeStyle = cat.tier >= 2 ? '#22d3ee' : '#e879f9';
+  ctx.lineWidth = 2 * scale;
+  ctx.beginPath();
+  ctx.moveTo(p1x, p1y - h + 4 * scale);
+  ctx.lineTo(p2x, p2y - h + 4 * scale);
+  ctx.lineTo(p2x, p2y - 4 * scale);
+  ctx.lineTo(p1x, p1y - 4 * scale);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+
+  // 4. Cocktail Shakers, Glowing Martini Glasses & Ice Bucket on the Glossy White Bar Top
+  const numStations = Math.max(2, lengthTiles);
+  for (let s = 0; s < numStations; s++) {
+    const u = (s + 0.5) / numStations;
+    const gx = item.gridX + (alongY ? 0.5 : u * fp.width);
+    const gy = item.gridY + (alongY ? u * fp.depth : 0.5);
+    const cx = originX + (gx - gy) * halfW;
+    const cy = originY + (gx + gy) * halfH - h;
+
+    // Silver Cocktail Shaker with #111116 outline
+    fillStrokeRoundedRect(
+      ctx,
+      cx - 5 * scale,
+      cy - 8 * scale,
+      4.2 * scale,
+      7.5 * scale,
+      1.8 * scale,
+      '#e2e8f0',
+      INK,
+      1.3 * scale
+    );
+
+    // Glowing Neon Cocktail Glass
+    ctx.fillStyle = s % 2 === 0 ? activeDrink.color : '#ec4899';
+    ctx.beginPath();
+    ctx.moveTo(cx + 2 * scale, cy - 7.5 * scale);
+    ctx.lineTo(cx + 8.5 * scale, cy - 7.5 * scale);
+    ctx.lineTo(cx + 5.25 * scale, cy - 3.5 * scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2 * scale;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(cx + 5.25 * scale, cy - 3.5 * scale);
+    ctx.lineTo(cx + 5.25 * scale, cy - 0.5 * scale);
+    ctx.stroke();
+  }
+
+  // 5. Round Cushioned Bar Stools with Metallic Bases arranged along the front edge
+  const numStools = Math.max(2, lengthTiles);
+  for (let s = 0; s < numStools; s++) {
+    const sxGrid = alongY ? item.gridX + fp.width + 0.36 : item.gridX + s + 0.5;
+    const syGrid = alongY ? item.gridY + s + 0.5 : item.gridY + fp.depth + 0.36;
+    drawBarStool(ctx, sxGrid, syGrid, originX, originY, tileW, tileH, scale);
+  }
+}
+
+/**
+ * Draws the DJ Booth & Stage along the back-right neon-striped wall (Matching IMG_1506_5bdf15ca.jpeg):
+ * - Detailed black-and-neon console table on a low stage riser
+ * - Two circular vinyl turntables with spinning record grooves & silver tonearms
+ * - Central mixer with glowing faders and an angled glowing laptop
+ * - Stacked black studio monitor speakers with yellow/gold & silver speaker cones
+ * - Gold record plaques and a golden crown trophy mounted beside the booth
+ */
+function drawDJBooth(
+  ctx: CanvasRenderingContext2D,
+  item: PlacedItem,
+  cat: CatalogItem,
+  fp: { width: number; depth: number },
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  // If this item is a dedicated Subwoofer Bass Tower ('dj_speaker_stack'), render the tall studio speaker stack directly
+  if (cat.id === 'dj_speaker_stack') {
+    drawStudioMonitorSpeakerStack(
+      ctx,
+      item.gridX + 0.5,
+      item.gridY + 0.5,
+      0,
+      originX,
+      originY,
+      tileW,
+      tileH,
+      scale,
+      t
+    );
+    return;
+  }
+
+  // 1. Sleek Dark Slate DJ Stage Platform Riser with Neon Cyan Trim Border
+  const riserH = 9 * scale;
+  drawIsoPrism(
+    ctx,
+    item.gridX - 0.35,
+    item.gridY - 0.05,
+    fp.width + 0.7,
+    fp.depth + 0.35,
+    0,
+    riserH,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#27243d',
+    '#1b182c',
+    '#131120',
+    INK,
+    2.0 * scale
+  );
+
+  // 2. Flanking Tall Stacked Black Studio Monitor Speakers with Gold & Silver Speaker Cones (Left & Right of DJ Console)
+  drawStudioMonitorSpeakerStack(
+    ctx,
+    item.gridX - 0.35,
+    item.gridY + 0.45,
+    riserH,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    t
+  );
+  drawStudioMonitorSpeakerStack(
+    ctx,
+    item.gridX + fp.width + 0.25,
+    item.gridY + 0.45,
+    riserH,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    t
+  );
+
+  // 3. Detailed Black-and-Neon DJ Console Table
+  const consoleH = 18 * scale;
+  drawIsoPrism(
+    ctx,
+    item.gridX + 0.08,
+    item.gridY + 0.12,
+    fp.width * 0.84,
+    fp.depth * 0.76,
+    riserH,
+    consoleH,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#1e293b',
+    '#0f172a',
+    '#090d16',
+    INK,
+    2.2 * scale
+  );
+
+  // Glowing Cyan/Magenta Equalizer Emblem on Front Face of DJ Console
+  const frontX = originX + (item.gridX + fp.width * 0.5 - (item.gridY + 0.88)) * halfW;
+  const frontY =
+    originY + (item.gridX + fp.width * 0.5 + (item.gridY + 0.88)) * halfH - (riserH + 9 * scale);
+  fillStrokeRoundedRect(
+    ctx,
+    frontX - 16 * scale,
+    frontY - 6 * scale,
+    32 * scale,
+    11 * scale,
+    3 * scale,
+    '#090514',
+    '#22d3ee',
+    1.6 * scale
+  );
+  // Animated LED equalizer bars on front of console
+  const ledColors = ['#22d3ee', '#f43f5e', '#facc15', '#4ade80', '#a855f7'];
+  for (let b = 0; b < 5; b++) {
+    const bh = (3 + Math.abs(Math.sin(t * 5 + b * 1.2)) * 6) * scale;
+    ctx.fillStyle = ledColors[b];
+    ctx.fillRect(frontX + (-11 + b * 5) * scale, frontY + 3.5 * scale - bh, 3.2 * scale, bh);
+  }
+
+  // 4. Two Circular Vinyl Turntables + Central Mixer with Glowing Faders + Angled Laptop on Console Top
+  const deckCenterX = originX + (item.gridX + fp.width * 0.5 - (item.gridY + 0.45)) * halfW;
+  const deckCenterY =
+    originY + (item.gridX + fp.width * 0.5 + (item.gridY + 0.45)) * halfH - (riserH + consoleH);
+
+  // Left & Right Circular Vinyl Turntables
+  for (const side of [-1, 1]) {
+    const tx = deckCenterX + side * 12 * scale;
+    const ty = deckCenterY + side * 4.5 * scale;
+
+    // Turntable platter base
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, 7.8 * scale, 4.4 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.6 * scale;
+    ctx.stroke();
+
+    // Black vinyl record disc
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, 6.2 * scale, 3.5 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glowing cyan/magenta center record label
+    ctx.fillStyle = side < 0 ? '#22d3ee' : '#f43f5e';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, 2.2 * scale, 1.3 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Silver tonearm
+    ctx.strokeStyle = '#f8fafc';
+    ctx.lineWidth = 1.2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(tx + 5.5 * scale, ty - 2 * scale);
+    ctx.lineTo(tx + 2 * scale, ty + 1 * scale);
+    ctx.stroke();
+  }
+
+  // Central 4-Channel DJ Mixer with Glowing Faders
+  fillStrokeRoundedRect(
+    ctx,
+    deckCenterX - 5.5 * scale,
+    deckCenterY - 4 * scale,
+    11 * scale,
+    8 * scale,
+    2 * scale,
+    '#0f172a',
+    INK,
+    1.5 * scale
+  );
+  for (const fx of [-3, 0, 3]) {
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(deckCenterX + fx * scale, deckCenterY - 2.2 * scale);
+    ctx.lineTo(deckCenterX + fx * scale, deckCenterY + 2.2 * scale);
+    ctx.stroke();
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(
+      deckCenterX + (fx - 1) * scale,
+      deckCenterY + Math.sin(t * 3 + fx) * 1.5 * scale,
+      2 * scale,
+      1.6 * scale
+    );
+  }
+
+  // Angled Glowing Laptop on Stand at Corner of DJ Console
+  const lapX = deckCenterX - 18 * scale;
+  const lapY = deckCenterY - 12 * scale;
+  fillStrokeRoundedRect(
+    ctx,
+    lapX - 6 * scale,
+    lapY - 8 * scale,
+    12 * scale,
+    8.5 * scale,
+    2 * scale,
+    '#38bdf8',
+    INK,
+    1.7 * scale
+  );
+  // Laptop screen waveform highlight
+  ctx.fillStyle = '#e0f2fe';
+  ctx.fillRect(lapX - 4 * scale, lapY - 5.5 * scale, 8 * scale, 2 * scale);
+
+  // 5. Mounted Gold Record Plaques on Wall + Golden Crown Trophy Pedestal beside DJ Booth
+  const plaqueX = deckCenterX - 36 * scale;
+  const plaqueY = deckCenterY - 22 * scale;
+  for (let p = 0; p < 2; p++) {
+    const px = plaqueX + p * 14 * scale;
+    const py = plaqueY + p * 6 * scale;
+    fillStrokeRoundedRect(
+      ctx,
+      px - 5.5 * scale,
+      py - 7 * scale,
+      11 * scale,
+      13 * scale,
+      2 * scale,
+      '#1e1b4b',
+      '#facc15',
+      1.5 * scale
+    );
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(px, py - 0.5 * scale, 3.6 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1 * scale;
+    ctx.stroke();
+  }
+
+  // Golden Crown Trophy on Pedestal beside DJ Booth (Matching gold trophy in IMG_1506_5bdf15ca.jpeg)
+  const trophyX = deckCenterX - 34 * scale;
+  const trophyY = deckCenterY + 2 * scale;
+  fillStrokeRoundedRect(
+    ctx,
+    trophyX - 6 * scale,
+    trophyY - 12 * scale,
+    12 * scale,
+    12 * scale,
+    2.5 * scale,
+    '#f8fafc',
+    INK,
+    1.8 * scale
+  );
+  // Golden Crown Trophy atop pedestal
+  ctx.beginPath();
+  ctx.moveTo(trophyX - 6 * scale, trophyY - 12 * scale);
+  ctx.lineTo(trophyX - 7 * scale, trophyY - 22 * scale);
+  ctx.lineTo(trophyX - 2.5 * scale, trophyY - 17 * scale);
+  ctx.lineTo(trophyX, trophyY - 24 * scale);
+  ctx.lineTo(trophyX + 2.5 * scale, trophyY - 17 * scale);
+  ctx.lineTo(trophyX + 7 * scale, trophyY - 22 * scale);
+  ctx.lineTo(trophyX + 6 * scale, trophyY - 12 * scale);
+  ctx.closePath();
+  ctx.fillStyle = '#facc15';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.6 * scale;
+  ctx.stroke();
+}
+
+/**
+ * Draws a tall stacked black studio monitor speaker tower with multiple yellow/gold & silver speaker cones
+ * and thick #111116 dark outlines (matching the tall speaker stacks flanking the DJ booth in IMG_1506_5bdf15ca.jpeg).
+ */
+function drawStudioMonitorSpeakerStack(
+  ctx: CanvasRenderingContext2D,
+  gx: number,
+  gy: number,
+  zBase: number,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  const towerH = 44 * scale;
+
+  drawIsoPrism(
+    ctx,
+    gx - 0.36,
+    gy - 0.36,
+    0.72,
+    0.72,
+    zBase,
+    towerH,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    '#27272a',
+    '#18181b',
+    '#09090b',
+    INK,
+    2.2 * scale
+  );
+
+  // Speaker cone stack on the front-left cabinet face (3 circular woofers + top horn tweeter)
+  const faceX = originX + (gx - 0.1 - (gy + 0.25)) * halfW;
+  const faceBaseY = originY + (gx - 0.1 + (gy + 0.25)) * halfH - zBase;
+  const conePulse = 1 + Math.sin(t * 7) * 0.05;
+
+  const cones = [
+    { dy: -10, r: 5.2, rim: '#facc15', core: '#ca8a04' }, // bottom gold sub woofer
+    { dy: -22, r: 4.6, rim: '#e2e8f0', core: '#facc15' }, // mid gold/silver cone
+    { dy: -33, r: 3.8, rim: '#facc15', core: '#eab308' }, // upper midrange cone
+  ];
+  for (const c of cones) {
+    const cy = faceBaseY + c.dy * scale;
+    // Outer metallic/gold cone ring
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.ellipse(faceX, cy, c.r * scale * conePulse, c.r * 1.15 * scale * conePulse, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = c.rim;
+    ctx.lineWidth = 1.6 * scale;
+    ctx.stroke();
+
+    // Inner yellow/gold dust cap
+    ctx.fillStyle = c.core;
+    ctx.beginPath();
+    ctx.arc(faceX, cy, c.r * 0.42 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1 * scale;
+    ctx.stroke();
+  }
+}
+
+/**
+ * Draws Detailed Tables & Seating (Matching IMG_1506_5bdf15ca.jpeg — NO plain brown rectangles!):
+ * - Round high-top purple/neon cocktail tables with thin metallic pedestals and circular bases, paired with sleek cushioned club chairs
+ * - Tufted purple/magenta VIP lounge booth sofas with black dining tables and glowing cocktail glasses/golden coins
+ */
+function drawTable(
+  ctx: CanvasRenderingContext2D,
+  item: PlacedItem,
+  cat: CatalogItem,
+  fp: { width: number; depth: number },
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  _t: number
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  if (cat.id === 'seat_bistro') {
+    // Round High-Top Purple/Magenta Cocktail Table with Thin Metallic Pedestal, Circular Base & Cushioned Club Chairs
+    const tx = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * halfW;
+    const ty = originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * halfH;
+
+    // Companion Cushioned Club Chair behind table
+    drawCushionedClubChair(ctx, tx - 14 * scale, ty - 4 * scale, scale, '#7e22ce');
+
+    // Circular Chrome Base Plate with #111116 outline
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty, 7.5 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.stroke();
+
+    // Thin Metallic Pedestal Stem
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 4.6 * scale;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx, ty - 16 * scale);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2.2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx, ty - 16 * scale);
+    ctx.stroke();
+
+    // Round High-Top Purple/Neon Acrylic Tabletop with Beveled Rim
+    ctx.fillStyle = '#581c87';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty - 15.5 * scale, 14 * scale, 7.8 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2 * scale;
+    ctx.stroke();
+
+    ctx.fillStyle = '#9333ea';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty - 17 * scale, 13.5 * scale, 7.2 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#e879f9';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.stroke();
+
+    // Glowing cocktail glass on high-top table
+    ctx.fillStyle = '#22d3ee';
+    ctx.beginPath();
+    ctx.arc(tx + 2 * scale, ty - 19.5 * scale, 2.5 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.1 * scale;
+    ctx.stroke();
+
+    // Foreground Cushioned Club Chair
+    drawCushionedClubChair(ctx, tx + 14 * scale, ty + 2 * scale, scale, '#9333ea');
+  } else {
+    // Tufted Purple/Magenta VIP Lounge Sofa & Black Lounge Dining Table (Matching back-left VIP booths in IMG_1506_5bdf15ca.jpeg)
+    const seatH = 12 * scale;
+    const backH = 13 * scale;
+    const topPurple = cat.tier >= 3 ? '#9333ea' : '#7e22ce';
+    const frontPurple = cat.tier >= 3 ? '#6b21a8' : '#581c87';
+    const sidePurple = '#3b0764';
+
+    // 1. Plush Cushioned Sofa Base
     drawIsoPrism(
       ctx,
       item.gridX,
@@ -3450,269 +4439,91 @@ function drawIllustratedFurniture(
       fp.width,
       fp.depth,
       0,
-      h,
+      seatH,
       originX,
       originY,
       tileW,
       tileH,
-      topColor,
-      sideColor,
-      '#3d2417',
+      topPurple,
+      frontPurple,
+      sidePurple,
       INK,
-      1.8 * scale
+      2.0 * scale
     );
 
-    // Round wooden bar stools arranged along the front edge of the bar (Matching IMG_1503.jpeg)
-    const numStools = Math.max(2, Math.max(fp.width, fp.depth));
-    for (let s = 0; s < numStools; s++) {
-      const sxGrid =
-        fp.depth > fp.width ? item.gridX + fp.width + 0.35 : item.gridX + s + 0.5;
-      const syGrid =
-        fp.depth > fp.width ? item.gridY + s + 0.5 : item.gridY + fp.depth + 0.35;
-      drawBarStool(ctx, sxGrid, syGrid, originX, originY, tileW, tileH, scale);
-    }
-
-    // Drinks & purple six-pack carrier on top of counter
-    const cx = originX + (item.gridX + fp.width * 0.5 - (item.gridY + fp.depth * 0.5)) * (tileW / 2);
-    const cy =
-      originY + (item.gridX + fp.width * 0.5 + (item.gridY + fp.depth * 0.5)) * (tileH / 2) - h;
-    fillStrokeRoundedRect(
-      ctx,
-      cx - 6 * scale,
-      cy - 7 * scale,
-      12 * scale,
-      7 * scale,
-      2 * scale,
-      '#a855f7',
-      INK,
-      1.2 * scale
-    );
-    ctx.fillStyle = activeDrink.color;
-    ctx.beginPath();
-    ctx.arc(cx + 14 * scale, cy - 3 * scale, 3.2 * scale, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (cat.category === 'DJ_BOOTH') {
-    // Raised Dark Concrete Stage Riser (3x1.5 look) with scuffed cracks
+    // 2. Tufted High Backrest with Button Tufting Dots & Neon Trim
+    const backW = fp.width >= fp.depth ? fp.width : 0.42;
+    const backD = fp.depth > fp.width ? fp.depth : 0.42;
     drawIsoPrism(
       ctx,
-      item.gridX - 0.3,
+      item.gridX,
       item.gridY,
-      fp.width + 0.8,
-      fp.depth + 0.4,
-      0,
-      12 * scale,
+      backW,
+      backD,
+      seatH,
+      backH,
       originX,
       originY,
       tileW,
       tileH,
-      '#3b3554',
-      '#28233b',
-      '#1e1a2e',
+      '#a855f7',
+      '#7e22ce',
+      '#4c1d95',
       INK,
-      1.8 * scale
+      2.0 * scale
     );
 
-    // Blue-Purple DJ Console Box on top of Stage Riser
-    drawIsoPrism(
-      ctx,
-      item.gridX + 0.1,
-      item.gridY + 0.15,
-      fp.width * 0.78,
-      fp.depth * 0.75,
-      12 * scale,
-      17 * scale,
-      originX,
-      originY,
-      tileW,
-      tileH,
-      '#4f46e5',
-      '#312e81',
-      '#1e1b4b',
-      INK,
-      1.8 * scale
-    );
-
-    // Glowing Magenta Neon Waveform Emblem on front of DJ Booth (Matching IMG_1503.jpeg)
-    const frontX =
-      originX + (item.gridX + 0.75 - (item.gridY + 0.85)) * (tileW / 2);
-    const frontY =
-      originY + (item.gridX + 0.75 + (item.gridY + 0.85)) * (tileH / 2) - 19 * scale;
-    ctx.strokeStyle = '#f472b6';
-    ctx.lineWidth = 2.2 * scale;
-    ctx.beginPath();
-    ctx.moveTo(frontX - 9 * scale, frontY - 2 * scale);
-    ctx.lineTo(frontX - 3 * scale, frontY - 8 * scale);
-    ctx.lineTo(frontX + 3 * scale, frontY + 2 * scale);
-    ctx.lineTo(frontX + 9 * scale, frontY - 5 * scale);
-    ctx.stroke();
-
-    // Dual Spinning Vinyl Turntables on top of DJ Console
-    const deckX = originX + (item.gridX + 0.65 - (item.gridY + 0.45)) * (tileW / 2);
-    const deckY =
-      originY + (item.gridX + 0.65 + (item.gridY + 0.45)) * (tileH / 2) - 31 * scale;
-    for (const offset of [-9, 9]) {
-      ctx.fillStyle = '#0f172a';
+    // Diamond Tufting Seam Dots across the VIP Sofa Backrest
+    const numTufts = 4;
+    for (let k = 1; k <= numTufts; k++) {
+      const u = k / (numTufts + 1);
+      const tGx = item.gridX + (fp.width >= fp.depth ? u * fp.width : 0.25);
+      const tGy = item.gridY + (fp.depth > fp.width ? u * fp.depth : 0.25);
+      const tx = originX + (tGx - tGy) * halfW;
+      const ty = originY + (tGx + tGy) * halfH - (seatH + backH * 0.55);
+      ctx.fillStyle = '#e9d5ff';
       ctx.beginPath();
-      ctx.ellipse(
-        deckX + offset * scale,
-        deckY + (offset > 0 ? 4 : 0) * scale,
-        6.5 * scale,
-        3.8 * scale,
-        0,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.4 * scale;
-      ctx.stroke();
-    }
-  } else if (cat.category === 'SEATING') {
-    if (cat.id === 'seat_bistro') {
-      // Round Wooden Bistro Table + 2 Wooden Chairs (Right lounge area in IMG_1503.jpeg)
-      const tx = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * (tileW / 2);
-      const ty = originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * (tileH / 2);
-
-      // Table Pedestal
-      ctx.strokeStyle = '#451a03';
-      ctx.lineWidth = 3 * scale;
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(tx, ty - 14 * scale);
-      ctx.stroke();
-
-      // Round Wood Tabletop
-      ctx.fillStyle = '#78482f';
-      ctx.beginPath();
-      ctx.ellipse(tx, ty - 15 * scale, 14 * scale, 8 * scale, 0, 0, Math.PI * 2);
+      ctx.arc(tx, ty, 1.5 * scale, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.6 * scale;
-      ctx.stroke();
-
-      // Side Wooden Chair
-      drawWoodenChair(ctx, tx + 16 * scale, ty - 4 * scale, scale);
-    } else if (cat.id === 'seat_worn_couch') {
-      // Worn Patched Couch with Torn Cushion Details + Low Coffee Table
-      const isLeftWall = item.gridX === 0;
-      const mainColor = isLeftWall ? '#64586e' : '#735742';
-      const darkColor = isLeftWall ? '#493f52' : '#543e2e';
-
-      drawIsoPrism(
-        ctx,
-        item.gridX,
-        item.gridY,
-        fp.width,
-        fp.depth,
-        0,
-        11 * scale,
-        originX,
-        originY,
-        tileW,
-        tileH,
-        mainColor,
-        darkColor,
-        '#2e231c',
-        INK,
-        1.6 * scale
-      );
-      // Backrest
-      drawIsoPrism(
-        ctx,
-        item.gridX,
-        item.gridY,
-        fp.width > fp.depth ? fp.width : 0.35,
-        fp.depth > fp.width ? fp.depth : 0.35,
-        11 * scale,
-        11 * scale,
-        originX,
-        originY,
-        tileW,
-        tileH,
-        mainColor,
-        darkColor,
-        '#2e231c',
-        INK,
-        1.6 * scale
-      );
-      // Torn Fabric Patch Detail
-      const px = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * (tileW / 2);
-      const py = originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * (tileH / 2) - 13 * scale;
-      ctx.fillStyle = '#291d18';
-      ctx.fillRect(px - 4 * scale, py - 2 * scale, 7 * scale, 4 * scale);
-    } else {
-      // Plush Purple/Magenta Corner VIP Lounge Booth with Round Drink Table (Bottom-corner of IMG_1503.jpeg)
-      drawIsoPrism(
-        ctx,
-        item.gridX,
-        item.gridY,
-        fp.width,
-        fp.depth,
-        0,
-        14 * scale,
-        originX,
-        originY,
-        tileW,
-        tileH,
-        '#7e22ce',
-        '#581c87',
-        '#3b0764',
-        INK,
-        1.8 * scale
-      );
-      drawIsoPrism(
-        ctx,
-        item.gridX,
-        item.gridY,
-        fp.width,
-        0.4,
-        14 * scale,
-        11 * scale,
-        originX,
-        originY,
-        tileW,
-        tileH,
-        '#a855f7',
-        '#6b21a8',
-        '#4c1d95',
-        INK,
-        1.8 * scale
-      );
-      // Center table in booth
-      const bx = originX + (item.gridX + 1 - (item.gridY + 1)) * (tileW / 2);
-      const by = originY + (item.gridX + 1 + (item.gridY + 1)) * (tileH / 2) - 16 * scale;
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.ellipse(bx, by, 10 * scale, 5.5 * scale, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = INK;
+      ctx.lineWidth = 0.9 * scale;
       ctx.stroke();
     }
-  } else if (cat.category === 'LIGHTING') {
+
+    // 3. Sleek Black VIP Lounge Table with Neon Gold/Cyan Rim in front of the Tufted Sofa
+    const tableGx = item.gridX + (fp.width >= fp.depth ? 0.25 : 0.52);
+    const tableGy = item.gridY + (fp.depth > fp.width ? 0.25 : 0.52);
+    const tableW = Math.max(0.55, fp.width * 0.58);
+    const tableD = Math.max(0.55, fp.depth * 0.58);
     drawIsoPrism(
       ctx,
-      item.gridX + 0.3,
-      item.gridY + 0.3,
-      0.4,
-      0.4,
+      tableGx,
+      tableGy,
+      tableW,
+      tableD,
       0,
-      44 * scale,
+      13.5 * scale,
       originX,
       originY,
       tileW,
       tileH,
-      cat.accentColor,
-      '#334155',
       '#1e293b',
+      '#0f172a',
+      '#090d16',
       INK,
-      1.5 * scale
+      1.8 * scale
     );
-    const orbX = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * (tileW / 2);
-    const orbY =
-      originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * (tileH / 2) - 50 * scale;
-    ctx.fillStyle = cat.accentColor;
+
+    // Bottle service / glowing cocktail glasses on VIP table
+    const bx = originX + (tableGx + tableW * 0.5 - (tableGy + tableD * 0.5)) * halfW;
+    const by = originY + (tableGx + tableW * 0.5 + (tableGy + tableD * 0.5)) * halfH - 14.5 * scale;
+    ctx.fillStyle = '#22d3ee';
     ctx.beginPath();
-    ctx.arc(orbX, orbY, (6 + Math.sin(t * 5) * 1.4) * scale, 0, Math.PI * 2);
+    ctx.arc(bx - 3 * scale, by - 2 * scale, 2.4 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(bx + 3.5 * scale, by - 2.5 * scale, 2.6 * scale, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -3730,77 +4541,92 @@ function drawBarStool(
   const sx = originX + (gx - gy) * (tileW / 2);
   const sy = originY + (gx + gy) * (tileH / 2);
 
-  // Metal Base & Stem
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  // Circular Metallic Base Plate with #111116 outline
+  ctx.fillStyle = '#94a3b8';
   ctx.beginPath();
-  ctx.ellipse(sx, sy, 5.8 * scale, 3 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, sy, 5.5 * scale, 2.8 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.5 * scale;
+  ctx.stroke();
 
-  ctx.strokeStyle = '#475569';
-  ctx.lineWidth = 2.6 * scale;
+  // Chrome Pedestal Stem & Footrest Ring
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4 * scale;
   ctx.beginPath();
   ctx.moveTo(sx, sy);
   ctx.lineTo(sx, sy - 11.5 * scale);
   ctx.stroke();
 
-  // Cushion Seat Top
-  ctx.fillStyle = '#9a3412';
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 2 * scale;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx, sy - 11.5 * scale);
+  ctx.stroke();
+
+  // Round Padded Neon-Purple Cushion Top with Specular Highlight
+  ctx.fillStyle = '#7e22ce';
   ctx.beginPath();
   ctx.ellipse(sx, sy - 12 * scale, 6.2 * scale, 3.6 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.6 * scale;
+  ctx.lineWidth = 1.8 * scale;
   ctx.stroke();
 
-  // High-Backed Bar Stool Backrest (matching image_5.png bar prop guidelines)
-  fillStrokeRoundedRect(
-    ctx,
-    sx - 4.5 * scale,
-    sy - 20.5 * scale,
-    9 * scale,
-    7.5 * scale,
-    2 * scale,
-    '#b45309',
-    INK,
-    1.5 * scale
-  );
-}
-
-function drawWoodenChair(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number) {
-  ctx.strokeStyle = '#451a03';
-  ctx.lineWidth = 2 * scale;
+  ctx.fillStyle = '#c084fc';
   ctx.beginPath();
-  ctx.moveTo(x - 4 * scale, y);
-  ctx.lineTo(x - 4 * scale, y - 9 * scale);
-  ctx.moveTo(x + 4 * scale, y);
-  ctx.lineTo(x + 4 * scale, y - 16 * scale);
+  ctx.ellipse(sx - 1 * scale, sy - 12.8 * scale, 3.5 * scale, 1.6 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawCushionedClubChair(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  cushionColor: string
+) {
+  // Metallic pedestal base
+  ctx.fillStyle = '#94a3b8';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 5.2 * scale, 2.6 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.4 * scale;
   ctx.stroke();
 
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 2.2 * scale;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 9.5 * scale);
+  ctx.stroke();
+
+  // Round cushioned seat
+  ctx.fillStyle = cushionColor;
+  ctx.beginPath();
+  ctx.ellipse(x, y - 10 * scale, 6.5 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.7 * scale;
+  ctx.stroke();
+
+  // Curved padded backrest
   fillStrokeRoundedRect(
     ctx,
-    x - 6 * scale,
-    y - 11 * scale,
+    x - 5.5 * scale,
+    y - 18.5 * scale,
     11 * scale,
-    4 * scale,
-    1.5 * scale,
-    '#78482f',
+    7.5 * scale,
+    3.5 * scale,
+    '#a855f7',
     INK,
-    1.2 * scale
-  );
-  fillStrokeRoundedRect(
-    ctx,
-    x + 1 * scale,
-    y - 19 * scale,
-    4 * scale,
-    8 * scale,
-    1.5 * scale,
-    '#78482f',
-    INK,
-    1.2 * scale
+    1.7 * scale
   );
 }
 
-function drawLightingBeams(
+function drawLightingFixture(
   ctx: CanvasRenderingContext2D,
   item: PlacedItem,
   cat: CatalogItem,
@@ -3811,28 +4637,73 @@ function drawLightingBeams(
   scale: number,
   t: number
 ) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  const tx = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * halfW;
+  const ty = originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * halfH;
+  const th = 48 * scale;
+
+  // Truss column with thick dark outline
+  fillStrokeRoundedRect(
+    ctx,
+    tx - 4 * scale,
+    ty - th,
+    8 * scale,
+    th,
+    2 * scale,
+    '#1e1b4b',
+    INK,
+    1.8 * scale
+  );
+  ctx.strokeStyle = cat.accentColor;
+  ctx.lineWidth = 1.4 * scale;
+  ctx.strokeRect(tx - 3 * scale, ty - th + 2 * scale, 6 * scale, th - 4 * scale);
+
+  // Glowing top spotlight orb
+  const orbY = ty - th - 4 * scale;
+  ctx.fillStyle = cat.accentColor;
+  ctx.beginPath();
+  ctx.arc(tx, orbY, (6.5 + Math.sin(t * 4) * 1.2) * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.6 * scale;
+  ctx.stroke();
+}
+
+function drawLightingBeams(
+  ctx: CanvasRenderingContext2D,
+  item: PlacedItem,
+  _cat: CatalogItem,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number
+) {
   const srcX = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * (tileW / 2);
   const srcY =
     originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * (tileH / 2) - 50 * scale;
-  const sweepX = originX + Math.sin(t * 1.9 + item.gridX) * 110 * scale;
-  const sweepY = originY + (130 + Math.cos(t * 1.4 + item.gridY) * 45) * scale;
+  const sweepX = originX + Math.sin(t * 1.25 + item.gridX) * 110 * scale;
+  const sweepY = originY + (130 + Math.cos(t * 0.95 + item.gridY) * 45) * scale;
 
   ctx.save();
   const grad = ctx.createLinearGradient(srcX, srcY, sweepX, sweepY);
-  grad.addColorStop(0, 'rgba(34, 211, 238, 0.38)');
+  grad.addColorStop(0, 'rgba(34, 211, 238, 0.36)');
   grad.addColorStop(1, 'rgba(236, 72, 153, 0)');
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.moveTo(srcX, srcY);
-  ctx.lineTo(sweepX - 30 * scale, sweepY);
-  ctx.lineTo(sweepX + 30 * scale, sweepY);
+  ctx.lineTo(sweepX - 28 * scale, sweepY);
+  ctx.lineTo(sweepX + 28 * scale, sweepY);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
 }
 
 /**
- * Draws the expressive cartoon Bartender (ponytail, blue vest) and DJ (purple headphones, leaning over decks).
+ * Draws the Chibi DJ with spiky magenta hair, cyan hoodie, and big DJ headphones behind the turntables
+ * (matching the DJ in IMG_1506_5bdf15ca.jpeg).
  */
 function drawIllustratedStaff(
   ctx: CanvasRenderingContext2D,
@@ -3848,61 +4719,77 @@ function drawIllustratedStaff(
 ) {
   const px = originX + (gx - gy) * (tileW / 2);
   const py = originY + (gx + gy) * (tileH / 2) - 16 * scale;
-  const bounce = Math.sin(t * 5) * 1.8 * scale;
+  // Calm, smooth DJ head-bob to the beat
+  const bounce = Math.sin(t * 2.8) * 1.4 * scale;
 
-  // Torso
+  // Chibi Hoodie Torso
   fillStrokeRoundedRect(
     ctx,
     px - 7.5 * scale,
     py - 19 * scale + bounce,
     15 * scale,
-    16 * scale,
-    4 * scale,
-    role === 'DJ' ? '#2563eb' : '#3b82f6',
+    15.5 * scale,
+    4.5 * scale,
+    role === 'DJ' ? '#22d3ee' : '#3b82f6',
     INK,
-    1.6 * scale
+    2.0 * scale
   );
 
-  // Head
-  ctx.fillStyle = role === 'DJ' ? '#d97706' : '#fcd34d';
+  // Oversized Chibi Head (1:1 head-to-body ratio)
+  const headY = py - 27.5 * scale + bounce;
+  const headR = 8.4 * scale;
+  ctx.fillStyle = '#f5cba7';
   ctx.beginPath();
-  ctx.arc(px, py - 26 * scale + bounce, 7 * scale, 0, Math.PI * 2);
+  ctx.arc(px, headY, headR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.6 * scale;
+  ctx.lineWidth = 2.1 * scale;
   ctx.stroke();
 
-  // Hair
-  ctx.fillStyle = '#1e1b4b';
+  // Spiky Magenta Punk DJ Hair (Matching DJ in IMG_1506_5bdf15ca.jpeg)
+  ctx.fillStyle = role === 'DJ' ? '#ec4899' : '#111116';
   ctx.beginPath();
-  ctx.arc(px, py - 28 * scale + bounce, 7.2 * scale, Math.PI, 0);
+  ctx.moveTo(px - 8 * scale, headY - 2 * scale);
+  ctx.lineTo(px - 9 * scale, headY - 10 * scale);
+  ctx.lineTo(px - 3 * scale, headY - 7 * scale);
+  ctx.lineTo(px, headY - 13 * scale);
+  ctx.lineTo(px + 4 * scale, headY - 7 * scale);
+  ctx.lineTo(px + 9 * scale, headY - 10 * scale);
+  ctx.lineTo(px + 8 * scale, headY - 2 * scale);
+  ctx.closePath();
   ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.8 * scale;
+  ctx.stroke();
 
-  // Eyes
+  // Crisp Dot Eyes
   ctx.fillStyle = INK;
   ctx.beginPath();
-  ctx.arc(px - 2.2 * scale, py - 25.5 * scale + bounce, 1.1 * scale, 0, Math.PI * 2);
-  ctx.arc(px + 2.2 * scale, py - 25.5 * scale + bounce, 1.1 * scale, 0, Math.PI * 2);
+  ctx.arc(px - 2.6 * scale, headY + 0.5 * scale, 1.4 * scale, 0, Math.PI * 2);
+  ctx.arc(px + 2.6 * scale, headY + 0.5 * scale, 1.4 * scale, 0, Math.PI * 2);
   ctx.fill();
 
   if (role === 'DJ') {
-    // Big Purple DJ Headphones
-    ctx.strokeStyle = '#a855f7';
-    ctx.lineWidth = 2.8 * scale;
+    // Oversized DJ Headphones with #111116 outline
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 3.2 * scale;
     ctx.beginPath();
-    ctx.arc(px, py - 26 * scale + bounce, 8.2 * scale, Math.PI, 0);
+    ctx.arc(px, headY, 9.2 * scale, Math.PI, 0);
     ctx.stroke();
-    ctx.fillStyle = '#c084fc';
+    ctx.fillStyle = '#a855f7';
     ctx.beginPath();
-    ctx.arc(px - 8 * scale, py - 25 * scale + bounce, 3 * scale, 0, Math.PI * 2);
-    ctx.arc(px + 8 * scale, py - 25 * scale + bounce, 3 * scale, 0, Math.PI * 2);
+    ctx.arc(px - 8.6 * scale, headY + 0.5 * scale, 3.2 * scale, 0, Math.PI * 2);
+    ctx.arc(px + 8.6 * scale, headY + 0.5 * scale, 3.2 * scale, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.stroke();
   }
 }
 
 /**
  * Draws an interactive hired Staff Member (Bartender, Bouncer, or Waiter) on the isometric grid
- * with a 60fps multi-limb Chibi walking stride animation, glowing dashed waypoint path trail,
+ * with a natural-speed 60fps multi-limb Chibi walking stride animation, glowing dashed waypoint path trail,
  * target station beacon ring, and role-specific props (cocktail shaker, sunglasses, drink tray).
  */
 function drawHiredStaffAgent(
@@ -3919,21 +4806,20 @@ function drawHiredStaffAgent(
   const px = originX + (staff.gridX - staff.gridY) * (tileW / 2);
   const py = originY + (staff.gridX + staff.gridY) * (tileH / 2);
   const isWalking = staff.path.length > 0;
-  const walkPhase = staff.walkCycle ?? t * 13 + (staff.gridX + staff.gridY) * 3.5;
+  const walkPhase = staff.walkCycle ?? t * 6.5 + (staff.gridX + staff.gridY) * 2.5;
 
-  // Stride cycle & vertical bounce
+  // Natural, unhurried stride cycle & gentle vertical bounce
   const strideSin = isWalking ? Math.sin(walkPhase) : 0;
   const strideCos = isWalking ? Math.cos(walkPhase) : 0;
   const bounce =
     (isWalking
-      ? Math.abs(strideSin) * 4.2
-      : Math.sin(t * 4.5 + staff.gridX) * 1.3) * scale;
+      ? Math.abs(strideSin) * 2.4
+      : Math.sin(t * 2.6 + staff.gridX) * 1.0) * scale;
 
-  // Compute isometric screen-space movement direction for body lean & gaze offset
   const fx = staff.facingX ?? 0;
   const fy = staff.facingY ?? 1;
   const isoDirX = fx - fy;
-  const leanX = isWalking ? Math.max(-2.6, Math.min(2.6, isoDirX * 1.8)) * scale : 0;
+  const leanX = isWalking ? Math.max(-1.8, Math.min(1.8, isoDirX * 1.2)) * scale : 0;
 
   const roleAccent =
     staff.role === 'BARTENDER'
@@ -3950,7 +4836,7 @@ function drawHiredStaffAgent(
     ctx.strokeStyle = roleAccent;
     ctx.lineWidth = 2 * scale;
     ctx.setLineDash([4 * scale, 4 * scale]);
-    ctx.lineDashOffset = -t * 28 * scale;
+    ctx.lineDashOffset = -t * 16 * scale;
     ctx.globalAlpha = 0.65;
     ctx.beginPath();
     ctx.moveTo(px, py);
@@ -3962,41 +4848,16 @@ function drawHiredStaffAgent(
     }
     ctx.stroke();
 
-    // Destination station beacon ring at the end of the path
     const destWp = staff.path[staff.path.length - 1];
     const destX = originX + (destWp.x - destWp.y) * (tileW / 2);
     const destY = originY + (destWp.x + destWp.y) * (tileH / 2);
-    const pulseRadius = (8.5 + Math.sin(t * 7) * 2.2) * scale;
+    const pulseRadius = (8.5 + Math.sin(t * 4) * 1.8) * scale;
     ctx.setLineDash([]);
     ctx.globalAlpha = 0.8;
     ctx.strokeStyle = roleAccent;
     ctx.lineWidth = 1.8 * scale;
     ctx.beginPath();
     ctx.ellipse(destX, destY, pulseRadius, pulseRadius * 0.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = roleAccent;
-    ctx.beginPath();
-    ctx.arc(destX, destY, 2.4 * scale, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Animated footstep dust/neon ripple puffs behind walking feet
-    const stepRipple = ((walkPhase % Math.PI) / Math.PI);
-    ctx.save();
-    ctx.strokeStyle = roleAccent;
-    ctx.globalAlpha = Math.max(0, 0.55 * (1 - stepRipple));
-    ctx.lineWidth = 1.3 * scale;
-    ctx.beginPath();
-    ctx.ellipse(
-      px - leanX * 0.8,
-      py + 1 * scale,
-      (4 + stepRipple * 8) * scale,
-      (2 + stepRipple * 4) * scale,
-      0,
-      0,
-      Math.PI * 2
-    );
     ctx.stroke();
     ctx.restore();
   }
@@ -4006,65 +4867,53 @@ function drawHiredStaffAgent(
     isRelocating
       ? '#22d3ee'
       : staff.role === 'BARTENDER'
-      ? 'rgba(56, 189, 248, 0.58)'
+      ? 'rgba(56, 189, 248, 0.55)'
       : staff.role === 'BOUNCER'
-      ? 'rgba(250, 204, 21, 0.58)'
-      : 'rgba(244, 114, 182, 0.58)';
+      ? 'rgba(250, 204, 21, 0.55)'
+      : 'rgba(244, 114, 182, 0.55)';
 
-  const shadowScale = isWalking ? 1 - Math.abs(strideSin) * 0.16 : 1;
-  ctx.fillStyle = 'rgba(15, 10, 30, 0.48)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
   ctx.beginPath();
-  ctx.ellipse(
-    px,
-    py,
-    10.5 * scale * shadowScale,
-    5.2 * scale * shadowScale,
-    0,
-    0,
-    Math.PI * 2
-  );
+  ctx.ellipse(px, py, 10 * scale, 5 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = ringColor;
-  ctx.lineWidth = (isRelocating ? 2.6 : 1.8) * scale;
+  ctx.lineWidth = (isRelocating ? 2.4 : 1.6) * scale;
   ctx.beginPath();
-  ctx.ellipse(px, py, 11.5 * scale, 5.8 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(px, py, 11 * scale, 5.5 * scale, 0, 0, Math.PI * 2);
   ctx.stroke();
 
   // 2. Animated Multi-Limb Walking Stride (Left & Right Legs + Sneakers)
-  const leftStrideX = strideSin * 4.6 * scale;
-  const rightStrideX = -strideSin * 4.6 * scale;
-  const leftFootLift = isWalking ? Math.max(0, strideCos) * 3.8 * scale : 0;
-  const rightFootLift = isWalking ? Math.max(0, -strideCos) * 3.8 * scale : 0;
+  const leftStrideX = strideSin * 3.2 * scale;
+  const rightStrideX = -strideSin * 3.2 * scale;
+  const leftFootLift = isWalking ? Math.max(0, strideCos) * 2.2 * scale : 0;
+  const rightFootLift = isWalking ? Math.max(0, -strideCos) * 2.2 * scale : 0;
 
   const hipY = py - 12.5 * scale - bounce;
-  const leftFootX = px - 3.4 * scale + leftStrideX;
+  const leftFootX = px - 3.2 * scale + leftStrideX;
   const leftFootY = py - 1.2 * scale - leftFootLift;
-  const rightFootX = px + 3.4 * scale + rightStrideX;
+  const rightFootX = px + 3.2 * scale + rightStrideX;
   const rightFootY = py - 1.2 * scale - rightFootLift;
 
-  // Thick Cel-Shaded Dark Outline Legs
   ctx.strokeStyle = INK;
   ctx.lineWidth = 4.6 * scale;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(px - 3.1 * scale + leanX * 0.4, hipY);
+  ctx.moveTo(px - 3.0 * scale + leanX * 0.4, hipY);
   ctx.lineTo(leftFootX, leftFootY);
-  ctx.moveTo(px + 3.1 * scale + leanX * 0.4, hipY);
+  ctx.moveTo(px + 3.0 * scale + leanX * 0.4, hipY);
   ctx.lineTo(rightFootX, rightFootY);
   ctx.stroke();
 
-  // Inner Pant Fill
   ctx.strokeStyle = '#1e293b';
   ctx.lineWidth = 2.6 * scale;
   ctx.beginPath();
-  ctx.moveTo(px - 3.1 * scale + leanX * 0.4, hipY);
+  ctx.moveTo(px - 3.0 * scale + leanX * 0.4, hipY);
   ctx.lineTo(leftFootX, leftFootY);
-  ctx.moveTo(px + 3.1 * scale + leanX * 0.4, hipY);
+  ctx.moveTo(px + 3.0 * scale + leanX * 0.4, hipY);
   ctx.lineTo(rightFootX, rightFootY);
   ctx.stroke();
 
-  // Stylized Chibi Sneakers at Each Foot
   for (const foot of [
     { x: leftFootX, y: leftFootY },
     { x: rightFootX, y: rightFootY },
@@ -4078,11 +4927,11 @@ function drawHiredStaffAgent(
       1.3 * scale,
       '#f8fafc',
       INK,
-      1.3 * scale
+      1.4 * scale
     );
   }
 
-  // 3. Role-Specific Chibi Torso / Uniform with Directional Walking Lean
+  // 3. Role-Specific Chibi Torso / Uniform
   const torsoW = (staff.role === 'BOUNCER' ? 16.5 : 14.5) * scale;
   const torsoX = px - torsoW / 2 + leanX;
   const torsoY = py - 26.5 * scale - bounce;
@@ -4095,15 +4944,12 @@ function drawHiredStaffAgent(
     4.5 * scale,
     staff.uniformColor,
     INK,
-    2.0 * scale
+    2.1 * scale
   );
 
-  // Opposite Arm Swing during Walking + Stylized Blocky Chibi Hands
-  const armSwing = isWalking ? -strideSin * 4.2 * scale : 0;
+  const armSwing = isWalking ? -strideSin * 2.8 * scale : 0;
 
-  // Role uniform accents (Vest lapels / Gold security badge / Waiter apron)
   if (staff.role === 'BARTENDER') {
-    // Bartender dark apron
     fillStrokeRoundedRect(
       ctx,
       px - 4.5 * scale + leanX,
@@ -4113,9 +4959,8 @@ function drawHiredStaffAgent(
       1.5 * scale,
       '#1e293b',
       INK,
-      1.2 * scale
+      1.3 * scale
     );
-    // Left swinging arm + blocky hand
     const leftHandX = px - 9 * scale + leanX + armSwing;
     const leftHandY = py - 17 * scale - bounce;
     ctx.strokeStyle = staff.uniformColor;
@@ -4133,11 +4978,11 @@ function drawHiredStaffAgent(
       1.2 * scale,
       '#f5cba7',
       INK,
-      1.3 * scale
+      1.4 * scale
     );
 
-    // Right arm holding Silver Cocktail Shaker
-    const shakeOffset = (isWalking ? strideCos * 2.2 : Math.sin(t * 14) * 2.5) * scale;
+    // Smooth cocktail shaker motion
+    const shakeOffset = (isWalking ? strideCos * 1.4 : Math.sin(t * 5.5) * 1.8) * scale;
     fillStrokeRoundedRect(
       ctx,
       px + 7.5 * scale + leanX - armSwing * 0.4,
@@ -4147,17 +4992,15 @@ function drawHiredStaffAgent(
       2 * scale,
       '#e2e8f0',
       INK,
-      1.4 * scale
+      1.5 * scale
     );
   } else if (staff.role === 'BOUNCER') {
-    // Gold Security Shield Pin
     ctx.fillStyle = '#facc15';
     ctx.beginPath();
     ctx.arc(px + 3.8 * scale + leanX, py - 22.5 * scale - bounce, 2.2 * scale, 0, Math.PI * 2);
     ctx.fill();
 
     if (isWalking) {
-      // Dynamic security patrol swinging arms with blocky Chibi hands
       for (const side of [-1, 1]) {
         const handX = px + side * 9.5 * scale + leanX + side * armSwing;
         const handY = py - 16.5 * scale - bounce - side * armSwing * 0.25;
@@ -4176,11 +5019,10 @@ function drawHiredStaffAgent(
           1.3 * scale,
           '#f5cba7',
           INK,
-          1.3 * scale
+          1.4 * scale
         );
       }
     } else {
-      // Crossed muscular arms at station
       ctx.strokeStyle = '#1e1b4b';
       ctx.lineWidth = 3.8 * scale;
       ctx.beginPath();
@@ -4189,7 +5031,6 @@ function drawHiredStaffAgent(
       ctx.stroke();
     }
   } else if (staff.role === 'WAITER') {
-    // Waiter white bistro apron
     fillStrokeRoundedRect(
       ctx,
       px - 4.5 * scale + leanX,
@@ -4199,10 +5040,9 @@ function drawHiredStaffAgent(
       1.5 * scale,
       '#f8fafc',
       INK,
-      1.2 * scale
+      1.3 * scale
     );
 
-    // Left counter-balancing arm + blocky Chibi hand while walking
     const leftHandX = px - 8.5 * scale + leanX + armSwing;
     const leftHandY = py - 17 * scale - bounce;
     ctx.strokeStyle = staff.uniformColor;
@@ -4220,10 +5060,9 @@ function drawHiredStaffAgent(
       1.2 * scale,
       '#f5cba7',
       INK,
-      1.2 * scale
+      1.3 * scale
     );
 
-    // Extended Serving Arm + Stabilized Silver Tray
     const trayX = px + 11.5 * scale + leanX - armSwing * 0.25;
     const trayY = py - 25 * scale - bounce * 0.75;
     ctx.strokeStyle = staff.uniformColor;
@@ -4238,10 +5077,9 @@ function drawHiredStaffAgent(
     ctx.ellipse(trayX, trayY, 6.5 * scale, 3 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.3 * scale;
+    ctx.lineWidth = 1.4 * scale;
     ctx.stroke();
 
-    // Glowing Drink Glass on Waiter's Tray
     fillStrokeRoundedRect(
       ctx,
       trayX - 2.2 * scale,
@@ -4251,26 +5089,25 @@ function drawHiredStaffAgent(
       1.2 * scale,
       staff.carryingDrinkColor || '#22d3ee',
       INK,
-      1.1 * scale
+      1.2 * scale
     );
   }
 
-  // 4. Oversized Chibi Head & Expressive Face (1:1 Chibi head-to-torso ratio)
-  const headX = px + leanX * 1.15;
+  // 4. Oversized Chibi Head & Expressive Face (1:1 Chibi head-to-body ratio)
+  const headX = px + leanX * 1.1;
   const headY = py - 35 * scale - bounce;
-  const headR = 8.4 * scale;
+  const headR = 8.8 * scale;
 
   ctx.fillStyle = '#f5cba7';
   ctx.beginPath();
   ctx.arc(headX, headY, headR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.1 * scale;
+  ctx.lineWidth = 2.2 * scale;
   ctx.stroke();
 
-  const gazeShift = Math.max(-1.6, Math.min(1.6, isoDirX * 1.1)) * scale;
+  const gazeShift = Math.max(-1.4, Math.min(1.4, isoDirX * 0.9)) * scale;
   if (staff.role === 'BOUNCER') {
-    // Cool dark Bouncer Sunglasses
     fillStrokeRoundedRect(
       ctx,
       headX - 6.2 * scale + gazeShift * 0.5,
@@ -4280,75 +5117,54 @@ function drawHiredStaffAgent(
       1.2 * scale,
       '#090518',
       '#38bdf8',
-      1.2 * scale
+      1.3 * scale
     );
   } else {
-    // Expressive round black Chibi eyes with white specular dot
     ctx.fillStyle = INK;
     ctx.beginPath();
-    ctx.arc(headX - 2.8 * scale + gazeShift, headY - 0.3 * scale, 1.6 * scale, 0, Math.PI * 2);
-    ctx.arc(headX + 2.8 * scale + gazeShift, headY - 0.3 * scale, 1.6 * scale, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(headX - 3.2 * scale + gazeShift, headY - 0.8 * scale, 0.55 * scale, 0, Math.PI * 2);
-    ctx.arc(headX + 2.4 * scale + gazeShift, headY - 0.8 * scale, 0.55 * scale, 0, Math.PI * 2);
+    ctx.arc(headX - 2.8 * scale + gazeShift, headY - 0.2 * scale, 1.55 * scale, 0, Math.PI * 2);
+    ctx.arc(headX + 2.8 * scale + gazeShift, headY - 0.2 * scale, 1.55 * scale, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Bold Outline-Rich Hair
+  // Stylish Hair with #111116 outline
   ctx.fillStyle = staff.hairColor;
   ctx.beginPath();
-  ctx.arc(headX, headY - 1.8 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
+  ctx.arc(headX, headY - 2 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.9 * scale;
+  ctx.lineWidth = 2.0 * scale;
   ctx.stroke();
 
-  // 5. Role Tag Pill & Walking Transition Status Indicator Overhead
-  const roleTag = isWalking
-    ? 'WALK'
-    : staff.role === 'BARTENDER'
-    ? 'MIX'
-    : staff.role === 'BOUNCER'
-    ? 'SEC'
-    : 'WAIT';
-  const badgeColor = isWalking
-    ? '#0d9488'
-    : staff.role === 'BARTENDER'
-    ? '#0284c7'
-    : staff.role === 'BOUNCER'
-    ? '#4c1d95'
-    : '#be185d';
+  // Circular Cocktail / Status Bubble above Bartender or Waiter (matching circular purple cocktail icons in IMG_1506_5bdf15ca.jpeg)
+  const bubbleY = headY - 17 * scale;
+  ctx.fillStyle = staff.role === 'BOUNCER' ? '#facc15' : '#9333ea';
+  ctx.beginPath();
+  ctx.arc(headX, bubbleY, 6.2 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.6 * scale;
+  ctx.stroke();
 
-  fillStrokeRoundedRect(
-    ctx,
-    headX - 13.5 * scale,
-    headY - 19 * scale,
-    27 * scale,
-    10.5 * scale,
-    3.5 * scale,
-    badgeColor,
-    isWalking ? '#5eead4' : '#ffffff',
-    1.2 * scale
-  );
   ctx.fillStyle = '#ffffff';
-  ctx.font = `800 ${Math.max(7, Math.round(7.5 * scale))}px "JetBrains Mono", monospace`;
+  ctx.font = `900 ${Math.max(7, Math.round(7.5 * scale))}px "Outfit", sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(roleTag, headX, headY - 11.5 * scale);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(staff.role === 'BOUNCER' ? '★' : '🍸', headX, bubbleY);
 
   ctx.restore();
 }
 
 /**
- * Draws the Chibi-style 2.5D patrons (matching image_5.png & IMG_1503.jpeg):
- * - Oversized expressive heads nearly equal to torso height (1:1 Chibi proportion)
- * - Round black eyes, omitted nose, and stylized blocky hands
- * - Youth-culture streetwear variety: baseball caps, hoodies, patterned vests, hair bows, and jeans
- * - Thick dark hand-drawn cel-shaded outlines
+ * Draws the 2.5D Chibi Characters (Guests, Dancers, VIPs) matching Nightclub City: Neon (IMG_1506_5bdf15ca.jpeg):
+ * - Large rounded heads (1:1 head-to-body ratio), thick #111116 black outlines, dot eyes, varied skin tones
+ * - Distinct stylish hairstyles: voluminous Afros, space buns, spiky neon hair, baseball caps, knit beanies, ponytails
+ * - Trendy streetwear: hoodies, patterned vests, club dresses, sneakers, and futuristic neon visor glasses
+ * - Natural, unhurried walking stride & smooth beat-bobbing dance groove (no frantic shaking!)
+ * - Crisp circular white/gold/purple overhead bubbles with black outlines (music notes, drink glasses, $, crowns)
+ *   plus the signature dark floating quote tooltip ("MIA H. — I think I'm in love.")
  */
-function drawIllustratedCharacter(
+function drawCharacter(
   ctx: CanvasRenderingContext2D,
   guest: GuestAgent,
   gx: number,
@@ -4364,192 +5180,218 @@ function drawIllustratedCharacter(
   const px = originX + (gx - gy) * (tileW / 2);
   const py = originY + (gx + gy) * (tileH / 2);
 
-  const isDancing = guest.state === 'DANCING' || guest.state === 'DANCER_MOVES';
+  const isWalking = guest.path.length > 0;
+  const isDancing =
+    !isWalking && (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES');
   const isFreestyleMove = guest.state === 'DANCER_MOVES';
   const activeMove: DancerMoveVariant = guest.danceMove || 'SHUFFLE_STEP';
 
-  // BPM-synchronized angular frequency: 1 full beat cycle per (60 / clubBpm) seconds
-  const beatHz = Math.max(90, Math.min(180, clubBpm)) / 60;
-  const phase =
-    t * beatHz * Math.PI * 2 + (guest.dancePhaseOffset ?? (gx * 2.7 + gy * 1.9));
+  // Deterministic character appearance seed from guest ID & name
+  const seed =
+    guest.name.charCodeAt(0) * 13 +
+    (guest.name.charCodeAt(1) || 7) * 7 +
+    (guest.id.charCodeAt(guest.id.length - 1) || 3);
+  const skinTone = SKIN_TONES[seed % SKIN_TONES.length];
+  const hairVariant = seed % 6; // 0: Cap, 1: Voluminous Afro, 2: Spiky Neon, 3: Knit Beanie, 4: Double Buns, 5: Sleek Bob
+  const hasNeonVisor = seed % 7 === 0;
+  const isDressOutfit = seed % 4 === 2;
+
+  // Smooth, relaxed half-tempo musical groove angular frequency (~2.6 rad/sec at 124 BPM -> ~0.83 gentle bobs/sec)
+  const grooveOmega = (Math.max(90, Math.min(160, clubBpm)) / 60) * Math.PI * 0.82;
+  const phase = t * grooveOmega + (guest.dancePhaseOffset ?? (gx * 2.1 + gy * 1.7));
   const beatSin = Math.sin(phase);
   const beatCos = Math.cos(phase);
   const halfBeatSin = Math.sin(phase * 0.5);
 
-  // Move-specific kinematics synchronized to the music BPM
-  let bounce = Math.sin(t * 3 + gx) * 1.1 * scale;
+  // Walking kinematics (calm, natural stride when moving along path)
+  const walkPhase = t * 5.8 + seed;
+  const walkSin = isWalking ? Math.sin(walkPhase) : 0;
+  const walkCos = isWalking ? Math.cos(walkPhase) : 0;
+
+  let bounce = (isWalking ? Math.abs(walkSin) * 1.8 : Math.sin(t * 2.2 + gx) * 0.8) * scale;
   let swayX = 0;
   let bodyScaleX = 1;
-  let leftLegDx = 0;
-  let rightLegDx = 0;
-  let leftLegLift = 0;
-  let rightLegLift = 0;
-  let leftHandOffsetX = -10.5 * scale;
+  let leftLegDx = isWalking ? walkSin * 2.6 * scale : 0;
+  let rightLegDx = isWalking ? -walkSin * 2.6 * scale : 0;
+  let leftLegLift = isWalking ? Math.max(0, walkCos) * 1.8 * scale : 0;
+  let rightLegLift = isWalking ? Math.max(0, -walkCos) * 1.8 * scale : 0;
+  let leftHandOffsetX = (-9.5 + (isWalking ? -walkSin * 2.2 : 0)) * scale;
   let leftHandOffsetY = -16.5 * scale;
-  let rightHandOffsetX = 7.2 * scale;
+  let rightHandOffsetX = (6.5 + (isWalking ? walkSin * 2.2 : 0)) * scale;
   let rightHandOffsetY = -16.5 * scale;
   let headTiltX = 0;
-  let moveRingColor = '#22d3ee';
+  let moveRingColor = 'rgba(255, 255, 255, 0.35)';
 
   if (isDancing) {
-    if (!isFreestyleMove) {
-      // Basic groove bounce
-      bounce = Math.abs(beatSin) * 5.2 * scale;
-      const armWave = beatCos * 5.2 * scale;
-      leftHandOffsetY -= armWave;
-      rightHandOffsetY += armWave;
-    } else if (activeMove === 'SHUFFLE_STEP') {
-      // Melbourne Shuffle: lateral slide, alternating high knee kicks & counter-arm swing
-      bounce = Math.abs(beatSin) * 4.8 * scale;
-      swayX = halfBeatSin * 4.5 * scale;
-      leftLegDx = beatSin * 3.8 * scale;
-      rightLegDx = -beatSin * 3.8 * scale;
-      leftLegLift = Math.max(0, beatSin) * 4.2 * scale;
-      rightLegLift = Math.max(0, -beatSin) * 4.2 * scale;
-      leftHandOffsetX = (-11.2 + beatCos * 2.4) * scale;
-      leftHandOffsetY = (-17.5 - beatSin * 4.2) * scale;
-      rightHandOffsetX = (7.8 - beatCos * 2.4) * scale;
-      rightHandOffsetY = (-17.5 + beatSin * 4.2) * scale;
-      headTiltX = beatSin * 1.6 * scale;
+    if (!isFreestyleMove || activeMove === 'SHUFFLE_STEP') {
+      // Smooth side-to-side club shuffle & gentle head bob
+      bounce = Math.abs(beatSin) * 2.4 * scale;
+      swayX = halfBeatSin * 2.2 * scale;
+      leftLegDx = beatSin * 1.8 * scale;
+      rightLegDx = -beatSin * 1.8 * scale;
+      leftLegLift = Math.max(0, beatSin) * 1.8 * scale;
+      rightLegLift = Math.max(0, -beatSin) * 1.8 * scale;
+      leftHandOffsetX = (-10.2 + beatCos * 1.4) * scale;
+      leftHandOffsetY = (-17.5 - beatSin * 2.2) * scale;
+      rightHandOffsetX = (7.0 - beatCos * 1.4) * scale;
+      rightHandOffsetY = (-17.5 + beatSin * 2.2) * scale;
+      headTiltX = beatSin * 1.1 * scale;
       moveRingColor = '#22d3ee';
     } else if (activeMove === 'FIST_PUMP') {
-      // High-energy Bass Fist Pump: deep knee bounce + right/left fist pumping high overhead on the beat
-      bounce = Math.pow(Math.abs(beatSin), 0.75) * 6.8 * scale;
-      swayX = beatCos * 1.8 * scale;
-      const pumpUp = Math.max(0, beatSin) * 14.5 * scale;
-      const altPumpUp = Math.max(0, -beatSin) * 11.5 * scale;
-      leftHandOffsetX = -10.8 * scale;
-      leftHandOffsetY = -19.5 * scale - altPumpUp;
-      rightHandOffsetX = 8.4 * scale;
-      rightHandOffsetY = -22.5 * scale - pumpUp;
-      headTiltX = beatCos * 2.1 * scale;
+      // Relaxed rhythmic bass fist pump
+      bounce = Math.abs(beatSin) * 2.8 * scale;
+      swayX = beatCos * 1.2 * scale;
+      const pumpUp = Math.max(0, beatSin) * 6.5 * scale;
+      const altPumpUp = Math.max(0, -beatSin) * 4.5 * scale;
+      leftHandOffsetX = -10.0 * scale;
+      leftHandOffsetY = -18.5 * scale - altPumpUp;
+      rightHandOffsetX = 7.6 * scale;
+      rightHandOffsetY = -20.5 * scale - pumpUp;
+      headTiltX = beatCos * 1.2 * scale;
       moveRingColor = '#f43f5e';
     } else if (activeMove === 'SPIN_TWIRL') {
-      // 360 Spin Twirl: horizontal foreshortening (cos spin), wide outstretched arms & twirl lift
-      bounce = (2.5 + Math.abs(beatSin) * 5.2) * scale;
-      bodyScaleX = 0.52 + 0.48 * Math.abs(beatCos);
-      swayX = beatSin * 3.2 * scale;
-      const armSpan = beatCos * 12.5 * scale;
-      leftHandOffsetX = -3.5 * scale - armSpan;
-      leftHandOffsetY = (-21.5 + beatSin * 3.2) * scale;
-      rightHandOffsetX = 0.5 * scale + armSpan;
-      rightHandOffsetY = (-21.5 - beatSin * 3.2) * scale;
-      leftLegLift = Math.max(0, beatSin) * 3.5 * scale;
-      rightLegLift = Math.max(0, -beatSin) * 3.5 * scale;
-      headTiltX = beatSin * 2.4 * scale;
+      // Smooth groove turn & arm sway
+      bounce = (1.2 + Math.abs(beatSin) * 2.4) * scale;
+      bodyScaleX = 0.76 + 0.24 * Math.abs(beatCos);
+      swayX = beatSin * 2.0 * scale;
+      const armSpan = beatCos * 4.5 * scale;
+      leftHandOffsetX = -6.5 * scale - armSpan;
+      leftHandOffsetY = (-19.5 + beatSin * 1.8) * scale;
+      rightHandOffsetX = 3.5 * scale + armSpan;
+      rightHandOffsetY = (-19.5 - beatSin * 1.8) * scale;
+      headTiltX = beatSin * 1.4 * scale;
       moveRingColor = '#e879f9';
     } else if (activeMove === 'BREAKDANCE_WAVE') {
-      // Electro Body-Wave: sinusoidal torso ripple, wide stance & liquid wave arms
-      bounce = Math.abs(beatCos) * 4.2 * scale;
-      swayX = Math.sin(phase) * 5.2 * scale;
-      leftLegDx = -1.8 * scale;
-      rightLegDx = 1.8 * scale;
-      leftHandOffsetX = (-13.5 + beatCos * 2.2) * scale;
-      leftHandOffsetY = (-21 + Math.sin(phase - 0.9) * 7.5) * scale;
-      rightHandOffsetX = (10.2 + beatCos * 2.2) * scale;
-      rightHandOffsetY = (-21 + Math.sin(phase + 0.9) * 7.5) * scale;
-      headTiltX = Math.sin(phase + 0.6) * 2.8 * scale;
+      // Smooth electro arm wave
+      bounce = Math.abs(beatCos) * 2.2 * scale;
+      swayX = beatSin * 2.6 * scale;
+      leftHandOffsetX = (-11.0 + beatCos * 1.4) * scale;
+      leftHandOffsetY = (-19.5 + Math.sin(phase - 0.8) * 3.8) * scale;
+      rightHandOffsetX = (8.0 + beatCos * 1.4) * scale;
+      rightHandOffsetY = (-19.5 + Math.sin(phase + 0.8) * 3.8) * scale;
+      headTiltX = Math.sin(phase + 0.5) * 1.5 * scale;
       moveRingColor = '#a855f7';
     } else if (activeMove === 'CYBER_JUMP') {
-      // High-BPM Cyber Rave Jump: explosive vertical leap, दोनों hands raised in V-shape & tucked legs
+      // Upbeat two-hand groove bounce
       const jumpPeak = Math.max(0, beatSin);
-      bounce = (jumpPeak * 10.5 + Math.abs(beatCos) * 2.2) * scale;
-      leftLegLift = jumpPeak * 4.8 * scale;
-      rightLegLift = jumpPeak * 4.8 * scale;
-      leftLegDx = -jumpPeak * 2.2 * scale;
-      rightLegDx = jumpPeak * 2.2 * scale;
-      leftHandOffsetX = (-12.5 - jumpPeak * 2.5) * scale;
-      leftHandOffsetY = (-26.5 - jumpPeak * 7.5) * scale;
-      rightHandOffsetX = (9.2 + jumpPeak * 2.5) * scale;
-      rightHandOffsetY = (-26.5 - jumpPeak * 7.5) * scale;
+      bounce = (jumpPeak * 3.6 + Math.abs(beatCos) * 1.0) * scale;
+      leftLegLift = jumpPeak * 2.0 * scale;
+      rightLegLift = jumpPeak * 2.0 * scale;
+      leftHandOffsetX = (-10.8 - jumpPeak * 1.2) * scale;
+      leftHandOffsetY = (-22.0 - jumpPeak * 3.8) * scale;
+      rightHandOffsetX = (7.8 + jumpPeak * 1.2) * scale;
+      rightHandOffsetY = (-22.0 - jumpPeak * 3.8) * scale;
       moveRingColor = '#4ade80';
     }
   }
 
-  // Deterministic streetwear variant hash per patron name
-  const styleIdx =
-    (guest.name.charCodeAt(0) + (guest.name.charCodeAt(1) || 0)) % 4;
-
-  // Floor shadow & BPM-pulsing neon dance ring for DANCER_MOVES
-  if (isFreestyleMove) {
-    const ringPulse = (11.5 + Math.abs(beatSin) * 4.5) * scale;
-    ctx.save();
-    ctx.strokeStyle = moveRingColor;
-    ctx.lineWidth = 1.8 * scale;
-    ctx.globalAlpha = 0.68;
-    ctx.beginPath();
-    ctx.ellipse(px + swayX * 0.4, py, ringPulse, ringPulse * 0.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  ctx.fillStyle = 'rgba(15, 10, 30, 0.45)';
+  // 0. Subtle Circular Floor Selection / Vibe Ring & Ground Shadow (Matching rings under patrons in IMG_1506_5bdf15ca.jpeg)
+  ctx.save();
+  ctx.strokeStyle = guest.isCelebrity ? '#facc15' : moveRingColor;
+  ctx.lineWidth = 1.4 * scale;
+  ctx.globalAlpha = isDancing ? 0.52 : 0.28;
   ctx.beginPath();
-  ctx.ellipse(
-    px + swayX * 0.5,
-    py,
-    Math.max(5.5, 9.5 - bounce * 0.25 / scale) * scale,
-    Math.max(2.8, 4.8 - bounce * 0.12 / scale) * scale,
-    0,
-    0,
-    Math.PI * 2
-  );
+  ctx.ellipse(px + swayX * 0.4, py, 10.5 * scale, 5.2 * scale, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.46)';
+  ctx.beginPath();
+  ctx.ellipse(px + swayX * 0.5, py, 8.8 * scale, 4.4 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const torsoW = 14.4 * scale * bodyScaleX;
+  const torsoW = 14.0 * scale * bodyScaleX;
   const cx = px + swayX;
 
-  // 1. Jeans & Streetwear Sneakers (Thick dark hand-drawn outlines + move-driven leg stride/lift)
+  // 1. Legs & Trendy Streetwear Sneakers with Thick #111116 Outlines
+  const leftLegX = cx - 4.8 * scale * bodyScaleX + leftLegDx;
+  const leftLegY = py - 11.2 * scale - bounce * 0.4 - leftLegLift;
+  const rightLegX = cx + 0.8 * scale * bodyScaleX + rightLegDx;
+  const rightLegY = py - 11.2 * scale - bounce * 0.4 - rightLegLift;
+  const legW = 4.1 * scale * Math.max(0.75, bodyScaleX);
+
   fillStrokeRoundedRect(
     ctx,
-    cx - 5.2 * scale * bodyScaleX + leftLegDx,
-    py - 11.5 * scale - bounce * 0.45 - leftLegLift,
-    4.4 * scale * Math.max(0.7, bodyScaleX),
-    10.5 * scale,
-    2 * scale,
+    leftLegX,
+    leftLegY,
+    legW,
+    9.5 * scale,
+    1.8 * scale,
     guest.pantsColor,
     INK,
-    1.8 * scale
+    1.9 * scale
   );
   fillStrokeRoundedRect(
     ctx,
-    cx + 0.8 * scale * bodyScaleX + rightLegDx,
-    py - 11.5 * scale - bounce * 0.45 - rightLegLift,
-    4.4 * scale * Math.max(0.7, bodyScaleX),
-    10.5 * scale,
-    2 * scale,
+    rightLegX,
+    rightLegY,
+    legW,
+    9.5 * scale,
+    1.8 * scale,
     guest.pantsColor,
     INK,
-    1.8 * scale
+    1.9 * scale
   );
 
-  // 2. Arms & Stylized Blocky Hands (image_5.png Chibi guideline + randomized BPM move poses)
+  // White/Neon Streetwear Sneakers
+  fillStrokeRoundedRect(
+    ctx,
+    leftLegX - 0.5 * scale,
+    leftLegY + 7.5 * scale,
+    legW + 1.2 * scale,
+    3.0 * scale,
+    1.2 * scale,
+    '#f8fafc',
+    INK,
+    1.5 * scale
+  );
+  fillStrokeRoundedRect(
+    ctx,
+    rightLegX - 0.5 * scale,
+    rightLegY + 7.5 * scale,
+    legW + 1.2 * scale,
+    3.0 * scale,
+    1.2 * scale,
+    '#f8fafc',
+    INK,
+    1.5 * scale
+  );
+
+  // 2. Arms & Stylized Chibi Hands
   const leftHandX = cx + leftHandOffsetX;
   const leftHandY = py + leftHandOffsetY - bounce;
   const rightHandX = cx + rightHandOffsetX;
   const rightHandY = py + rightHandOffsetY - bounce;
 
-  ctx.strokeStyle = guest.shirtColor;
-  ctx.lineWidth = 3.4 * scale;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 5.2 * scale;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(cx - 6 * scale * bodyScaleX, py - 21 * scale - bounce);
-  ctx.lineTo(leftHandX + 1.8 * scale, leftHandY + 1.8 * scale);
-  ctx.moveTo(cx + 6 * scale * bodyScaleX, py - 21 * scale - bounce);
-  ctx.lineTo(rightHandX + 1.8 * scale, rightHandY + 1.8 * scale);
+  ctx.moveTo(cx - 5.8 * scale * bodyScaleX, py - 21 * scale - bounce);
+  ctx.lineTo(leftHandX + 1.6 * scale, leftHandY + 1.6 * scale);
+  ctx.moveTo(cx + 5.8 * scale * bodyScaleX, py - 21 * scale - bounce);
+  ctx.lineTo(rightHandX + 1.6 * scale, rightHandY + 1.6 * scale);
   ctx.stroke();
 
-  // Stylized Blocky Hands
+  ctx.strokeStyle = guest.shirtColor;
+  ctx.lineWidth = 3.0 * scale;
+  ctx.beginPath();
+  ctx.moveTo(cx - 5.8 * scale * bodyScaleX, py - 21 * scale - bounce);
+  ctx.lineTo(leftHandX + 1.6 * scale, leftHandY + 1.6 * scale);
+  ctx.moveTo(cx + 5.8 * scale * bodyScaleX, py - 21 * scale - bounce);
+  ctx.lineTo(rightHandX + 1.6 * scale, rightHandY + 1.6 * scale);
+  ctx.stroke();
+
   fillStrokeRoundedRect(
     ctx,
     leftHandX,
     leftHandY,
     3.6 * scale,
     3.6 * scale,
-    1.1 * scale,
-    '#f5cba7',
+    1.2 * scale,
+    skinTone,
     INK,
-    1.5 * scale
+    1.6 * scale
   );
   fillStrokeRoundedRect(
     ctx,
@@ -4557,167 +5399,279 @@ function drawIllustratedCharacter(
     rightHandY,
     3.6 * scale,
     3.6 * scale,
-    1.1 * scale,
-    '#f5cba7',
+    1.2 * scale,
+    skinTone,
     INK,
-    1.5 * scale
+    1.6 * scale
   );
 
-  // 3. Chibi Torso (14px height to match oversized 8.8px-radius Chibi head)
+  // 3. Chibi Streetwear Torso (Hoodie, Vest, or Stylish Club Dress — 14px height to match 1:1 Chibi head!)
   fillStrokeRoundedRect(
     ctx,
     cx - torsoW * 0.5,
-    py - 25 * scale - bounce,
+    py - 24.5 * scale - bounce,
     torsoW,
-    14.5 * scale,
+    (isDressOutfit ? 16.0 : 14.0) * scale,
     4.5 * scale,
     guest.shirtColor,
     INK,
-    2.1 * scale
+    2.2 * scale
   );
 
-  // Streetwear Patterned Vest / Hoodie Detail
-  if (styleIdx === 1) {
-    // Open Patterned Vest over contrasting tee
+  // Streetwear Vest / Graphic Hoodie Accents
+  if (seed % 3 === 1) {
+    // Contrasting center tee / open jacket placket
     fillStrokeRoundedRect(
       ctx,
-      cx - 2.6 * scale * bodyScaleX,
-      py - 24.5 * scale - bounce,
-      5.2 * scale * bodyScaleX,
-      13.5 * scale,
-      1.5 * scale,
-      '#fef08a',
+      cx - 2.4 * scale * bodyScaleX,
+      py - 24.0 * scale - bounce,
+      4.8 * scale * bodyScaleX,
+      13.0 * scale,
+      1.4 * scale,
+      '#f8fafc',
       INK,
-      1.2 * scale
+      1.3 * scale
     );
-  } else if (styleIdx === 2) {
-    // Graphic Diamond Emblem on Hoodie
-    ctx.fillStyle = '#22d3ee';
-    ctx.beginPath();
-    ctx.moveTo(cx, py - 21.5 * scale - bounce);
-    ctx.lineTo(cx + 3 * scale * bodyScaleX, py - 18 * scale - bounce);
-    ctx.lineTo(cx, py - 14.5 * scale - bounce);
-    ctx.lineTo(cx - 3 * scale * bodyScaleX, py - 18 * scale - bounce);
-    ctx.closePath();
-    ctx.fill();
+  } else if (seed % 3 === 2) {
+    // Neon chest stripe
+    ctx.fillStyle = '#fde047';
+    ctx.fillRect(
+      cx - 4.5 * scale * bodyScaleX,
+      py - 19.5 * scale - bounce,
+      9 * scale * bodyScaleX,
+      2.2 * scale
+    );
   }
 
-  // 4. Oversized Expressive Chibi Head (Radius 8.6 * scale ≈ torso height, omitted nose, thick dark outline)
+  // 4. Oversized Rounded Chibi Head (1:1 head-to-body ratio, radius 9.0 * scale, thick #111116 outline)
   const headX = cx + headTiltX;
-  const headY = py - 34 * scale - bounce;
-  const headR = 8.6 * scale;
-  ctx.fillStyle = '#f5cba7';
+  const headY = py - 34.2 * scale - bounce;
+  const headR = 9.0 * scale;
+
+  // If Voluminous Afro (hairVariant === 1), draw the back Afro puff Halo behind the head first
+  if (hairVariant === 1) {
+    ctx.fillStyle = guest.hairColor;
+    ctx.beginPath();
+    ctx.arc(headX, headY - 2.2 * scale, headR + 3.6 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2.3 * scale;
+    ctx.stroke();
+  }
+
+  // Rounded Chibi Face
+  ctx.fillStyle = skinTone;
   ctx.beginPath();
   ctx.arc(headX, headY, headR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.2 * scale;
+  ctx.lineWidth = 2.3 * scale;
   ctx.stroke();
 
-  // Bold Outline-Rich Hair
-  ctx.fillStyle = guest.hairColor;
-  ctx.beginPath();
-  ctx.arc(headX, headY - 1.8 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
-  ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2 * scale;
-  ctx.stroke();
-
-  // Round Black Chibi Eyes (facing isometric diagonal, omitted nose)
-  const eyeShift = headTiltX * 0.35;
-  ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.arc(headX - 2.8 * scale + eyeShift, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
-  ctx.arc(headX + 2.8 * scale + eyeShift, headY + 0.5 * scale, 1.55 * scale, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Tiny white eye catchlight
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(headX - 3.2 * scale + eyeShift, headY, 0.55 * scale, 0, Math.PI * 2);
-  ctx.arc(headX + 2.4 * scale + eyeShift, headY, 0.55 * scale, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 5. Youth Streetwear Headgear (Baseball Caps, Hair Bows, Beanies)
-  if (styleIdx === 0) {
-    // Streetwear Baseball Cap with sideways/diagonal visor
+  // 5. Distinct Stylish Hairstyles & Headgear (Afros, Double Buns, Spiky Hair, Caps, Beanies)
+  if (hairVariant === 0) {
+    // Trendy Streetwear Baseball Cap with Visor
     ctx.fillStyle = '#22d3ee';
     ctx.beginPath();
-    ctx.arc(headX, headY - 2.5 * scale, headR + 0.4 * scale, Math.PI, 0);
+    ctx.arc(headX, headY - 2 * scale, headR + 0.4 * scale, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.8 * scale;
+    ctx.lineWidth = 2.0 * scale;
     ctx.stroke();
-    // Cap Visor Bill
+
     fillStrokeRoundedRect(
       ctx,
-      headX + 1 * scale,
-      headY - 4.2 * scale,
-      9.5 * scale,
+      headX + 0.5 * scale,
+      headY - 4.0 * scale,
+      9.8 * scale,
       3.2 * scale,
-      1.4 * scale,
+      1.5 * scale,
       '#0284c7',
       INK,
-      1.5 * scale
+      1.7 * scale
     );
-  } else if (styleIdx === 1) {
-    // Vibrant Pink Hair Bow on top-right of head
-    const bowX = headX + 4.5 * scale;
-    const bowY = headY - 7.5 * scale;
-    ctx.fillStyle = '#f43f5e';
+  } else if (hairVariant === 1) {
+    // Voluminous Afro Front Hairline Bangs
+    ctx.fillStyle = guest.hairColor;
     ctx.beginPath();
-    ctx.moveTo(bowX, bowY);
-    ctx.lineTo(bowX - 5 * scale, bowY - 3.5 * scale);
-    ctx.lineTo(bowX - 4 * scale, bowY + 3 * scale);
+    ctx.arc(headX, headY - 3.2 * scale, headR - 0.5 * scale, Math.PI * 1.05, -Math.PI * 0.05);
+    ctx.fill();
+  } else if (hairVariant === 2) {
+    // Spiky Neon Anime/Club Hair
+    ctx.fillStyle = guest.hairColor;
+    ctx.beginPath();
+    ctx.moveTo(headX - 8.5 * scale, headY - 2 * scale);
+    ctx.lineTo(headX - 10.5 * scale, headY - 9.5 * scale);
+    ctx.lineTo(headX - 4 * scale, headY - 7.5 * scale);
+    ctx.lineTo(headX - 1 * scale, headY - 13.5 * scale);
+    ctx.lineTo(headX + 3.5 * scale, headY - 8 * scale);
+    ctx.lineTo(headX + 9.5 * scale, headY - 10.5 * scale);
+    ctx.lineTo(headX + 8.5 * scale, headY - 2 * scale);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.4 * scale;
+    ctx.lineWidth = 2.0 * scale;
     ctx.stroke();
-
+  } else if (hairVariant === 3) {
+    // Ribbed Knit Street Beanie with Top Pom
+    ctx.fillStyle = '#ec4899';
     ctx.beginPath();
-    ctx.moveTo(bowX, bowY);
-    ctx.lineTo(bowX + 5 * scale, bowY - 3.5 * scale);
-    ctx.lineTo(bowX + 4 * scale, bowY + 3 * scale);
+    ctx.arc(headX, headY - 2.5 * scale, headR + 0.5 * scale, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2.0 * scale;
     ctx.stroke();
 
-    ctx.fillStyle = '#fde047';
-    ctx.beginPath();
-    ctx.arc(bowX, bowY, 1.8 * scale, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (styleIdx === 3) {
-    // Ribbed Neon Street Beanie
     fillStrokeRoundedRect(
       ctx,
-      headX - 8.5 * scale,
-      headY - 6.8 * scale,
-      17 * scale,
-      4.2 * scale,
+      headX - 9.2 * scale,
+      headY - 5.5 * scale,
+      18.4 * scale,
+      4.0 * scale,
       2 * scale,
-      '#a855f7',
+      '#f472b6',
+      INK,
+      1.8 * scale
+    );
+  } else if (hairVariant === 4) {
+    // Stylish Double Space Buns + Bangs
+    ctx.fillStyle = guest.hairColor;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(headX + side * 7.2 * scale, headY - 7.8 * scale, 3.8 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.9 * scale;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(headX, headY - 2.2 * scale, headR + 0.3 * scale, Math.PI * 0.95, Math.PI * 0.05);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    // Sleek Side-Swept Club Hair
+    ctx.fillStyle = guest.hairColor;
+    ctx.beginPath();
+    ctx.arc(headX, headY - 2.0 * scale, headR + 0.5 * scale, Math.PI * 0.92, Math.PI * 0.08);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2.0 * scale;
+    ctx.stroke();
+  }
+
+  // 6. Crisp Dot Eyes or Glowing Cyber Visor Sunglasses
+  const eyeShift = headTiltX * 0.35;
+  if (hasNeonVisor || guest.isCelebrity) {
+    fillStrokeRoundedRect(
+      ctx,
+      headX - 6.2 * scale + eyeShift,
+      headY - 1.5 * scale,
+      12.4 * scale,
+      3.8 * scale,
+      1.5 * scale,
+      guest.isCelebrity ? '#facc15' : '#22d3ee',
       INK,
       1.6 * scale
     );
+  } else {
+    // Signature Chibi Black Dot Eyes with tiny white specular catchlight
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(headX - 3.0 * scale + eyeShift, headY + 0.6 * scale, 1.55 * scale, 0, Math.PI * 2);
+    ctx.arc(headX + 3.0 * scale + eyeShift, headY + 0.6 * scale, 1.55 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(headX - 3.4 * scale + eyeShift, headY + 0.1 * scale, 0.55 * scale, 0, Math.PI * 2);
+    ctx.arc(headX + 2.6 * scale + eyeShift, headY + 0.1 * scale, 0.55 * scale, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  if (guest.isCelebrity) {
-    ctx.fillStyle = '#facc15';
-    ctx.font = `800 ${Math.max(8, Math.round(10 * scale))}px "Outfit", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('★ VIP', headX, py - 48 * scale - bounce);
-  }
-
-  if (guest.bubble) {
-    drawIllustratedSpeechBubble(ctx, headX, py - 60 * scale - bounce, scale, guest.bubble);
+  // 7. Crisp Circular Speech / Thought Bubbles & Floating Dark Patron Quote Tooltip (Matching IMG_1506_5bdf15ca.jpeg)
+  if (guest.name === 'Mia H.' || guest.id === 'g_dance_2') {
+    drawPatronQuoteTooltip(
+      ctx,
+      headX,
+      headY - 22 * scale,
+      scale,
+      'MIA H.',
+      "I think I'm in love."
+    );
+  } else if (guest.bubble) {
+    drawIllustratedSpeechBubble(ctx, headX, headY - 20 * scale, scale, guest.bubble);
+  } else if (seed % 3 === 0) {
+    // Subtle circular status badge ($, ★, or ♛) matching the overhead circles in IMG_1506_5bdf15ca.jpeg
+    const badgeType: BubbleType =
+      seed % 9 === 0 ? 'VIP_CROWN' : seed % 6 === 0 ? 'CASH' : 'SPARKLE';
+    drawIllustratedSpeechBubble(ctx, headX, headY - 19 * scale, scale * 0.88, badgeType);
   }
 }
 
+const drawIllustratedCharacter = drawCharacter;
+
 /**
- * Draws the crisp white rounded comic speech bubbles with frothy golden beer mugs, orange 4-point sparkles,
- * purple music eighth-notes, and blue chat ellipses (matching IMG_1503.jpeg).
+ * Draws the dark translucent rounded patron quote card ("MIA H. / I think I'm in love.")
+ * with floating pink heart icons matching the bottom-center of IMG_1506_5bdf15ca.jpeg.
+ */
+function drawPatronQuoteTooltip(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  name: string,
+  quote: string
+) {
+  ctx.save();
+  const s = Math.max(0.85, scale);
+  const boxW = 86 * s;
+  const boxH = 26 * s;
+
+  fillStrokeRoundedRect(
+    ctx,
+    x - boxW / 2,
+    y - boxH / 2,
+    boxW,
+    boxH,
+    6 * s,
+    'rgba(17, 17, 22, 0.92)',
+    '#38bdf8',
+    1.6 * s
+  );
+
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = `900 ${Math.max(7, Math.round(7.5 * s))}px "Outfit", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(name, x, y - 3 * s);
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = `700 ${Math.max(7, Math.round(7.5 * s))}px "Outfit", sans-serif`;
+  ctx.fillText(quote, x, y + 7.5 * s);
+
+  // Floating pink heart cluster below tooltip
+  const hearts = [
+    { dx: -6, dy: 18, r: 3.2 },
+    { dx: 0, dy: 15, r: 3.8 },
+    { dx: 6, dy: 18, r: 3.2 },
+  ];
+  for (const h of hearts) {
+    ctx.fillStyle = '#f472b6';
+    ctx.beginPath();
+    ctx.arc(x + h.dx * s, y + h.dy * s, h.r * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2 * s;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Draws the crisp circular white/gold/purple speech & thought bubbles with thick #111116 black outlines
+ * (music notes ♫, cocktail drink glasses, golden $ coins, golden crowns ♛, purple ★ badges, and exclamation marks)
+ * matching IMG_1506_5bdf15ca.jpeg.
  */
 function drawIllustratedSpeechBubble(
   ctx: CanvasRenderingContext2D,
@@ -4729,135 +5683,109 @@ function drawIllustratedSpeechBubble(
   ctx.save();
   const s = Math.max(0.82, scale);
 
-  // Crisp White Rounded Rect Bubble with dark ink outline
-  fillStrokeRoundedRect(
-    ctx,
-    x - 16 * s,
-    y - 15 * s,
-    32 * s,
-    26 * s,
-    8 * s,
-    '#ffffff',
-    INK,
-    2 * s
-  );
+  // Determine circular bubble background style matching IMG_1506_5bdf15ca.jpeg:
+  // - White circles with thick #111116 outlines for Music Notes (♫), Crowns (♛), Drinks, and Alerts (!)
+  // - Golden coin circles for Cash ($)
+  // - Deep purple circles for Star (★) vibe badges
+  const isCashCoin = bubble === 'CASH';
+  const isPurpleStar = bubble === 'SPARKLE';
+  const r = (isCashCoin || isPurpleStar ? 8.5 : 11.5) * s;
 
-  // Pointer triangle tail at bottom center
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
   ctx.beginPath();
-  ctx.moveTo(x - 4.5 * s, y + 10 * s);
-  ctx.lineTo(x, y + 16 * s);
-  ctx.lineTo(x + 4.5 * s, y + 10 * s);
-  ctx.closePath();
-  ctx.fillStyle = '#ffffff';
+  ctx.arc(x, y + 1.5 * s, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Main Circular Bubble with Thick #111116 Black Outline
+  ctx.fillStyle = isCashCoin ? '#eab308' : isPurpleStar ? '#581c87' : '#ffffff';
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.8 * s;
+  ctx.lineWidth = 2.1 * s;
   ctx.stroke();
-  // Cover top seam of tail
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(x - 4 * s, y + 8.5 * s, 8 * s, 3 * s);
 
-  if (bubble === 'BEER') {
-    // Detailed Frothy Golden Beer Mug with Handle
-    ctx.strokeStyle = '#b45309';
-    ctx.lineWidth = 2 * s;
-    ctx.strokeRect(x + 3 * s, y - 5 * s, 4.5 * s, 7 * s);
-    fillStrokeRoundedRect(
-      ctx,
-      x - 6 * s,
-      y - 6 * s,
-      10 * s,
-      11 * s,
-      2 * s,
-      '#f59e0b',
-      '#78350f',
-      1.4 * s
-    );
-    // White foam head
-    ctx.fillStyle = '#fef3c7';
+  // Small bottom pointer tail for large white thought/speech bubbles
+  if (!isCashCoin && !isPurpleStar) {
     ctx.beginPath();
-    ctx.arc(x - 4 * s, y - 6.5 * s, 3 * s, 0, Math.PI * 2);
-    ctx.arc(x - 1 * s, y - 7 * s, 3.2 * s, 0, Math.PI * 2);
-    ctx.arc(x + 2 * s, y - 6.5 * s, 2.8 * s, 0, Math.PI * 2);
+    ctx.moveTo(x - 3.2 * s, y + r - 1 * s);
+    ctx.lineTo(x, y + r + 4.5 * s);
+    ctx.lineTo(x + 3.2 * s, y + r - 1 * s);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
-  } else if (bubble === 'SPARKLE') {
-    // Orange & Gold 4-Point Diamond Sparkle Stars
-    drawFourPointStar(ctx, x - 3 * s, y - 1 * s, 7 * s, '#f97316');
-    drawFourPointStar(ctx, x + 5 * s, y - 5 * s, 4.5 * s, '#facc15');
-    drawFourPointStar(ctx, x + 4 * s, y + 4 * s, 3.5 * s, '#fb923c');
-  } else if (bubble === 'MUSIC') {
-    // Purple Beamed Eighth Music Note (♫)
-    ctx.fillStyle = '#6d28d9';
-    ctx.font = `900 ${Math.round(15 * s)}px sans-serif`;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.8 * s;
+    ctx.stroke();
+  }
+
+  if (bubble === 'MUSIC') {
+    // Crisp Black Beamed Music Note (♫) inside White Circle (matching dancers in IMG_1506_5bdf15ca.jpeg)
+    ctx.fillStyle = INK;
+    ctx.font = `900 ${Math.round(13.5 * s)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('♫', x, y - 1.5 * s);
-  } else if (bubble === 'CHAT') {
-    // Light Blue Circle with 3 White Dots inside (Matching queued guest in IMG_1503.jpeg)
-    ctx.fillStyle = '#38bdf8';
+    ctx.fillText('♫', x, y + 0.5 * s);
+  } else if (bubble === 'VIP_CROWN') {
+    // Golden Crown inside White Circle (matching crown bubbles on the dance floor in IMG_1506_5bdf15ca.jpeg)
     ctx.beginPath();
-    ctx.arc(x, y - 2 * s, 8.5 * s, 0, Math.PI * 2);
+    ctx.moveTo(x - 5.5 * s, y + 3.5 * s);
+    ctx.lineTo(x - 6.5 * s, y - 3.5 * s);
+    ctx.lineTo(x - 2.5 * s, y - 0.5 * s);
+    ctx.lineTo(x, y - 5 * s);
+    ctx.lineTo(x + 2.5 * s, y - 0.5 * s);
+    ctx.lineTo(x + 6.5 * s, y - 3.5 * s);
+    ctx.lineTo(x + 5.5 * s, y + 3.5 * s);
+    ctx.closePath();
+    ctx.fillStyle = '#facc15';
     ctx.fill();
-    ctx.strokeStyle = '#0369a1';
-    ctx.lineWidth = 1.3 * s;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5 * s;
     ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    for (const dx of [-4, 0, 4]) {
-      ctx.beginPath();
-      ctx.arc(x + dx * s, y - 2 * s, 1.4 * s, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else if (bubble === 'COCKTAIL') {
-    ctx.fillStyle = '#ec4899';
+  } else if (bubble === 'CASH') {
+    // Golden Dollar Coin ($)
+    ctx.fillStyle = '#fef08a';
+    ctx.font = `900 ${Math.round(11 * s)}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('$', x, y + 0.5 * s);
+  } else if (bubble === 'SPARKLE') {
+    // Gold Star (★) inside Purple Circle
+    ctx.fillStyle = '#facc15';
+    ctx.font = `900 ${Math.round(10.5 * s)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('★', x, y + 0.5 * s);
+  } else if (bubble === 'COCKTAIL' || bubble === 'BEER') {
+    // Neon Cocktail Martini Glass with #111116 outline
+    ctx.fillStyle = bubble === 'COCKTAIL' ? '#ec4899' : '#38bdf8';
     ctx.beginPath();
-    ctx.moveTo(x - 6 * s, y - 7 * s);
-    ctx.lineTo(x + 6 * s, y - 7 * s);
-    ctx.lineTo(x, y);
+    ctx.moveTo(x - 5.5 * s, y - 4.5 * s);
+    ctx.lineTo(x + 5.5 * s, y - 4.5 * s);
+    ctx.lineTo(x, y + 1 * s);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.4 * s;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, y + 6 * s);
     ctx.stroke();
-  } else if (bubble === 'CASH') {
-    ctx.fillStyle = '#16a34a';
-    ctx.font = `900 ${Math.round(12 * s)}px "JetBrains Mono", monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('$$', x, y - 1.5 * s);
+
+    ctx.beginPath();
+    ctx.moveTo(x, y + 1 * s);
+    ctx.lineTo(x, y + 5.5 * s);
+    ctx.moveTo(x - 3.5 * s, y + 5.5 * s);
+    ctx.lineTo(x + 3.5 * s, y + 5.5 * s);
+    ctx.stroke();
   } else {
-    ctx.fillStyle = '#eab308';
-    ctx.font = `900 ${Math.round(13 * s)}px sans-serif`;
+    // Bold Exclamation Mark (!) inside White Circle
+    ctx.fillStyle = '#ef4444';
+    ctx.font = `900 ${Math.round(14 * s)}px "Outfit", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('♛', x, y - 1.5 * s);
+    ctx.fillText('!', x, y + 0.5 * s);
   }
 
   ctx.restore();
-}
-
-function drawFourPointStar(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  r: number,
-  color: string
-) {
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r);
-  ctx.quadraticCurveTo(cx, cy, cx + r, cy);
-  ctx.quadraticCurveTo(cx, cy, cx, cy + r);
-  ctx.quadraticCurveTo(cx, cy, cx - r, cy);
-  ctx.quadraticCurveTo(cx, cy, cx, cy - r);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.strokeStyle = '#7c2d12';
-  ctx.lineWidth = 1;
-  ctx.stroke();
 }
 
 // ============================================================================

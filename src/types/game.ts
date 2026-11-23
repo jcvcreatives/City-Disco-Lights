@@ -533,32 +533,41 @@ export const DRINK_MIXES: DrinkMix[] = [
   },
 ];
 
-// Initial Dive Bar Layout matching uploaded reference image (IMG_1503.jpeg)
+// Initial Nightclub City: Neon Layout matching uploaded reference image (IMG_1506.jpeg)
 export const INITIAL_PLACED_ITEMS: PlacedItem[] = [
-  // L-shaped wooden bar along top-left back wall + return corner
-  { uid: 'init_bar_1', catalogId: 'bar_dive', floor: 1, gridX: 0, gridY: 1, rotation: 90 },
-  { uid: 'init_bar_2', catalogId: 'bar_dive', floor: 1, gridX: 1, gridY: 0, rotation: 0 },
-  // Top-right DJ booth on dark concrete riser
-  { uid: 'init_dj_1', catalogId: 'dj_turntable', floor: 1, gridX: 6, gridY: 0, rotation: 0 },
-  // 3x3 dance floor in center (each tile renders 2x2 glowing squares = 6x6 pastel grid)
-  { uid: 'init_df_1', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 3, rotation: 0 },
-  { uid: 'init_df_2', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 3, rotation: 0 },
-  { uid: 'init_df_3', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 3, rotation: 0 },
-  { uid: 'init_df_4', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 4, rotation: 0 },
-  { uid: 'init_df_5', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 4, rotation: 0 },
-  { uid: 'init_df_6', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 4, rotation: 0 },
-  { uid: 'init_df_7', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 5, rotation: 0 },
-  { uid: 'init_df_8', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 5, rotation: 0 },
-  { uid: 'init_df_9', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 5, rotation: 0 },
-  // Worn patched couch on left brick wall + two brown couches on right brick wall
-  { uid: 'init_couch_left', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 5, rotation: 90 },
-  { uid: 'init_couch_right1', catalogId: 'seat_worn_couch', floor: 1, gridX: 8, gridY: 2, rotation: 90 },
-  { uid: 'init_couch_right2', catalogId: 'seat_worn_couch', floor: 1, gridX: 8, gridY: 5, rotation: 90 },
-  // Round wooden bistro tables & chairs in right lounge
-  { uid: 'init_table_1', catalogId: 'seat_bistro', floor: 1, gridX: 6, gridY: 6, rotation: 0 },
-  { uid: 'init_table_2', catalogId: 'seat_bistro', floor: 1, gridX: 7, gridY: 7, rotation: 0 },
-  // Bottom corner purple lounge booth
-  { uid: 'init_booth_bottom', catalogId: 'seat_velvet_booth', floor: 1, gridX: 6, gridY: 8, rotation: 0 },
+  // Back-left wall: Tufted purple VIP booths under "CLUB NEON" & "GOOD TIMES" neon signs
+  { uid: 'init_couch_left1', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 1, rotation: 90 },
+  { uid: 'init_couch_left2', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 4, rotation: 90 },
+  // Back-right wall: DJ Booth Console flanked by two Stacked Studio Monitor Speaker Towers under "LOVE THE BASS"
+  { uid: 'init_sub_left', catalogId: 'dj_speaker_stack', floor: 1, gridX: 3, gridY: 0, rotation: 0 },
+  { uid: 'init_dj_1', catalogId: 'dj_turntable', floor: 1, gridX: 5, gridY: 0, rotation: 0 },
+  { uid: 'init_sub_right', catalogId: 'dj_speaker_stack', floor: 1, gridX: 7, gridY: 0, rotation: 0 },
+  // Long illuminated Bar Counters & Liquor Shelves packed with bottles & cocktail shakers
+  { uid: 'init_bar_1', catalogId: 'bar_neon', floor: 1, gridX: 7, gridY: 2, rotation: 90 },
+  { uid: 'init_bar_2', catalogId: 'bar_dive', floor: 1, gridX: 7, gridY: 5, rotation: 90 },
+  { uid: 'init_bar_3', catalogId: 'bar_dive', floor: 1, gridX: 1, gridY: 0, rotation: 0 },
+  // Large 4x4 sunken dance floor in center (each tile renders 2x2 glowing beveled squares = 64 tiles)
+  { uid: 'init_df_1', catalogId: 'dance_basic', floor: 1, gridX: 2, gridY: 2, rotation: 0 },
+  { uid: 'init_df_2', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 2, rotation: 0 },
+  { uid: 'init_df_3', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 2, rotation: 0 },
+  { uid: 'init_df_4', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 2, rotation: 0 },
+  { uid: 'init_df_5', catalogId: 'dance_basic', floor: 1, gridX: 2, gridY: 3, rotation: 0 },
+  { uid: 'init_df_6', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 3, rotation: 0 },
+  { uid: 'init_df_7', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 3, rotation: 0 },
+  { uid: 'init_df_8', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 3, rotation: 0 },
+  { uid: 'init_df_9', catalogId: 'dance_basic', floor: 1, gridX: 2, gridY: 4, rotation: 0 },
+  { uid: 'init_df_10', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 4, rotation: 0 },
+  { uid: 'init_df_11', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 4, rotation: 0 },
+  { uid: 'init_df_12', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 4, rotation: 0 },
+  { uid: 'init_df_13', catalogId: 'dance_basic', floor: 1, gridX: 2, gridY: 5, rotation: 0 },
+  { uid: 'init_df_14', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 5, rotation: 0 },
+  { uid: 'init_df_15', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 5, rotation: 0 },
+  { uid: 'init_df_16', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 5, rotation: 0 },
+  // Round high-top cocktail tables with metallic pedestals & cushioned club chairs
+  { uid: 'init_table_1', catalogId: 'seat_bistro', floor: 1, gridX: 1, gridY: 7, rotation: 0 },
+  { uid: 'init_table_2', catalogId: 'seat_bistro', floor: 1, gridX: 4, gridY: 7, rotation: 0 },
+  // Tufted VIP lounge booth in corner
+  { uid: 'init_booth_bottom', catalogId: 'seat_velvet_booth', floor: 1, gridX: 8, gridY: 7, rotation: 0 },
 ];
 
 // Preset VIP Hotspot Showcase layout for Floor 1 & Floor 2
