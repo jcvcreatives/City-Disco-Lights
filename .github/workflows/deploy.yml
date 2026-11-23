@@ -35,15 +35,21 @@ jobs:
         env:
           GITHUB_ACTIONS: "true"
         run: |
+          node -e '
+            const fs = require("fs");
+            let html = fs.readFileSync("index.html", "utf8");
+            if (!html.includes("/src/main.tsx")) {
+              html = html.replace("<div id=\"root\"></div>", "<div id=\"root\"></div>\n    <script type=\"module\" src=\"/src/main.tsx\"></script>");
+              fs.writeFileSync("index.html", html, "utf8");
+            }
+          '
           npm run build
+          ls -lh dist/assets/
           mkdir -p assets docs/assets
-          if [ -d "dist/assets" ]; then
-            cp -Rf dist/assets/* assets/
-            cp -Rf dist/assets/* docs/assets/
-          fi
-          if [ -f "dist/index.html" ]; then
-            cp -f dist/index.html docs/index.html
-          fi
+          cp -Rf dist/assets/* assets/
+          cp -Rf dist/assets/* docs/assets/
+          cp -f dist/index.html docs/index.html
+          git checkout -- index.html || true
 
       - name: Add .nojekyll markers
         run: |
@@ -56,7 +62,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f assets/ docs/ dist/ index.html .nojekyll
+          git add -f assets/app.bundle.js assets/app.bundle.css docs/ dist/ .nojekyll
           if ! git diff --cached --quiet; then
             git commit -m "chore: auto-update compiled game bundle [skip ci]"
             git push

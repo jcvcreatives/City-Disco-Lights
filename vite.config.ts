@@ -20,14 +20,22 @@ export default defineConfig(() => {
       {
         name: 'ensure-main-tsx-entry',
         enforce: 'pre',
-        transformIndexHtml(html: string): string {
-          if (!html.includes('/src/main.tsx')) {
-            return html.replace(
-              '<div id="root"></div>',
-              '<div id="root"></div>\n    <script type="module" src="/src/main.tsx"></script>'
-            );
+        config(): void {
+          // Runs BEFORE Vite's internal vite:build-html plugin reads index.html from disk.
+          // When building on GitHub Actions, ensure index.html on disk contains the /src/main.tsx entry tag.
+          if (process.env.GITHUB_ACTIONS === 'true') {
+            const rootIndexHtmlPath = path.resolve(__dirname, 'index.html');
+            if (fs.existsSync(rootIndexHtmlPath)) {
+              const html = fs.readFileSync(rootIndexHtmlPath, 'utf8');
+              if (!html.includes('/src/main.tsx')) {
+                const patched = html.replace(
+                  '<div id="root"></div>',
+                  '<div id="root"></div>\n    <script type="module" src="/src/main.tsx"></script>'
+                );
+                fs.writeFileSync(rootIndexHtmlPath, patched, 'utf8');
+              }
+            }
           }
-          return html;
         },
       },
       react(),
@@ -42,14 +50,12 @@ export default defineConfig(() => {
             return;
           }
           // Do not mutate tracked workspace files outside dist/ during AI Studio compile_applet
-          // (where DISABLE_HMR === 'true' and GITHUB_ACTIONS is not set), so AI Studio never reverts index.html.
           if (process.env.DISABLE_HMR === 'true' && process.env.GITHUB_ACTIONS !== 'true') {
             return;
           }
 
           const distDir = path.resolve(__dirname, 'dist');
           if (fs.existsSync(distDir)) {
-            const buildId = `build_${Date.now()}`;
             const docsDir = path.resolve(__dirname, 'docs');
             fs.cpSync(distDir, docsDir, {recursive: true, force: true});
             fs.writeFileSync(path.resolve(docsDir, '.nojekyll'), '');
@@ -59,16 +65,6 @@ export default defineConfig(() => {
             const rootAssetsBundle = path.resolve(__dirname, 'assets');
             if (fs.existsSync(distAssetsBundle)) {
               fs.cpSync(distAssetsBundle, rootAssetsBundle, {recursive: true, force: true});
-            }
-
-            const rootIndexHtmlPath = path.resolve(__dirname, 'index.html');
-            if (fs.existsSync(rootIndexHtmlPath)) {
-              const html = fs.readFileSync(rootIndexHtmlPath, 'utf8');
-              const updatedHtml = html.replace(
-                /window\.__NEON_NIGHTS_BUILD__\s*=\s*'[^']*';/,
-                `window.__NEON_NIGHTS_BUILD__ = '${buildId}';`
-              );
-              fs.writeFileSync(rootIndexHtmlPath, updatedHtml, 'utf8');
             }
           }
         },
