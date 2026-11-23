@@ -597,8 +597,8 @@ export const INITIAL_PLACED_ITEMS: PlacedItem[] = [
   // Round high-top cocktail tables with metallic pedestals & cushioned club chairs
   { uid: 'init_table_1', catalogId: 'seat_bistro', floor: 1, gridX: 1, gridY: 7, rotation: 0 },
   { uid: 'init_table_2', catalogId: 'seat_bistro', floor: 1, gridX: 4, gridY: 7, rotation: 0 },
-  // Tufted VIP lounge booth in corner
-  { uid: 'init_booth_bottom', catalogId: 'seat_velvet_booth', floor: 1, gridX: 8, gridY: 7, rotation: 0 },
+  // Tufted VIP lounge booth in corner (clear of the bar stool aisle at x = 8.36)
+  { uid: 'init_booth_bottom', catalogId: 'seat_velvet_booth', floor: 1, gridX: 6, gridY: 8, rotation: 0 },
 
   // Floor 2: VIP Mezannine Sky Lounge
   { uid: 'init_f2_bar', catalogId: 'bar_neon', floor: 2, gridX: 1, gridY: 0, rotation: 0 },

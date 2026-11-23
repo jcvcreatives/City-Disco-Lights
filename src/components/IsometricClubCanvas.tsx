@@ -530,6 +530,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       let earnedCashThisFrame = 0;
       let earnedXpThisFrame = 0;
 
+      // Ensure all currently seated/ordering guests occupy distinct, valid furniture slots (no clustering on a single seat)
+      reconcileOccupiedFurnitureSlots(items, guests);
+
       for (let i = guests.length - 1; i >= 0; i--) {
         const guest = guests[i];
         guest.stateTimer -= dt;
@@ -563,6 +566,35 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
 
         if (guest.path.length > 0) {
+          // On the final approach step toward a bar stool or chair, verify that the target seat slot is still available;
+          // if another sprite just occupied it, run a proximity search to divert smoothly to the nearest open stool/chair.
+          if (
+            guest.path.length === 1 &&
+            (guest.state === 'WALKING_TO_BAR' || guest.state === 'WALKING_TO_SEAT')
+          ) {
+            const isBarWalk = guest.state === 'WALKING_TO_BAR';
+            const slotPool = isBarWalk
+              ? buildBarSlotCandidates(items, guest.floor)
+              : buildSeatOrTableSlotCandidates(items, guest.floor);
+            const targetSlot = slotPool.find((c) => c.slotId === guest.assignedSlotId);
+            if (!targetSlot || !isFurnitureSlotAvailable(targetSlot, guests, guest.floor, guest.id)) {
+              const nearestOpen = findNearestVerifiedAvailableSlot(
+                slotPool,
+                guests,
+                guest.floor,
+                guest.id,
+                guest.gridX,
+                guest.gridY
+              );
+              if (nearestOpen) {
+                guest.assignedSlotId = nearestOpen.slotId;
+                guest.seatPosture = nearestOpen.posture;
+                guest.facingDir = nearestOpen.facingDir;
+                guest.path[0] = { x: nearestOpen.x, y: nearestOpen.y };
+              }
+            }
+          }
+
           const nextWp = guest.path[0];
           const dx = nextWp.x - guest.gridX;
           const dy = nextWp.y - guest.gridY;
@@ -613,62 +645,95 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               );
               guest.stateTimer = 0.8;
             } else {
-              const barSlot = pickSeparatedBarSlot(items, guests, guest.floor, guest.id);
-              guest.state = 'WALKING_TO_BAR';
-              guest.seatPosture = barSlot.posture;
-              guest.facingDir = barSlot.facingDir;
-              guest.assignedSlotId = barSlot.slotId;
-              const path = findGridPath(
-                items,
-                guest.floor,
-                guest.gridX,
-                guest.gridY,
-                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.x))),
-                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.y)))
-              );
-              if (path.length > 0) {
-                path[path.length - 1] = { x: barSlot.x, y: barSlot.y };
+              // Verify seat availability at the bar first; if full, check open table seats before defaulting to dance floor
+              const availBarSlot = findAvailableBarSlot(items, guests, guest.floor, guest.id);
+              const availSeatSlot = !availBarSlot
+                ? findAvailableSeatOrTableSlot(items, guests, guest.floor, guest.id)
+                : null;
+
+              if (availBarSlot) {
+                assignGuestToFurnitureSlot(guest, availBarSlot, items, 'WALKING_TO_BAR');
+                guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
+                guest.bubbleTimer = 4;
+                guest.stateTimer = 0.9;
+              } else if (availSeatSlot) {
+                assignGuestToFurnitureSlot(guest, availSeatSlot, items, 'WALKING_TO_SEAT');
+                guest.bubble = 'CHAT';
+                guest.bubbleTimer = 4;
+                guest.stateTimer = 0.9;
               } else {
-                path.push({ x: barSlot.x, y: barSlot.y });
+                const danceSlot = pickSeparatedDanceSlot(items, guests, guest.floor, guest.id);
+                guest.state = 'WALKING_TO_DANCE';
+                guest.seatPosture = undefined;
+                guest.assignedSlotId = undefined;
+                const path = findGridPath(
+                  items,
+                  guest.floor,
+                  guest.gridX,
+                  guest.gridY,
+                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(danceSlot.x))),
+                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(danceSlot.y)))
+                );
+                if (path.length > 0) {
+                  path[path.length - 1] = { x: danceSlot.x, y: danceSlot.y };
+                } else {
+                  path.push({ x: danceSlot.x, y: danceSlot.y });
+                }
+                guest.path = path;
+                guest.bubble = 'MUSIC';
+                guest.bubbleTimer = 4;
+                guest.stateTimer = 0.8;
               }
-              guest.path = path;
-              guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
-              guest.bubbleTimer = 4;
-              guest.stateTimer = 0.9;
             }
           } else if (guest.state === 'CLIMBING_STAIRS') {
             const destFloor: FloorLevel = guest.targetFloor >= 2 ? guest.targetFloor : 2;
             guest.floor = destFloor;
             guest.gridX = STAIRS_COORD.x;
             guest.gridY = STAIRS_COORD.y + 1;
-            guest.state = 'WALKING_TO_BAR';
-            const barSlot2 = pickSeparatedBarSlot(items, guests, destFloor, guest.id);
-            guest.seatPosture = barSlot2.posture;
-            guest.facingDir = barSlot2.facingDir;
-            guest.assignedSlotId = barSlot2.slotId;
-            const path = findGridPath(
-              items,
-              destFloor,
-              guest.gridX,
-              guest.gridY,
-              Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot2.x))),
-              Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot2.y)))
-            );
-            if (path.length > 0) {
-              path[path.length - 1] = { x: barSlot2.x, y: barSlot2.y };
+            const availBarSlot2 = findAvailableBarSlot(items, guests, destFloor, guest.id);
+            const availSeatSlot2 = !availBarSlot2
+              ? findAvailableSeatOrTableSlot(items, guests, destFloor, guest.id)
+              : null;
+
+            if (availBarSlot2) {
+              assignGuestToFurnitureSlot(guest, availBarSlot2, items, 'WALKING_TO_BAR');
+            } else if (availSeatSlot2) {
+              assignGuestToFurnitureSlot(guest, availSeatSlot2, items, 'WALKING_TO_SEAT');
             } else {
-              path.push({ x: barSlot2.x, y: barSlot2.y });
+              const barFallback = pickSeparatedBarSlot(items, guests, destFloor, guest.id);
+              assignGuestToFurnitureSlot(guest, barFallback, items, 'WALKING_TO_BAR');
             }
-            guest.path = path;
             guest.bubble = 'VIP_CROWN';
             guest.bubbleTimer = 4;
             guest.stateTimer = 0.9;
           } else if (guest.state === 'WALKING_TO_BAR') {
-            guest.state = 'ORDERING_DRINK';
-            // Stay seated on the bar stool enjoying a drink long enough so all bar stools stay occupied naturally
-            guest.stateTimer = 8.5 + Math.random() * 5.0;
-            guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
-            guest.bubbleTimer = 4.5;
+            // Re-verify that the assigned bar stool/slot is still unoccupied on arrival
+            const arrivalStatus = verifyOrReassignGuestSlotOnArrival(guest, items, guests, 'BAR');
+            if (arrivalStatus === 'ARRIVED') {
+              guest.state = 'ORDERING_DRINK';
+              // Stay seated on the bar stool enjoying a drink long enough so all bar stools stay occupied naturally
+              guest.stateTimer = 8.5 + Math.random() * 5.0;
+              guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
+              guest.bubbleTimer = 4.5;
+            } else if (arrivalStatus === 'NO_SEAT_AVAILABLE') {
+              const fallbackSeat = findAvailableSeatOrTableSlot(
+                items,
+                guests,
+                guest.floor,
+                guest.id
+              );
+              if (fallbackSeat) {
+                assignGuestToFurnitureSlot(guest, fallbackSeat, items, 'WALKING_TO_SEAT');
+                guest.stateTimer = 0.8;
+              } else {
+                const danceSlot = pickSeparatedDanceSlot(items, guests, guest.floor, guest.id);
+                guest.state = 'WALKING_TO_DANCE';
+                guest.seatPosture = undefined;
+                guest.assignedSlotId = undefined;
+                guest.path = [{ x: danceSlot.x, y: danceSlot.y }];
+                guest.stateTimer = 0.8;
+              }
+            }
           } else if (guest.state === 'ORDERING_DRINK') {
             const drinkRevenue = Math.round(
               drink.sellPrice * (1 + metrics.tipBonus * 0.5) * (guest.isCelebrity ? 2.5 : 1)
@@ -688,31 +753,15 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
 
-            // 48% of patrons head from the bar to sit in an open chair / VIP booth or stand at a cocktail table
-            const seats = items.filter(
-              (it) =>
-                it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
+            // Check if an unoccupied chair, VIP booth cushion, or cocktail table slot is available before assignment
+            const availSeatSlot = findAvailableSeatOrTableSlot(
+              items,
+              guests,
+              guest.floor,
+              guest.id
             );
-            if (seats.length > 0 && Math.random() < 0.48) {
-              const seatSlot = pickSeparatedSeatOrTableSlot(items, guests, guest.floor, guest.id);
-              guest.state = 'WALKING_TO_SEAT';
-              guest.seatPosture = seatSlot.posture;
-              guest.facingDir = seatSlot.facingDir;
-              guest.assignedSlotId = seatSlot.slotId;
-              const path = findGridPath(
-                items,
-                guest.floor,
-                guest.gridX,
-                guest.gridY,
-                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.x))),
-                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.y)))
-              );
-              if (path.length > 0) {
-                path[path.length - 1] = { x: seatSlot.x, y: seatSlot.y };
-              } else {
-                path.push({ x: seatSlot.x, y: seatSlot.y });
-              }
-              guest.path = path;
+            if (availSeatSlot && Math.random() < 0.58) {
+              assignGuestToFurnitureSlot(guest, availSeatSlot, items, 'WALKING_TO_SEAT');
               guest.stateTimer = 0.8;
             } else {
               const danceSlot = pickSeparatedDanceSlot(items, guests, guest.floor, guest.id);
@@ -751,7 +800,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 : 'SPARKLE';
             guest.bubbleTimer = 5.5;
           } else if (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES') {
-            // 25% chance to chain into another DANCER_MOVES freestyle burst before heading to a chair, table, or bar stool
+            // 25% chance to chain into another DANCER_MOVES freestyle burst before heading to an open chair, table, or bar stool
             const danceTiles = items.filter(
               (it) =>
                 it.floor === guest.floor &&
@@ -765,56 +814,20 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               guest.bubble = Math.random() < 0.5 ? 'MUSIC' : 'SPARKLE';
               guest.bubbleTimer = 4.0;
             } else {
-              const seats = items.filter(
-                (it) =>
-                  it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
+              // Verify seat availability at both bar stools and tables/VIP booths before assigning
+              const availBarSlot = findAvailableBarSlot(items, guests, guest.floor, guest.id);
+              const availSeatSlot = findAvailableSeatOrTableSlot(
+                items,
+                guests,
+                guest.floor,
+                guest.id
               );
-              const bars = items.filter(
-                (it) =>
-                  it.floor === guest.floor && getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
-              );
-              // Frequently refill any open bar stools or lounge chairs/VIP sofas
-              if (bars.length > 0 && Math.random() < 0.38) {
-                const barSlot = pickSeparatedBarSlot(items, guests, guest.floor, guest.id);
-                guest.state = 'WALKING_TO_BAR';
-                guest.seatPosture = barSlot.posture;
-                guest.facingDir = barSlot.facingDir;
-                guest.assignedSlotId = barSlot.slotId;
-                const path = findGridPath(
-                  items,
-                  guest.floor,
-                  guest.gridX,
-                  guest.gridY,
-                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.x))),
-                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.y)))
-                );
-                if (path.length > 0) {
-                  path[path.length - 1] = { x: barSlot.x, y: barSlot.y };
-                } else {
-                  path.push({ x: barSlot.x, y: barSlot.y });
-                }
-                guest.path = path;
+
+              if (availBarSlot && (!availSeatSlot || Math.random() < 0.46)) {
+                assignGuestToFurnitureSlot(guest, availBarSlot, items, 'WALKING_TO_BAR');
                 guest.stateTimer = 0.8;
-              } else if (seats.length > 0) {
-                const seatSlot = pickSeparatedSeatOrTableSlot(items, guests, guest.floor, guest.id);
-                guest.state = 'WALKING_TO_SEAT';
-                guest.seatPosture = seatSlot.posture;
-                guest.facingDir = seatSlot.facingDir;
-                guest.assignedSlotId = seatSlot.slotId;
-                const path = findGridPath(
-                  items,
-                  guest.floor,
-                  guest.gridX,
-                  guest.gridY,
-                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.x))),
-                  Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(seatSlot.y)))
-                );
-                if (path.length > 0) {
-                  path[path.length - 1] = { x: seatSlot.x, y: seatSlot.y };
-                } else {
-                  path.push({ x: seatSlot.x, y: seatSlot.y });
-                }
-                guest.path = path;
+              } else if (availSeatSlot) {
+                assignGuestToFurnitureSlot(guest, availSeatSlot, items, 'WALKING_TO_SEAT');
                 guest.stateTimer = 0.8;
               } else {
                 guest.state = 'LEAVING';
@@ -832,10 +845,31 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               }
             }
           } else if (guest.state === 'WALKING_TO_SEAT') {
-            guest.state = 'RESTING_AT_SEAT';
-            guest.stateTimer = 10.5 + Math.random() * 5.5;
-            guest.bubble = guest.isCelebrity ? 'VIP_CROWN' : Math.random() < 0.5 ? 'COCKTAIL' : 'CHAT';
-            guest.bubbleTimer = 4.5;
+            // Re-verify that the assigned chair/sofa/table slot is still unoccupied on arrival
+            const arrivalStatus = verifyOrReassignGuestSlotOnArrival(guest, items, guests, 'SEAT');
+            if (arrivalStatus === 'ARRIVED') {
+              guest.state = 'RESTING_AT_SEAT';
+              guest.stateTimer = 10.5 + Math.random() * 5.5;
+              guest.bubble = guest.isCelebrity
+                ? 'VIP_CROWN'
+                : Math.random() < 0.5
+                ? 'COCKTAIL'
+                : 'CHAT';
+              guest.bubbleTimer = 4.5;
+            } else if (arrivalStatus === 'NO_SEAT_AVAILABLE') {
+              const fallbackBar = findAvailableBarSlot(items, guests, guest.floor, guest.id);
+              if (fallbackBar) {
+                assignGuestToFurnitureSlot(guest, fallbackBar, items, 'WALKING_TO_BAR');
+                guest.stateTimer = 0.8;
+              } else {
+                const danceSlot = pickSeparatedDanceSlot(items, guests, guest.floor, guest.id);
+                guest.state = 'WALKING_TO_DANCE';
+                guest.seatPosture = undefined;
+                guest.assignedSlotId = undefined;
+                guest.path = [{ x: danceSlot.x, y: danceSlot.y }];
+                guest.stateTimer = 0.8;
+              }
+            }
           } else if (guest.state === 'RESTING_AT_SEAT') {
             const seatTip = Math.round(
               35 * (1 + metrics.tipBonus) * (guest.isCelebrity ? 3 : 1)
@@ -855,27 +889,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
 
-            // 45% of rested guests grab another drink at the bar or hit the dance floor instead of immediately leaving
-            if (Math.random() < 0.45) {
-              const barSlot = pickSeparatedBarSlot(items, guests, guest.floor, guest.id);
-              guest.state = 'WALKING_TO_BAR';
-              guest.seatPosture = barSlot.posture;
-              guest.facingDir = barSlot.facingDir;
-              guest.assignedSlotId = barSlot.slotId;
-              const path = findGridPath(
-                items,
-                guest.floor,
-                guest.gridX,
-                guest.gridY,
-                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.x))),
-                Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(barSlot.y)))
-              );
-              if (path.length > 0) {
-                path[path.length - 1] = { x: barSlot.x, y: barSlot.y };
-              } else {
-                path.push({ x: barSlot.x, y: barSlot.y });
-              }
-              guest.path = path;
+            // Verify bar seat availability before sending a rested guest to grab another drink at the bar
+            const availBarSlot =
+              Math.random() < 0.48
+                ? findAvailableBarSlot(items, guests, guest.floor, guest.id)
+                : null;
+            if (availBarSlot) {
+              assignGuestToFurnitureSlot(guest, availBarSlot, items, 'WALKING_TO_BAR');
               guest.stateTimer = 0.8;
             } else if (guest.floor >= 2) {
               guest.state = 'DESCENDING_STAIRS';
@@ -6944,26 +6964,194 @@ function computeRhythmicLightingSequencer(
 }
 
 /**
- * Slot-selection & Personal-Space Separation Helpers for Natural Bar, Table, Chair, and Dance Floor Behavior
+ * Slot-selection, Seat-Availability Verification & Personal-Space Separation Helpers
+ * Ensures guests distribute naturally across ALL individual seats at multi-seat tables,
+ * VIP booths, and multi-stool bar counters instead of clustering on a single seat.
  */
 interface FurnitureSlotCandidate {
   slotId: string;
+  parentItemId: string;
+  seatIndex: number;
+  totalSeatsOnItem: number;
   x: number;
   y: number;
   posture: GuestSeatPosture;
   facingDir: 'NE' | 'NW' | 'SE' | 'SW';
-  priority: number; // Higher priority = seated stool/chair/sofa; lower priority = standing overflow
+  priority: number; // 2 = seated stool/chair/sofa; 1 = standing companion slot at table/bar
 }
 
-function pickBestFurnitureSlot(
+const SEAT_CLAIM_STATES = new Set([
+  'WALKING_TO_BAR',
+  'ORDERING_DRINK',
+  'WALKING_TO_SEAT',
+  'RESTING_AT_SEAT',
+]);
+
+/**
+ * Verifies whether a specific seat or bar stool slot is currently unoccupied and unreserved.
+ * Checks both explicit `assignedSlotId` reservations (including guests currently walking to the seat)
+ * and physical/target coordinate proximity (< 0.36 grid units) so two guests never share or cluster on a single seat.
+ */
+function isFurnitureSlotAvailable(
+  slot: FurnitureSlotCandidate,
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string
+): boolean {
+  for (let i = 0; i < guests.length; i++) {
+    const fg = guests[i];
+    if (
+      fg.floor !== floor ||
+      fg.id === excludeGuestId ||
+      fg.state === 'QUEUEING' ||
+      fg.state === 'LEAVING'
+    ) {
+      continue;
+    }
+
+    // 1. Explicit slot reservation check
+    if (fg.assignedSlotId === slot.slotId && SEAT_CLAIM_STATES.has(fg.state)) {
+      return false;
+    }
+
+    // 2. Destination waypoint proximity check (guest walking toward this seat)
+    const targetPt =
+      fg.path.length > 0 ? fg.path[fg.path.length - 1] : { x: fg.gridX, y: fg.gridY };
+    if (
+      SEAT_CLAIM_STATES.has(fg.state) &&
+      Math.hypot(slot.x - targetPt.x, slot.y - targetPt.y) < 0.36
+    ) {
+      return false;
+    }
+
+    // 3. Current physical occupancy check (guest already seated/standing at this slot)
+    if (
+      (fg.state === 'ORDERING_DRINK' || fg.state === 'RESTING_AT_SEAT') &&
+      Math.hypot(slot.x - fg.gridX, slot.y - fg.gridY) < 0.36
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Counts how many seats on each furniture item (`parentItemId`) are currently claimed or occupied
+ * so the AI spreads guests across all available seats and tables/bars naturally.
+ */
+function computeParentItemOccupancyMap(
   candidates: FurnitureSlotCandidate[],
   guests: GuestAgent[],
   floor: FloorLevel,
   excludeGuestId: string
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const cand of candidates) {
+    if (!counts.has(cand.parentItemId)) {
+      counts.set(cand.parentItemId, 0);
+    }
+    if (!isFurnitureSlotAvailable(cand, guests, floor, excludeGuestId)) {
+      counts.set(cand.parentItemId, (counts.get(cand.parentItemId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/**
+ * Performs a proximity-based search from `(originX, originY)` across candidate furniture slots,
+ * verifying each slot's availability via `isFurnitureSlotAvailable` before attempting to occupy it,
+ * while load-balancing across furniture items so sprites distribute evenly across all stools and chairs.
+ */
+function findNearestVerifiedAvailableSlot(
+  candidates: FurnitureSlotCandidate[],
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string,
+  originX?: number,
+  originY?: number
+): FurnitureSlotCandidate | null {
+  if (candidates.length === 0) return null;
+
+  const requestingGuest = guests.find((g) => g.id === excludeGuestId);
+  const refX = originX ?? requestingGuest?.gridX ?? DOOR_COORD.x;
+  const refY = originY ?? requestingGuest?.gridY ?? DOOR_COORD.y;
+
+  const floorGuests = guests.filter(
+    (g) =>
+      g.floor === floor &&
+      g.id !== excludeGuestId &&
+      g.state !== 'QUEUEING' &&
+      g.state !== 'LEAVING'
+  );
+
+  const itemOccupancy = computeParentItemOccupancyMap(candidates, guests, floor, excludeGuestId);
+
+  // Rank candidates by posture priority (stools/chairs/sofas first), proximity to (refX, refY),
+  // even occupancy distribution across multi-seat items, and personal-space separation from other guests
+  const rankedCandidates = candidates
+    .map((cand) => {
+      const distFromOrigin = Math.hypot(cand.x - refX, cand.y - refY);
+      let minDistToOtherGuest = Infinity;
+      for (const fg of floorGuests) {
+        const targetPt =
+          fg.path.length > 0 ? fg.path[fg.path.length - 1] : { x: fg.gridX, y: fg.gridY };
+        const dCurrent = Math.hypot(cand.x - fg.gridX, cand.y - fg.gridY);
+        const dTarget = Math.hypot(cand.x - targetPt.x, cand.y - targetPt.y);
+        const d = Math.min(dCurrent, dTarget);
+        if (d < minDistToOtherGuest) minDistToOtherGuest = d;
+      }
+
+      const occupiedOnItem = itemOccupancy.get(cand.parentItemId) ?? 0;
+      const fillRatio =
+        cand.totalSeatsOnItem > 0 ? occupiedOnItem / cand.totalSeatsOnItem : 0;
+      const separationBonus = Math.min(minDistToOtherGuest, 2.2) * 0.9;
+
+      // Lower searchCost = closer available seat on an evenly balanced stool/chair group
+      const searchCost =
+        distFromOrigin * 1.15 + fillRatio * 3.4 - separationBonus + Math.random() * 0.25;
+
+      return {
+        cand,
+        searchCost,
+      };
+    })
+    .sort((a, b) => {
+      // 1. Always search seated slots (stools, chairs, VIP sofa cushions: priority 2) before standing overflow (priority 1)
+      if (b.cand.priority !== a.cand.priority) {
+        return b.cand.priority - a.cand.priority;
+      }
+      // 2. Proximity + even-distribution search order
+      return a.searchCost - b.searchCost;
+    });
+
+  // Verify availability of each slot in proximity order before attempting to occupy it
+  for (const entry of rankedCandidates) {
+    if (isFurnitureSlotAvailable(entry.cand, guests, floor, excludeGuestId)) {
+      return entry.cand;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Selects the best available seat or bar slot using proximity-based verification from the guest's position.
+ * Falls back to the least-crowded slot only if 100% of slots on the floor are occupied.
+ */
+function pickBestFurnitureSlot(
+  candidates: FurnitureSlotCandidate[],
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string,
+  originX?: number,
+  originY?: number
 ): FurnitureSlotCandidate {
   if (candidates.length === 0) {
     return {
       slotId: 'fallback_slot',
+      parentItemId: 'fallback_item',
+      seatIndex: 0,
+      totalSeatsOnItem: 1,
       x: 4.0,
       y: 4.0,
       posture: 'STANDING_TABLE',
@@ -6972,45 +7160,633 @@ function pickBestFurnitureSlot(
     };
   }
 
-  const floorGuests = guests.filter(
-    (g) => g.floor === floor && g.id !== excludeGuestId && g.state !== 'QUEUEING'
+  const verifiedNearest = findNearestVerifiedAvailableSlot(
+    candidates,
+    guests,
+    floor,
+    excludeGuestId,
+    originX,
+    originY
   );
+  if (verifiedNearest) {
+    return verifiedNearest;
+  }
 
-  // Separate unoccupied vs occupied slots so every bar stool and chair gets filled before any slot doubles up
+  // Fallback when every slot on the floor is occupied: pick the most separated candidate
+  const floorGuests = guests.filter(
+    (g) =>
+      g.floor === floor &&
+      g.id !== excludeGuestId &&
+      g.state !== 'QUEUEING' &&
+      g.state !== 'LEAVING'
+  );
   let bestCandidate = candidates[0];
-  let bestScore = -Infinity;
-
+  let bestDist = -Infinity;
   for (const cand of candidates) {
     let minDist = Infinity;
-    let isClaimedBySlotId = false;
-
     for (const fg of floorGuests) {
-      if (fg.assignedSlotId && fg.assignedSlotId === cand.slotId) {
-        isClaimedBySlotId = true;
-      }
-      const targetPt =
-        fg.path.length > 0 ? fg.path[fg.path.length - 1] : { x: fg.gridX, y: fg.gridY };
-      const dCurrent = Math.hypot(cand.x - fg.gridX, cand.y - fg.gridY);
-      const dTarget = Math.hypot(cand.x - targetPt.x, cand.y - targetPt.y);
-      const d = Math.min(dCurrent, dTarget);
+      const d = Math.hypot(cand.x - fg.gridX, cand.y - fg.gridY);
       if (d < minDist) minDist = d;
     }
-
-    const isOccupied = isClaimedBySlotId || minDist < 0.42;
-    // Unoccupied seated stools/chairs get a huge bonus (+100) so patrons occupy ALL available seats!
-    const unoccupiedBonus = isOccupied ? -50 : 100;
-    const priorityBonus = cand.priority * 18;
-    const spacingScore = Math.min(minDist, 2.2) * 4;
-    const jitter = Math.random() * 3.5;
-    const totalScore = unoccupiedBonus + priorityBonus + spacingScore + jitter;
-
-    if (totalScore > bestScore) {
-      bestScore = totalScore;
+    if (minDist > bestDist) {
+      bestDist = minDist;
       bestCandidate = cand;
     }
   }
-
   return bestCandidate;
+}
+
+/**
+ * Enumerates all individual bar stool and standing counter slots across every BAR_UNIT on the floor.
+ */
+function buildBarSlotCandidates(
+  items: PlacedItem[],
+  floor: FloorLevel
+): FurnitureSlotCandidate[] {
+  const barItems = items.filter(
+    (it) => it.floor === floor && getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
+  );
+  const candidates: FurnitureSlotCandidate[] = [];
+
+  for (const bar of barItems) {
+    const cat = getCatalogItem(bar.catalogId);
+    if (!cat) continue;
+    const fp = getRotatedFootprint(cat, bar.rotation);
+
+    // 1. Add a high-priority SITTING_STOOL slot for EVERY single bar stool drawn by getBarStoolCoords
+    const stools = getBarStoolCoords(bar, fp);
+    const totalSeats = stools.length + 2;
+    for (let idx = 0; idx < stools.length; idx++) {
+      const st = stools[idx];
+      candidates.push({
+        slotId: st.slotId,
+        parentItemId: bar.uid,
+        seatIndex: idx,
+        totalSeatsOnItem: totalSeats,
+        x: st.gx,
+        y: st.gy,
+        posture: 'SITTING_STOOL',
+        facingDir: st.facingDir,
+        priority: 2,
+      });
+    }
+
+    // 2. Add two well-separated STANDING_BAR slots at opposite ends of the bar counter when all stools are full
+    const alongY = fp.depth > fp.width;
+    if (alongY) {
+      const standX =
+        bar.gridX + fp.width + 0.52 <= 9.25 ? bar.gridX + fp.width + 0.52 : bar.gridX - 0.45;
+      candidates.push(
+        {
+          slotId: `${bar.uid}_stand_end_0`,
+          parentItemId: bar.uid,
+          seatIndex: stools.length,
+          totalSeatsOnItem: totalSeats,
+          x: standX,
+          y: Math.min(9.15, bar.gridY + fp.depth + 0.14),
+          posture: 'STANDING_BAR',
+          facingDir: 'NW',
+          priority: 1,
+        },
+        {
+          slotId: `${bar.uid}_stand_end_1`,
+          parentItemId: bar.uid,
+          seatIndex: stools.length + 1,
+          totalSeatsOnItem: totalSeats,
+          x: standX,
+          y: Math.max(0.35, bar.gridY - 0.14),
+          posture: 'STANDING_BAR',
+          facingDir: 'NW',
+          priority: 1,
+        }
+      );
+    } else {
+      const standY =
+        bar.gridY + fp.depth + 0.52 <= 9.25 ? bar.gridY + fp.depth + 0.52 : bar.gridY - 0.45;
+      candidates.push(
+        {
+          slotId: `${bar.uid}_stand_end_0`,
+          parentItemId: bar.uid,
+          seatIndex: stools.length,
+          totalSeatsOnItem: totalSeats,
+          x: Math.min(9.15, bar.gridX + fp.width + 0.14),
+          y: standY,
+          posture: 'STANDING_BAR',
+          facingDir: 'NE',
+          priority: 1,
+        },
+        {
+          slotId: `${bar.uid}_stand_end_1`,
+          parentItemId: bar.uid,
+          seatIndex: stools.length + 1,
+          totalSeatsOnItem: totalSeats,
+          x: Math.max(0.35, bar.gridX - 0.14),
+          y: standY,
+          posture: 'STANDING_BAR',
+          facingDir: 'NE',
+          priority: 1,
+        }
+      );
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Enumerates all individual chair, VIP sofa cushion, and cocktail table standing slots across every SEATING item on the floor.
+ */
+function buildSeatOrTableSlotCandidates(
+  items: PlacedItem[],
+  floor: FloorLevel
+): FurnitureSlotCandidate[] {
+  const seatItems = items.filter(
+    (it) => it.floor === floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
+  );
+  const candidates: FurnitureSlotCandidate[] = [];
+
+  for (const seat of seatItems) {
+    const cat = getCatalogItem(seat.catalogId);
+    if (!cat) continue;
+    const fp = getRotatedFootprint(cat, seat.rotation);
+
+    if (cat.id === 'seat_bistro') {
+      // High-top cocktail table at (seat.gridX + 0.50, seat.gridY + 0.50) with 2 cushioned club chairs + 2 standing positions:
+      const totalTableSlots = 4;
+      // 1) Back-Left Cushioned Club Chair at exact chair coordinate (seat.gridX + 0.14, seat.gridY + 0.52)
+      candidates.push({
+        slotId: `${seat.uid}_chair_back`,
+        parentItemId: seat.uid,
+        seatIndex: 0,
+        totalSeatsOnItem: totalTableSlots,
+        x: seat.gridX + 0.14,
+        y: seat.gridY + 0.52,
+        posture: 'SITTING_CHAIR',
+        facingDir: 'SE',
+        priority: 2,
+      });
+      // 2) Front-Right Cushioned Club Chair at exact chair coordinate (seat.gridX + 0.86, seat.gridY + 0.48)
+      candidates.push({
+        slotId: `${seat.uid}_chair_front`,
+        parentItemId: seat.uid,
+        seatIndex: 1,
+        totalSeatsOnItem: totalTableSlots,
+        x: seat.gridX + 0.86,
+        y: seat.gridY + 0.48,
+        posture: 'SITTING_CHAIR',
+        facingDir: 'NW',
+        priority: 2,
+      });
+      // 3) Standing Cocktail Table Companion Slot in front of the table (never on top of the table!)
+      candidates.push({
+        slotId: `${seat.uid}_stand_front`,
+        parentItemId: seat.uid,
+        seatIndex: 2,
+        totalSeatsOnItem: totalTableSlots,
+        x: seat.gridX + 0.54,
+        y: Math.min(9.2, seat.gridY + 0.96),
+        posture: 'STANDING_TABLE',
+        facingDir: 'NW',
+        priority: 1,
+      });
+      // 4) Standing Cocktail Table Companion Slot on the back-right side of the table
+      candidates.push({
+        slotId: `${seat.uid}_stand_back`,
+        parentItemId: seat.uid,
+        seatIndex: 3,
+        totalSeatsOnItem: totalTableSlots,
+        x: seat.gridX + 0.46,
+        y: Math.max(0.35, seat.gridY + 0.06),
+        posture: 'STANDING_TABLE',
+        facingDir: 'SE',
+        priority: 1,
+      });
+    } else {
+      // Tufted Purple VIP Lounge Booth / Couch:
+      // Match exact orientation used by drawTable (fp.depth > fp.width = vertical sofa; fp.width >= fp.depth = horizontal sofa)
+      const alongY = fp.depth > fp.width;
+      if (alongY) {
+        // Vertical sofa along Y at X = seat.gridX + 0.28: generate 3 distinct cushion slots across a 2-tile sofa
+        const numCushions = fp.depth >= 2 ? 3 : 2;
+        const totalBoothSlots = numCushions + 1;
+        for (let k = 0; k < numCushions; k++) {
+          const offsetY =
+            numCushions === 3
+              ? 0.32 + k * 0.68 // 0.32, 1.00, 1.68 (0.68 grid units apart)
+              : (k + 0.48) * (fp.depth / numCushions);
+          candidates.push({
+            slotId: `${seat.uid}_sofa_${k}`,
+            parentItemId: seat.uid,
+            seatIndex: k,
+            totalSeatsOnItem: totalBoothSlots,
+            x: seat.gridX + 0.28,
+            y: Math.min(9.25, seat.gridY + offsetY),
+            posture: 'SITTING_SOFA',
+            facingDir: 'SE',
+            priority: 2,
+          });
+        }
+        // Companion standing cocktail slot at the end of the VIP table
+        candidates.push({
+          slotId: `${seat.uid}_stand_vip_0`,
+          parentItemId: seat.uid,
+          seatIndex: numCushions,
+          totalSeatsOnItem: totalBoothSlots,
+          x: Math.min(9.2, seat.gridX + 0.88),
+          y: Math.min(9.2, seat.gridY + fp.depth * 0.5),
+          posture: 'STANDING_TABLE',
+          facingDir: 'NW',
+          priority: 1,
+        });
+      } else {
+        // Horizontal sofa along X at Y = seat.gridY + 0.28: generate 3 distinct cushion slots across a 2-tile sofa
+        const numCushions = fp.width >= 2 ? 3 : 2;
+        const extraFrontSlots = fp.depth >= 2 ? 2 : 1;
+        const totalBoothSlots = numCushions + extraFrontSlots;
+        for (let k = 0; k < numCushions; k++) {
+          const offsetX =
+            numCushions === 3
+              ? 0.32 + k * 0.68 // 0.32, 1.00, 1.68 (0.68 grid units apart)
+              : (k + 0.48) * (fp.width / numCushions);
+          candidates.push({
+            slotId: `${seat.uid}_sofa_${k}`,
+            parentItemId: seat.uid,
+            seatIndex: k,
+            totalSeatsOnItem: totalBoothSlots,
+            x: Math.min(9.25, seat.gridX + offsetX),
+            y: seat.gridY + 0.28,
+            posture: 'SITTING_SOFA',
+            facingDir: 'SW',
+            priority: 2,
+          });
+        }
+        if (fp.depth >= 2) {
+          // 2x2 VIP booth: 2 well-spaced table-side companion slots in front of the black VIP table
+          candidates.push(
+            {
+              slotId: `${seat.uid}_stand_vip_0`,
+              parentItemId: seat.uid,
+              seatIndex: numCushions,
+              totalSeatsOnItem: totalBoothSlots,
+              x: Math.min(9.2, seat.gridX + 0.48),
+              y: Math.min(9.2, seat.gridY + 1.34),
+              posture: 'STANDING_TABLE',
+              facingDir: 'NE',
+              priority: 1,
+            },
+            {
+              slotId: `${seat.uid}_stand_vip_1`,
+              parentItemId: seat.uid,
+              seatIndex: numCushions + 1,
+              totalSeatsOnItem: totalBoothSlots,
+              x: Math.min(9.2, seat.gridX + 1.48),
+              y: Math.min(9.2, seat.gridY + 1.34),
+              posture: 'STANDING_TABLE',
+              facingDir: 'NE',
+              priority: 1,
+            }
+          );
+        } else {
+          candidates.push({
+            slotId: `${seat.uid}_stand_vip_0`,
+            parentItemId: seat.uid,
+            seatIndex: numCushions,
+            totalSeatsOnItem: totalBoothSlots,
+            x: Math.min(9.2, seat.gridX + fp.width * 0.5),
+            y: Math.min(9.2, seat.gridY + 0.92),
+            posture: 'STANDING_TABLE',
+            facingDir: 'NE',
+            priority: 1,
+          });
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Proximity-based search that verifies and returns the nearest available bar stool/counter slot on `floor` (or null if full).
+ */
+function findAvailableBarSlot(
+  items: PlacedItem[],
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string,
+  originX?: number,
+  originY?: number
+): FurnitureSlotCandidate | null {
+  const candidates = buildBarSlotCandidates(items, floor);
+  return findNearestVerifiedAvailableSlot(
+    candidates,
+    guests,
+    floor,
+    excludeGuestId,
+    originX,
+    originY
+  );
+}
+
+/**
+ * Proximity-based search that verifies and returns the nearest available chair/VIP sofa/table slot on `floor` (or null if full).
+ */
+function findAvailableSeatOrTableSlot(
+  items: PlacedItem[],
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string,
+  originX?: number,
+  originY?: number
+): FurnitureSlotCandidate | null {
+  const candidates = buildSeatOrTableSlotCandidates(items, floor);
+  return findNearestVerifiedAvailableSlot(
+    candidates,
+    guests,
+    floor,
+    excludeGuestId,
+    originX,
+    originY
+  );
+}
+
+function pickSeparatedBarSlot(
+  items: PlacedItem[],
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string,
+  originX?: number,
+  originY?: number
+): FurnitureSlotCandidate {
+  const candidates = buildBarSlotCandidates(items, floor);
+  if (candidates.length === 0) {
+    const fallback: FurnitureSlotCandidate[] = [
+      {
+        slotId: 'def_stool_1',
+        parentItemId: 'def_bar',
+        seatIndex: 0,
+        totalSeatsOnItem: 6,
+        x: 8.36,
+        y: 2.5,
+        posture: 'SITTING_STOOL',
+        facingDir: 'NW',
+        priority: 2,
+      },
+      {
+        slotId: 'def_stool_2',
+        parentItemId: 'def_bar',
+        seatIndex: 1,
+        totalSeatsOnItem: 6,
+        x: 8.36,
+        y: 3.5,
+        posture: 'SITTING_STOOL',
+        facingDir: 'NW',
+        priority: 2,
+      },
+      {
+        slotId: 'def_stool_3',
+        parentItemId: 'def_bar',
+        seatIndex: 2,
+        totalSeatsOnItem: 6,
+        x: 8.36,
+        y: 4.5,
+        posture: 'SITTING_STOOL',
+        facingDir: 'NW',
+        priority: 2,
+      },
+      {
+        slotId: 'def_stool_4',
+        parentItemId: 'def_bar',
+        seatIndex: 3,
+        totalSeatsOnItem: 6,
+        x: 8.36,
+        y: 5.5,
+        posture: 'SITTING_STOOL',
+        facingDir: 'NW',
+        priority: 2,
+      },
+      {
+        slotId: 'def_stool_5',
+        parentItemId: 'def_bar',
+        seatIndex: 4,
+        totalSeatsOnItem: 6,
+        x: 8.36,
+        y: 6.5,
+        posture: 'SITTING_STOOL',
+        facingDir: 'NW',
+        priority: 2,
+      },
+      {
+        slotId: 'def_stool_6',
+        parentItemId: 'def_bar',
+        seatIndex: 5,
+        totalSeatsOnItem: 6,
+        x: 8.36,
+        y: 7.5,
+        posture: 'SITTING_STOOL',
+        facingDir: 'NW',
+        priority: 2,
+      },
+    ];
+    return pickBestFurnitureSlot(fallback, guests, floor, excludeGuestId, originX, originY);
+  }
+  return pickBestFurnitureSlot(candidates, guests, floor, excludeGuestId, originX, originY);
+}
+
+function pickSeparatedSeatOrTableSlot(
+  items: PlacedItem[],
+  guests: GuestAgent[],
+  floor: FloorLevel,
+  excludeGuestId: string,
+  originX?: number,
+  originY?: number
+): FurnitureSlotCandidate {
+  const candidates = buildSeatOrTableSlotCandidates(items, floor);
+  if (candidates.length === 0) {
+    const fallback: FurnitureSlotCandidate[] = [
+      {
+        slotId: 'def_sofa_1',
+        parentItemId: 'def_sofa',
+        seatIndex: 0,
+        totalSeatsOnItem: 2,
+        x: 0.28,
+        y: 1.46,
+        posture: 'SITTING_SOFA',
+        facingDir: 'SE',
+        priority: 2,
+      },
+      {
+        slotId: 'def_chair_1',
+        parentItemId: 'def_table',
+        seatIndex: 1,
+        totalSeatsOnItem: 2,
+        x: 1.14,
+        y: 7.52,
+        posture: 'SITTING_CHAIR',
+        facingDir: 'SE',
+        priority: 2,
+      },
+    ];
+    return pickBestFurnitureSlot(fallback, guests, floor, excludeGuestId, originX, originY);
+  }
+  return pickBestFurnitureSlot(candidates, guests, floor, excludeGuestId, originX, originY);
+}
+
+/**
+ * Builds an A* approach path that always terminates cleanly at the exact sub-tile seat/stool coordinate `(slot.x, slot.y)`
+ * so guests walk onto their individual chair/stool rather than stopping on a shared integer tile.
+ */
+function buildPathToFurnitureSlot(
+  items: PlacedItem[],
+  floor: FloorLevel,
+  startX: number,
+  startY: number,
+  slot: FurnitureSlotCandidate
+): Array<{ x: number; y: number }> {
+  const goalTileX = Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(slot.x)));
+  const goalTileY = Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(slot.y)));
+  const rawPath = findGridPath(items, floor, startX, startY, goalTileX, goalTileY);
+
+  if (rawPath.length === 0) {
+    return [{ x: slot.x, y: slot.y }];
+  }
+
+  const lastWp = rawPath[rawPath.length - 1];
+  if (Math.hypot(lastWp.x - slot.x, lastWp.y - slot.y) <= 0.45) {
+    rawPath[rawPath.length - 1] = { x: slot.x, y: slot.y };
+  } else {
+    rawPath.push({ x: slot.x, y: slot.y });
+  }
+  return rawPath;
+}
+
+/**
+ * Assigns a guest to a verified available furniture slot and sets up their walking path and posture metadata.
+ */
+function assignGuestToFurnitureSlot(
+  guest: GuestAgent,
+  slot: FurnitureSlotCandidate,
+  items: PlacedItem[],
+  targetWalkState: 'WALKING_TO_BAR' | 'WALKING_TO_SEAT'
+) {
+  guest.state = targetWalkState;
+  guest.seatPosture = slot.posture;
+  guest.facingDir = slot.facingDir;
+  guest.assignedSlotId = slot.slotId;
+  guest.path = buildPathToFurnitureSlot(items, guest.floor, guest.gridX, guest.gridY, slot);
+}
+
+/**
+ * Re-verifies seat availability when a guest finishes walking to a bar stool or table chair.
+ * Uses a proximity-based search centered at the guest's current arrival position `(guest.gridX, guest.gridY)`
+ * to verify and occupy the nearest available sibling stool or chair if their original target was taken.
+ */
+function verifyOrReassignGuestSlotOnArrival(
+  guest: GuestAgent,
+  items: PlacedItem[],
+  guests: GuestAgent[],
+  kind: 'BAR' | 'SEAT'
+): 'ARRIVED' | 'REROUTED' | 'NO_SEAT_AVAILABLE' {
+  const candidates =
+    kind === 'BAR'
+      ? buildBarSlotCandidates(items, guest.floor)
+      : buildSeatOrTableSlotCandidates(items, guest.floor);
+
+  const assignedSlot = candidates.find((c) => c.slotId === guest.assignedSlotId);
+  if (assignedSlot && isFurnitureSlotAvailable(assignedSlot, guests, guest.floor, guest.id)) {
+    // Snap cleanly to the exact chair/stool/sofa coordinate so there is zero drift or overlap
+    guest.gridX = assignedSlot.x;
+    guest.gridY = assignedSlot.y;
+    guest.seatPosture = assignedSlot.posture;
+    guest.facingDir = assignedSlot.facingDir;
+    guest.assignedSlotId = assignedSlot.slotId;
+    return 'ARRIVED';
+  }
+
+  // Target seat was taken or invalidated — run proximity-based search from the guest's current position
+  // to verify the nearest available sibling chair or bar stool before attempting to occupy it
+  const searchOriginX = assignedSlot ? assignedSlot.x : guest.gridX;
+  const searchOriginY = assignedSlot ? assignedSlot.y : guest.gridY;
+  const nearestAvailable = findNearestVerifiedAvailableSlot(
+    candidates,
+    guests,
+    guest.floor,
+    guest.id,
+    searchOriginX,
+    searchOriginY
+  );
+
+  if (nearestAvailable) {
+    assignGuestToFurnitureSlot(
+      guest,
+      nearestAvailable,
+      items,
+      kind === 'BAR' ? 'WALKING_TO_BAR' : 'WALKING_TO_SEAT'
+    );
+    guest.stateTimer = 0.55;
+    return 'REROUTED';
+  }
+
+  return 'NO_SEAT_AVAILABLE';
+}
+
+/**
+ * Reconciles any seated or bar-ordering guests whose `assignedSlotId` is missing, stale (e.g. after layout edits),
+ * or duplicated with another guest on the same seat, ensuring every occupied seat has at most 1 patron.
+ */
+function reconcileOccupiedFurnitureSlots(items: PlacedItem[], guests: GuestAgent[]) {
+  const claimedSlotIds = new Set<string>();
+  const occupiedCoords: Array<{ floor: FloorLevel; x: number; y: number; guestId: string }> = [];
+
+  for (let i = 0; i < guests.length; i++) {
+    const g = guests[i];
+    if (g.state !== 'ORDERING_DRINK' && g.state !== 'RESTING_AT_SEAT') continue;
+
+    const isBar = g.state === 'ORDERING_DRINK';
+    const candidates = isBar
+      ? buildBarSlotCandidates(items, g.floor)
+      : buildSeatOrTableSlotCandidates(items, g.floor);
+    if (candidates.length === 0) continue;
+
+    const matchedSlot = candidates.find((c) => c.slotId === g.assignedSlotId);
+    const hasCoordCollision = occupiedCoords.some(
+      (oc) => oc.floor === g.floor && Math.hypot(oc.x - g.gridX, oc.y - g.gridY) < 0.34
+    );
+
+    if (matchedSlot && !claimedSlotIds.has(matchedSlot.slotId) && !hasCoordCollision) {
+      claimedSlotIds.add(matchedSlot.slotId);
+      g.gridX = matchedSlot.x;
+      g.gridY = matchedSlot.y;
+      g.seatPosture = matchedSlot.posture;
+      g.facingDir = matchedSlot.facingDir;
+      occupiedCoords.push({ floor: g.floor, x: g.gridX, y: g.gridY, guestId: g.id });
+    } else {
+      // Find the nearest unoccupied slot on this floor and snap/assign the guest to it so they never cluster
+      const available = candidates.filter(
+        (c) =>
+          !claimedSlotIds.has(c.slotId) &&
+          !occupiedCoords.some(
+            (oc) => oc.floor === g.floor && Math.hypot(oc.x - c.x, oc.y - c.y) < 0.34
+          ) &&
+          isFurnitureSlotAvailable(c, guests, g.floor, g.id)
+      );
+      if (available.length > 0) {
+        available.sort(
+          (a, b) =>
+            b.priority - a.priority ||
+            Math.hypot(a.x - g.gridX, a.y - g.gridY) - Math.hypot(b.x - g.gridX, b.y - g.gridY)
+        );
+        const chosen = available[0];
+        claimedSlotIds.add(chosen.slotId);
+        g.assignedSlotId = chosen.slotId;
+        g.gridX = chosen.x;
+        g.gridY = chosen.y;
+        g.seatPosture = chosen.posture;
+        g.facingDir = chosen.facingDir;
+        occupiedCoords.push({ floor: g.floor, x: g.gridX, y: g.gridY, guestId: g.id });
+      }
+    }
+  }
 }
 
 function pickMostSeparatedSlot(
@@ -7033,7 +7809,8 @@ function pickMostSeparatedSlot(
   for (const cand of candidates) {
     let minDist = Infinity;
     for (const fg of floorGuests) {
-      const targetPt = fg.path.length > 0 ? fg.path[fg.path.length - 1] : { x: fg.gridX, y: fg.gridY };
+      const targetPt =
+        fg.path.length > 0 ? fg.path[fg.path.length - 1] : { x: fg.gridX, y: fg.gridY };
       const dCurrent = Math.hypot(cand.x - fg.gridX, cand.y - fg.gridY);
       const dTarget = Math.hypot(cand.x - targetPt.x, cand.y - targetPt.y);
       const d = Math.min(dCurrent, dTarget);
@@ -7047,173 +7824,6 @@ function pickMostSeparatedSlot(
   }
 
   return bestSlot;
-}
-
-function pickSeparatedBarSlot(
-  items: PlacedItem[],
-  guests: GuestAgent[],
-  floor: FloorLevel,
-  excludeGuestId: string
-): FurnitureSlotCandidate {
-  const barItems = items.filter(
-    (it) => it.floor === floor && getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
-  );
-  const candidates: FurnitureSlotCandidate[] = [];
-
-  for (const bar of barItems) {
-    const cat = getCatalogItem(bar.catalogId);
-    if (!cat) continue;
-    const fp = getRotatedFootprint(cat, bar.rotation);
-
-    // 1. Add a high-priority SITTING_STOOL slot for EVERY single bar stool drawn by getBarStoolCoords
-    const stools = getBarStoolCoords(bar, fp);
-    for (const st of stools) {
-      candidates.push({
-        slotId: st.slotId,
-        x: st.gx,
-        y: st.gy,
-        posture: 'SITTING_STOOL',
-        facingDir: st.facingDir,
-        priority: 2,
-      });
-    }
-
-    // 2. Add natural STANDING_BAR slots at the ends of the bar counter when all stools are full
-    const alongY = fp.depth > fp.width;
-    if (alongY) {
-      const standX = bar.gridX + fp.width + 0.52 <= 9.25 ? bar.gridX + fp.width + 0.52 : bar.gridX - 0.45;
-      candidates.push({
-        slotId: `${bar.uid}_stand_end`,
-        x: standX,
-        y: Math.min(9.1, bar.gridY + fp.depth + 0.15),
-        posture: 'STANDING_BAR',
-        facingDir: 'NW',
-        priority: 1,
-      });
-    } else {
-      const standY = bar.gridY + fp.depth + 0.52 <= 9.25 ? bar.gridY + fp.depth + 0.52 : bar.gridY - 0.45;
-      candidates.push({
-        slotId: `${bar.uid}_stand_end`,
-        x: Math.min(9.1, bar.gridX + fp.width + 0.15),
-        y: standY,
-        posture: 'STANDING_BAR',
-        facingDir: 'NE',
-        priority: 1,
-      });
-    }
-  }
-
-  if (candidates.length === 0) {
-    candidates.push(
-      { slotId: 'def_stool_1', x: 7.36, y: 1.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
-      { slotId: 'def_stool_2', x: 7.36, y: 2.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
-      { slotId: 'def_stool_3', x: 7.36, y: 3.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
-      { slotId: 'def_stool_4', x: 7.36, y: 4.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
-      { slotId: 'def_stool_5', x: 7.36, y: 5.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 },
-      { slotId: 'def_stool_6', x: 7.36, y: 6.5, posture: 'SITTING_STOOL', facingDir: 'NW', priority: 2 }
-    );
-  }
-
-  return pickBestFurnitureSlot(candidates, guests, floor, excludeGuestId);
-}
-
-function pickSeparatedSeatOrTableSlot(
-  items: PlacedItem[],
-  guests: GuestAgent[],
-  floor: FloorLevel,
-  excludeGuestId: string
-): FurnitureSlotCandidate {
-  const seatItems = items.filter(
-    (it) => it.floor === floor && getCatalogItem(it.catalogId)?.category === 'SEATING'
-  );
-  const candidates: FurnitureSlotCandidate[] = [];
-
-  for (const seat of seatItems) {
-    const cat = getCatalogItem(seat.catalogId);
-    if (!cat) continue;
-    const fp = getRotatedFootprint(cat, seat.rotation);
-
-    if (cat.id === 'seat_bistro') {
-      // High-top cocktail table at (seat.gridX + 0.50, seat.gridY + 0.50):
-      // 1) Back-Left Cushioned Club Chair at exact chair coordinate (seat.gridX + 0.14, seat.gridY + 0.52)
-      candidates.push({
-        slotId: `${seat.uid}_chair_back`,
-        x: seat.gridX + 0.14,
-        y: seat.gridY + 0.52,
-        posture: 'SITTING_CHAIR',
-        facingDir: 'SE',
-        priority: 2,
-      });
-      // 2) Front-Right Cushioned Club Chair at exact chair coordinate (seat.gridX + 0.86, seat.gridY + 0.48)
-      candidates.push({
-        slotId: `${seat.uid}_chair_front`,
-        x: seat.gridX + 0.86,
-        y: seat.gridY + 0.48,
-        posture: 'SITTING_CHAIR',
-        facingDir: 'NW',
-        priority: 2,
-      });
-      // 3) Standing Cocktail Table Companion Slot cleanly in front of the table (never on top of the table!)
-      candidates.push({
-        slotId: `${seat.uid}_stand_front`,
-        x: seat.gridX + 0.54,
-        y: Math.min(9.2, seat.gridY + 0.96),
-        posture: 'STANDING_TABLE',
-        facingDir: 'NW',
-        priority: 1,
-      });
-    } else {
-      // Tufted Purple VIP Lounge Booth / Couch: distinct sofa cushion slots strictly on the purple sofa cushion (behind the black VIP table)
-      if (fp.depth >= fp.width) {
-        candidates.push({
-          slotId: `${seat.uid}_sofa_0`,
-          x: seat.gridX + 0.28,
-          y: seat.gridY + 0.46,
-          posture: 'SITTING_SOFA',
-          facingDir: 'SE',
-          priority: 2,
-        });
-        if (fp.depth > 1) {
-          candidates.push({
-            slotId: `${seat.uid}_sofa_1`,
-            x: seat.gridX + 0.28,
-            y: seat.gridY + 1.46,
-            posture: 'SITTING_SOFA',
-            facingDir: 'SE',
-            priority: 2,
-          });
-        }
-      } else {
-        candidates.push({
-          slotId: `${seat.uid}_sofa_0`,
-          x: seat.gridX + 0.46,
-          y: seat.gridY + 0.28,
-          posture: 'SITTING_SOFA',
-          facingDir: 'SW',
-          priority: 2,
-        });
-        if (fp.width > 1) {
-          candidates.push({
-            slotId: `${seat.uid}_sofa_1`,
-            x: seat.gridX + 1.46,
-            y: seat.gridY + 0.28,
-            posture: 'SITTING_SOFA',
-            facingDir: 'SW',
-            priority: 2,
-          });
-        }
-      }
-    }
-  }
-
-  if (candidates.length === 0) {
-    candidates.push(
-      { slotId: 'def_sofa_1', x: 0.28, y: 1.46, posture: 'SITTING_SOFA', facingDir: 'SE', priority: 2 },
-      { slotId: 'def_chair_1', x: 1.14, y: 7.52, posture: 'SITTING_CHAIR', facingDir: 'SE', priority: 2 }
-    );
-  }
-
-  return pickBestFurnitureSlot(candidates, guests, floor, excludeGuestId);
 }
 
 function pickSeparatedDanceSlot(
