@@ -22,12 +22,13 @@ export default defineConfig(() => {
         enforce: 'pre',
         config(): void {
           // Runs BEFORE Vite's internal vite:build-html plugin reads index.html from disk.
-          // When building on GitHub Actions, ensure index.html on disk contains the /src/main.tsx entry tag.
+          // Check specifically for an actual <script ... src="/src/main.tsx"> HTML tag
+          // (not comments or inline JS strings that mention ./src/main.tsx).
           if (process.env.GITHUB_ACTIONS === 'true') {
             const rootIndexHtmlPath = path.resolve(__dirname, 'index.html');
             if (fs.existsSync(rootIndexHtmlPath)) {
               const html = fs.readFileSync(rootIndexHtmlPath, 'utf8');
-              if (!html.includes('/src/main.tsx')) {
+              if (!/<script[^>]+src=["']\.?\/src\/main\.tsx["']/i.test(html)) {
                 const patched = html.replace(
                   '<div id="root"></div>',
                   '<div id="root"></div>\n    <script type="module" src="/src/main.tsx"></script>'
