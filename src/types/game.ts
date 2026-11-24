@@ -81,6 +81,7 @@ export type BubbleType =
   | 'CHAT'
   | 'CASH'
   | 'EXCLAMATION'
+  | 'BOTTLE_SERVICE'
   | 'ANGRY_LIGHT'
   | 'ANGRY_QUEUE'
   | 'ANGRY_SEAT'
@@ -120,6 +121,39 @@ export interface GuestAgent {
   assignedSlotId?: string;
   chatText?: string;
   chatTimer?: number;
+  bottleServiceTrayId?: string;
+}
+
+export interface VipBottleServiceTray {
+  id: string;
+  name: string;
+  tier: 1 | 2 | 3;
+  price: number;
+  hypeBoost: number;
+  vibeBoost: number;
+  durationSec: number;
+  spendingMultiplier: number;
+  trayColor: string;
+  sparklerColor: string;
+  badgeEmoji: string;
+  description: string;
+}
+
+export interface ActiveBoothBottleService {
+  boothUid: string;
+  floor: FloorLevel;
+  trayId: string;
+  trayName: string;
+  trayColor: string;
+  sparklerColor: string;
+  price: number;
+  hypeBoost: number;
+  vibeBoost: number;
+  spendingMultiplier: number;
+  status: 'ORDERED_WAITING' | 'ACTIVE_SPARKLERS';
+  timer: number;
+  maxTimer: number;
+  orderedByGuestName: string;
 }
 
 export interface FloatingText {
@@ -547,6 +581,59 @@ export const DRINK_MIXES: DrinkMix[] = [
     description: 'Sparkler-lit crystal magnum delivered to VIP booths for massive celebrity tips.',
   },
 ];
+
+export const VIP_BOTTLE_SERVICE_TRAYS: VipBottleServiceTray[] = [
+  {
+    id: 'tray_crystal_rose',
+    name: 'Crystal Rosé Sparkler Tray',
+    tier: 1,
+    price: 480,
+    hypeBoost: 38,
+    vibeBoost: 24,
+    durationSec: 20,
+    spendingMultiplier: 2.2,
+    trayColor: '#f43f5e',
+    sparklerColor: '#fb7185',
+    badgeEmoji: '🍾',
+    description: 'Chilled rosé champagne tray with twin LED sparklers & 4 neon flutes for VIP booths.',
+  },
+  {
+    id: 'tray_neon_magnum',
+    name: 'Neon Blue Magnum & Shots Tray',
+    tier: 2,
+    price: 850,
+    hypeBoost: 68,
+    vibeBoost: 45,
+    durationSec: 24,
+    spendingMultiplier: 2.8,
+    trayColor: '#22d3ee',
+    sparklerColor: '#38bdf8',
+    badgeEmoji: '🥂',
+    description: 'Illuminated crystal magnum in a silver ice bucket with glowing electric shot tray.',
+  },
+  {
+    id: 'tray_24k_supernova',
+    name: '24K Gold Supernova Parade Tray',
+    tier: 3,
+    price: 1480,
+    hypeBoost: 120,
+    vibeBoost: 80,
+    durationSec: 30,
+    spendingMultiplier: 3.6,
+    trayColor: '#facc15',
+    sparklerColor: '#fde047',
+    badgeEmoji: '👑',
+    description: 'Royal 24K gold double-magnum parade tray with fireworks sparklers & celebrity spending surge.',
+  },
+];
+
+export function isVipBoothCatalogId(catalogId: string): boolean {
+  return (
+    catalogId === 'seat_velvet_booth' ||
+    catalogId === 'seat_vip_pod' ||
+    catalogId === 'seat_worn_couch'
+  );
+}
 
 // Level 1 Dive Bar Starter Layout (Small gritty single-floor club with 3x3 dance floor, basic bar, warm string light, and a couple of chairs)
 export const LEVEL_1_DIVE_BAR_ITEMS: PlacedItem[] = [

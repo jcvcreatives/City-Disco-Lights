@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
+  ActiveBoothBottleService,
   BubbleType,
   CatalogItem,
   DancerMoveVariant,
@@ -8,6 +9,7 @@ import {
   FloorLevel,
   GuestAgent,
   GuestSeatPosture,
+  isVipBoothCatalogId,
   ParkingUpgradeState,
   PlacedItem,
   StaffCatalogItem,
@@ -188,6 +190,7 @@ export interface SpriteMoodInfo {
   thought: string;
   favoriteGenre: string;
   shirtColor: string;
+  boothUid?: string;
 }
 
 interface TrafficCarAgent {
@@ -244,6 +247,12 @@ interface IsometricClubCanvasProps {
   selectedSpriteId?: string | null;
   onSelectSprite?: (info: SpriteMoodInfo) => void;
   onSpriteMoodListReport?: (list: SpriteMoodInfo[]) => void;
+  activeBottleServices?: Record<string, ActiveBoothBottleService>;
+  onBottleServiceEvent?: (
+    boothUid: string,
+    eventType: 'GUEST_ORDERED' | 'WAITER_DELIVERED' | 'TAPPED_BOOTH',
+    guestName?: string
+  ) => void;
   cameraZoom: number;
   cameraResetTick: number;
   dayNightOverrideHour?: number | null;
@@ -451,6 +460,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   selectedSpriteId = null,
   onSelectSprite,
   onSpriteMoodListReport,
+  activeBottleServices,
+  onBottleServiceEvent,
   cameraZoom,
   cameraResetTick,
   dayNightOverrideHour = null,
@@ -721,6 +732,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     selectedSpriteId,
     onSelectSprite,
     onSpriteMoodListReport,
+    activeBottleServices,
+    onBottleServiceEvent,
     cameraZoom,
     dayNightOverrideHour,
     onCycleTimeReport,
@@ -753,6 +766,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     selectedSpriteId,
     onSelectSprite,
     onSpriteMoodListReport,
+    activeBottleServices,
+    onBottleServiceEvent,
     cameraZoom,
     dayNightOverrideHour,
     onCycleTimeReport,
@@ -1365,13 +1380,37 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             const arrivalStatus = verifyOrReassignGuestSlotOnArrival(guest, items, guests, 'SEAT');
             if (arrivalStatus === 'ARRIVED') {
               guest.state = 'RESTING_AT_SEAT';
-              guest.stateTimer = 10.5 + Math.random() * 5.5;
-              guest.bubble = guest.isCelebrity
-                ? 'VIP_CROWN'
-                : Math.random() < 0.5
-                ? 'COCKTAIL'
-                : 'CHAT';
-              guest.bubbleTimer = 4.5;
+              guest.stateTimer = 11.5 + Math.random() * 6.0;
+
+              // Check if guest arrived at a VIP Booth item (seat_velvet_booth, seat_vip_pod, seat_worn_couch)
+              const parentBooth = findGuestSeatedVipBooth(guest, items);
+              const existingService = parentBooth
+                ? props.activeBottleServices?.[parentBooth.uid]
+                : undefined;
+
+              if (
+                parentBooth &&
+                !existingService &&
+                (guest.isCelebrity || guest.hype >= 75 || Math.random() < 0.72)
+              ) {
+                // VIP guest or hyped booth patron places a Bottle Service order for a premium drink tray!
+                props.onBottleServiceEvent?.(parentBooth.uid, 'GUEST_ORDERED', guest.name);
+                guest.bubble = 'BOTTLE_SERVICE';
+                guest.bubbleTimer = 6.5;
+                guest.chatText = 'Ordering a VIP Bottle Service sparkler tray for our booth! 🍾';
+              } else if (existingService?.status === 'ACTIVE_SPARKLERS') {
+                guest.bubble = 'BOTTLE_SERVICE';
+                guest.bubbleTimer = 6.0;
+                guest.hype = 100;
+                guest.chatText = `Popping ${existingService.trayName} in the VIP booth! 🍾✨`;
+              } else {
+                guest.bubble = guest.isCelebrity
+                  ? 'VIP_CROWN'
+                  : Math.random() < 0.5
+                  ? 'COCKTAIL'
+                  : 'CHAT';
+                guest.bubbleTimer = 4.5;
+              }
             } else if (arrivalStatus === 'NO_SEAT_AVAILABLE') {
               const fallbackBar = findAvailableBarSlot(items, guests, guest.floor, guest.id);
               if (fallbackBar) {
@@ -1387,21 +1426,46 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               }
             }
           } else if (guest.state === 'RESTING_AT_SEAT') {
+            const parentBooth = findGuestSeatedVipBooth(guest, items);
+            const boothService = parentBooth
+              ? props.activeBottleServices?.[parentBooth.uid]
+              : undefined;
+            const bottleMultiplier =
+              boothService?.status === 'ACTIVE_SPARKLERS'
+                ? boothService.spendingMultiplier
+                : 1.0;
+
             const seatTip = Math.round(
-              35 * (1 + metrics.tipBonus) * (guest.isCelebrity ? 3 : 1)
+              35 *
+                (1 + metrics.tipBonus) *
+                (guest.isCelebrity ? 3 : 1) *
+                bottleMultiplier
             );
             earnedCashThisFrame += seatTip;
-            earnedXpThisFrame += 15;
+            earnedXpThisFrame += boothService?.status === 'ACTIVE_SPARKLERS' ? 35 : 15;
             guest.cashSpent += seatTip;
+
+            if (boothService?.status === 'ACTIVE_SPARKLERS') {
+              guest.hype = 100;
+              guest.bubble = 'BOTTLE_SERVICE';
+              guest.bubbleTimer = 4.5;
+              spawnParticlesAboveDancer(guest, 4);
+            }
 
             if (fts.length < 18) {
               fts.push({
                 id: `ft_tip_${performance.now()}_${Math.random()}`,
-                text: `+$${seatTip} TIP`,
+                text:
+                  boothService?.status === 'ACTIVE_SPARKLERS'
+                    ? `+$${seatTip} VIP BOTTLE TRAY! 🍾`
+                    : `+$${seatTip} TIP`,
                 floor: guest.floor,
                 gridX: guest.gridX,
                 gridY: guest.gridY,
-                color: '#facc15',
+                color:
+                  boothService?.status === 'ACTIVE_SPARKLERS'
+                    ? boothService.trayColor
+                    : '#facc15',
                 age: 0,
               });
             }
@@ -1639,14 +1703,27 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               staff.taskState === 'IDLE_STATION' ||
               staff.taskState === 'RETURNING_TO_BAR'
             ) {
-              staff.carryingDrinkColor = drink.color;
-              staff.actionBubble = '🍸';
+              // Prioritize any VIP booth on this floor that has a pending Bottle Service order!
+              const waitingVipBooth = floorSeats.find(
+                (it) =>
+                  isVipBoothCatalogId(it.catalogId) &&
+                  props.activeBottleServices?.[it.uid]?.status === 'ORDERED_WAITING'
+              );
+              const targetSeat =
+                waitingVipBooth ||
+                (floorSeats.length > 0
+                  ? floorSeats[Math.floor(Math.random() * floorSeats.length)]
+                  : { gridX: staff.postGridX, gridY: staff.postGridY, uid: '' });
+
+              const pendingOrder =
+                'uid' in targetSeat && targetSeat.uid
+                  ? props.activeBottleServices?.[targetSeat.uid]
+                  : undefined;
+
+              staff.carryingDrinkColor = pendingOrder ? pendingOrder.trayColor : drink.color;
+              staff.actionBubble = pendingOrder ? '🍾' : '🍸';
               staff.bubbleTimer = 2.5;
               staff.taskState = 'WALKING_TO_TABLE';
-              const targetSeat =
-                floorSeats.length > 0
-                  ? floorSeats[Math.floor(Math.random() * floorSeats.length)]
-                  : { gridX: staff.postGridX, gridY: staff.postGridY };
               staff.path = buildStaffStationPath(
                 items,
                 staff.floor,
@@ -1662,23 +1739,41 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               staff.bubbleTimer = 2.2;
               staff.taskTimer = 1.4;
             } else {
-              const traySale = Math.round(drink.sellPrice * (1.15 + metrics.tipBonus * 0.4));
+              // Check if waiter is next to a VIP booth with a pending Bottle Service order
+              const nearbyWaitingBooth = floorSeats.find(
+                (it) =>
+                  isVipBoothCatalogId(it.catalogId) &&
+                  props.activeBottleServices?.[it.uid]?.status === 'ORDERED_WAITING' &&
+                  Math.hypot(it.gridX - staff.gridX, it.gridY - staff.gridY) <= 3.2
+              );
+              if (nearbyWaitingBooth) {
+                props.onBottleServiceEvent?.(
+                  nearbyWaitingBooth.uid,
+                  'WAITER_DELIVERED',
+                  staff.name
+                );
+              }
+              const traySale = Math.round(
+                drink.sellPrice * (nearbyWaitingBooth ? 2.4 : 1.15 + metrics.tipBonus * 0.4)
+              );
               earnedCashThisFrame += traySale;
-              earnedXpThisFrame += 10;
+              earnedXpThisFrame += nearbyWaitingBooth ? 25 : 10;
               staff.drinksServed += 1;
               staff.carryingDrinkColor = null;
-              staff.actionBubble = '$$';
-              staff.bubbleTimer = 2.0;
+              staff.actionBubble = nearbyWaitingBooth ? '🍾✨' : '$$';
+              staff.bubbleTimer = 2.2;
               props.onStaffTaskComplete?.(staff.uid, 'SERVED_DRINK');
 
               if (fts.length < 18) {
                 fts.push({
                   id: `ft_waiter_${performance.now()}_${Math.random()}`,
-                  text: `+$${traySale} TABLE`,
+                  text: nearbyWaitingBooth
+                    ? `+$${traySale} VIP TRAY SERVED!`
+                    : `+$${traySale} TABLE`,
                   floor: staff.floor,
                   gridX: staff.gridX,
                   gridY: staff.gridY,
-                  color: '#f472b6',
+                  color: nearbyWaitingBooth ? '#facc15' : '#f472b6',
                   age: 0,
                 });
               }
@@ -1768,6 +1863,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           guests,
           pedestriansRef.current,
           props.staffMembers,
+          props.placedItems,
+          props.activeBottleServices,
           props.activeFloor,
           props.activeGenre || 'Pop',
           metrics.maxGuests
@@ -2168,6 +2265,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 drawTable(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t),
             });
             if (!assetManager.hasSprite('vip_couch')) {
+              const boothService = props.activeBottleServices?.[item.uid];
               drawables.push({
                 zIndex: 0,
                 depth: item.gridX + item.gridY + Math.max(fp.width, fp.depth) + 0.65,
@@ -2180,7 +2278,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                     originY,
                     tileW,
                     tileH,
-                    scale
+                    scale,
+                    t,
+                    boothService
                   ),
               });
             }
@@ -2695,44 +2795,63 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       Boolean(props.placementModeStaff) ||
       Boolean(props.relocatingStaffUid);
 
-    if (!isEditingGridMode && props.onSelectSprite) {
-      const streetZOffset = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 92 * scale : 0;
-      const streetOriginY = originY - streetZOffset;
-      const insideCountNow = guestsRef.current.filter((g) => g.state !== 'QUEUEING').length;
-      const isClubFullNow = insideCountNow >= props.clubMetrics.maxGuests;
-
-      const tappedMood = findTappedSpriteMoodAtScreenPoint(
+    if (!isEditingGridMode) {
+      // 1. First check if the user tapped on a VIP Booth's floating "🍾 TAP TO SERVE" Bottle Service callout badge
+      const tappedBoothBadge = findTappedVipBoothBottleBadgeAtScreenPoint(
         sx,
         sy,
         originX,
         originY,
-        streetOriginY,
         tileW,
         tileH,
         scale,
-        guestsRef.current,
-        pedestriansRef.current,
         props.placedItems,
-        props.staffMembers,
         props.activeFloor,
-        props.activeGenre || 'Pop',
-        props.clubMetrics.maxGuests
+        props.activeBottleServices
       );
-
-      if (tappedMood) {
-        // Trigger a fun reaction bubble on the tapped sprite
-        const matchedGuest = guestsRef.current.find((g) => g.id === tappedMood.id);
-        if (matchedGuest) {
-          matchedGuest.bubble = matchedGuest.isCelebrity ? 'VIP_CROWN' : 'SPARKLE';
-          matchedGuest.bubbleTimer = 4.0;
-        }
-        const matchedPed = pedestriansRef.current.find((p) => p.id === tappedMood.id);
-        if (matchedPed) {
-          matchedPed.bubble = 'MUSIC';
-          matchedPed.bubbleTimer = 4.0;
-        }
-        props.onSelectSprite(tappedMood);
+      if (tappedBoothBadge && props.onBottleServiceEvent) {
+        props.onBottleServiceEvent(tappedBoothBadge.uid, 'TAPPED_BOOTH');
         return;
+      }
+
+      // 2. Next check if the user tapped on any sprite (Guest, Queued Customer, Sidewalk Pedestrian, DJ, or Staff) to inspect their Mood
+      if (props.onSelectSprite) {
+        const streetZOffset = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 92 * scale : 0;
+        const streetOriginY = originY - streetZOffset;
+
+        const tappedMood = findTappedSpriteMoodAtScreenPoint(
+          sx,
+          sy,
+          originX,
+          originY,
+          streetOriginY,
+          tileW,
+          tileH,
+          scale,
+          guestsRef.current,
+          pedestriansRef.current,
+          props.placedItems,
+          props.staffMembers,
+          props.activeBottleServices,
+          props.activeFloor,
+          props.activeGenre || 'Pop',
+          props.clubMetrics.maxGuests
+        );
+
+        if (tappedMood) {
+          const matchedGuest = guestsRef.current.find((g) => g.id === tappedMood.id);
+          if (matchedGuest) {
+            matchedGuest.bubble = matchedGuest.isCelebrity ? 'VIP_CROWN' : 'SPARKLE';
+            matchedGuest.bubbleTimer = 4.0;
+          }
+          const matchedPed = pedestriansRef.current.find((p) => p.id === tappedMood.id);
+          if (matchedPed) {
+            matchedPed.bubble = 'MUSIC';
+            matchedPed.bubbleTimer = 4.0;
+          }
+          props.onSelectSprite(tappedMood);
+          return;
+        }
       }
     }
 
@@ -6141,7 +6260,9 @@ function drawVipBoothForegroundTable(
   originY: number,
   tileW: number,
   tileH: number,
-  scale: number
+  scale: number,
+  t: number = 0,
+  bottleService?: ActiveBoothBottleService
 ) {
   const halfW = tileW / 2;
   const halfH = tileH / 2;
@@ -6149,6 +6270,14 @@ function drawVipBoothForegroundTable(
   const tableGy = item.gridY + (fp.depth > fp.width ? 0.20 : 0.66);
   const tableW = fp.width >= fp.depth ? Math.max(0.6, fp.width - 0.40) : 0.42;
   const tableD = fp.depth > fp.width ? Math.max(0.6, fp.depth - 0.40) : 0.42;
+
+  const isSparklerActive = bottleService?.status === 'ACTIVE_SPARKLERS';
+  const isWaitingOrder = bottleService?.status === 'ORDERED_WAITING';
+  const tableRimColor = isSparklerActive
+    ? bottleService.trayColor
+    : isWaitingOrder
+    ? '#facc15'
+    : INK;
 
   drawIsoPrism(
     ctx,
@@ -6162,16 +6291,139 @@ function drawVipBoothForegroundTable(
     originY,
     tileW,
     tileH,
-    '#1e293b',
+    isSparklerActive ? '#311042' : '#1e293b',
     '#0f172a',
     '#090d16',
-    INK,
-    1.8 * scale
+    tableRimColor,
+    (isSparklerActive ? 2.2 : 1.8) * scale
   );
 
-  // Glowing Gold/Cyan Rim & Bottle Service on VIP Table
   const bx = originX + (tableGx + tableW * 0.5 - (tableGy + tableD * 0.5)) * halfW;
   const by = originY + (tableGx + tableW * 0.5 + (tableGy + tableD * 0.5)) * halfH - 14.0 * scale;
+
+  if (isSparklerActive && bottleService) {
+    ctx.save();
+    // 1. Illuminated Gold/Neon VIP Drink Tray Platter on the Table
+    ctx.fillStyle = bottleService.trayColor;
+    ctx.globalAlpha = 0.28 + Math.sin(t * 7) * 0.1;
+    ctx.beginPath();
+    ctx.ellipse(bx, by - 1 * scale, 13.5 * scale, 7.2 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.ellipse(bx, by - 1.2 * scale, 10.5 * scale, 5.4 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = bottleService.trayColor;
+    ctx.lineWidth = 1.6 * scale;
+    ctx.stroke();
+
+    // 2. Chilled Silver Champagne Ice Bucket in Center of Tray
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.moveTo(bx - 3.6 * scale, by - 2.2 * scale);
+    ctx.lineTo(bx - 4.4 * scale, by - 8.2 * scale);
+    ctx.lineTo(bx + 4.4 * scale, by - 8.2 * scale);
+    ctx.lineTo(bx + 3.6 * scale, by - 2.2 * scale);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Glowing Crystal Magnum Bottle Rising from Ice Bucket
+    ctx.fillStyle = bottleService.trayColor;
+    ctx.beginPath();
+    ctx.roundRect(bx - 1.9 * scale, by - 14.5 * scale, 3.8 * scale, 8.2 * scale, 1.4 * scale);
+    ctx.fill();
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(bx - 1.1 * scale, by - 17.5 * scale, 2.2 * scale, 3.5 * scale);
+
+    // 4. Four Neon Champagne Flutes Around the Tray
+    const fluteOffsets = [
+      { dx: -7.2, dy: -2.0, col: '#22d3ee' },
+      { dx: -4.8, dy: 1.2, col: '#f43f5e' },
+      { dx: 4.8, dy: 1.2, col: '#facc15' },
+      { dx: 7.2, dy: -2.0, col: '#e879f9' },
+    ];
+    for (const fl of fluteOffsets) {
+      ctx.fillStyle = fl.col;
+      ctx.beginPath();
+      ctx.arc(bx + fl.dx * scale, by + fl.dy * scale, 1.9 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 5. Twin Animated Sparkler Fountains Shooting Flickering Sparks!
+    const sparklerBases = [
+      { sx: bx - 5.2 * scale, sy: by - 11.5 * scale },
+      { sx: bx + 5.2 * scale, sy: by - 11.5 * scale },
+    ];
+    for (let sIdx = 0; sIdx < sparklerBases.length; sIdx++) {
+      const sb = sparklerBases[sIdx];
+      // Sparkler wand stem
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.1 * scale;
+      ctx.beginPath();
+      ctx.moveTo(bx + (sIdx === 0 ? -2.8 : 2.8) * scale, by - 7.5 * scale);
+      ctx.lineTo(sb.sx, sb.sy);
+      ctx.stroke();
+
+      // Core spark flash
+      const coreR = (2.6 + Math.sin(t * 22 + sIdx * 2) * 0.9) * scale;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(sb.sx, sb.sy, coreR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Radiating spark rays
+      for (let ray = 0; ray < 6; ray++) {
+        const angle = (ray / 6) * Math.PI * 2 + t * 9 + sIdx;
+        const rayLen = (4.2 + Math.sin(t * 19 + ray * 1.7) * 2.2) * scale;
+        const rx = sb.sx + Math.cos(angle) * rayLen;
+        const ry = sb.sy + Math.sin(angle) * rayLen * 0.85;
+        ctx.strokeStyle = ray % 2 === 0 ? '#fde047' : bottleService.sparklerColor;
+        ctx.lineWidth = 1.3 * scale;
+        ctx.beginPath();
+        ctx.moveTo(sb.sx, sb.sy);
+        ctx.lineTo(rx, ry);
+        ctx.stroke();
+      }
+    }
+
+    // 6. Floating Live Bottle Service Active Multiplier Pill Badge
+    const pillY = by - 27 * scale - Math.abs(Math.sin(t * 3.5)) * 2 * scale;
+    const pillText = `🍾 ${bottleService.spendingMultiplier}x VIP TRAY · +${bottleService.hypeBoost}⚡ (${Math.ceil(
+      bottleService.timer
+    )}s)`;
+    ctx.font = `800 ${Math.max(8, Math.round(7.5 * scale))}px "Outfit", sans-serif`;
+    const tw = ctx.measureText(pillText).width;
+    const pw = tw + 12 * scale;
+    const ph = 14 * scale;
+    fillStrokeRoundedRect(
+      ctx,
+      bx - pw * 0.5,
+      pillY - ph * 0.5,
+      pw,
+      ph,
+      5 * scale,
+      'rgba(15, 9, 32, 0.92)'
+    );
+    fillStrokeRoundedRect(
+      ctx,
+      bx - pw * 0.5 + 3 * scale,
+      pillY + ph * 0.5 - 2.2 * scale,
+      pw - 6 * scale,
+      1.6 * scale,
+      1 * scale,
+      bottleService.trayColor
+    );
+    ctx.fillStyle = '#fef08a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pillText, bx, pillY - 0.5 * scale);
+    ctx.restore();
+    return;
+  }
+
+  // Standard Cocktail Glasses on VIP Table
   ctx.fillStyle = '#22d3ee';
   ctx.beginPath();
   ctx.arc(bx - 3.2 * scale, by - 1.8 * scale, 2.3 * scale, 0, Math.PI * 2);
@@ -6187,6 +6439,33 @@ function drawVipBoothForegroundTable(
   ctx.strokeStyle = INK;
   ctx.lineWidth = 1.0 * scale;
   ctx.stroke();
+
+  // If a VIP guest at this booth has placed a Bottle Service order waiting to be served, render an interactive "🍾 TAP TO SERVE" floating pill
+  if (isWaitingOrder && bottleService) {
+    ctx.save();
+    const bounce = Math.abs(Math.sin(t * 5.2)) * 3.5 * scale;
+    const badgeY = by - 25 * scale - bounce;
+    const label = `🍾 VIP BOTTLE ORDER! TAP TO SERVE (+$${bottleService.price})`;
+    ctx.font = `900 ${Math.max(8, Math.round(7.8 * scale))}px "Outfit", sans-serif`;
+    const tw = ctx.measureText(label).width;
+    const pw = tw + 14 * scale;
+    const ph = 15.5 * scale;
+
+    fillStrokeRoundedRect(
+      ctx,
+      bx - pw * 0.5,
+      badgeY - ph * 0.5,
+      pw,
+      ph,
+      6 * scale,
+      'rgba(250, 204, 21, 0.96)'
+    );
+    ctx.fillStyle = '#090514';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, bx, badgeY);
+    ctx.restore();
+  }
 }
 
 function drawBarStool(
@@ -7829,6 +8108,24 @@ function drawIllustratedSpeechBubble(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('★', x, y + 0.5 * s);
+  } else if (bubble === 'BOTTLE_SERVICE') {
+    // Golden Champagne Magnum + Sparkler Star inside bubble (clean lineless fill)
+    ctx.fillStyle = '#d97706';
+    ctx.beginPath();
+    ctx.roundRect(x - 2.2 * s, y - 2.2 * s, 4.4 * s, 7.0 * s, 1.2 * s);
+    ctx.fill();
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(x - 1.1 * s, y - 5.4 * s, 2.2 * s, 3.4 * s);
+    ctx.fillStyle = '#ec4899';
+    ctx.beginPath();
+    ctx.arc(x + 4.0 * s, y - 3.8 * s, 1.8 * s, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (bubble === 'EXCLAMATION') {
+    ctx.fillStyle = '#ec4899';
+    ctx.font = `900 ${Math.round(13 * s)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', x, y + 0.5 * s);
   } else if (bubble === 'COCKTAIL' || bubble === 'BEER') {
     // Neon Cocktail Martini Glass (clean filled silhouette without stroke lines)
     const glassCol = bubble === 'COCKTAIL' ? '#ec4899' : '#0284c7';
@@ -9005,17 +9302,102 @@ function hashIdToIndex(id: string, mod: number): number {
   return h % mod;
 }
 
+/**
+ * Finds the VIP Booth PlacedItem (`seat_velvet_booth`, `seat_vip_pod`, `seat_worn_couch`) that a guest is currently seated at.
+ */
+function findGuestSeatedVipBooth(
+  guest: GuestAgent,
+  items: PlacedItem[]
+): PlacedItem | null {
+  const vipBooths = items.filter(
+    (it) => it.floor === guest.floor && isVipBoothCatalogId(it.catalogId)
+  );
+  if (vipBooths.length === 0) return null;
+
+  if (guest.assignedSlotId) {
+    const bySlot = vipBooths.find((b) => guest.assignedSlotId?.startsWith(b.uid));
+    if (bySlot) return bySlot;
+  }
+
+  for (const b of vipBooths) {
+    const cat = getCatalogItem(b.catalogId);
+    const fp = cat ? getRotatedFootprint(cat, b.rotation) : { width: 2, depth: 2 };
+    if (
+      guest.gridX >= b.gridX - 0.5 &&
+      guest.gridX <= b.gridX + fp.width + 0.5 &&
+      guest.gridY >= b.gridY - 0.5 &&
+      guest.gridY <= b.gridY + fp.depth + 0.5
+    ) {
+      return b;
+    }
+  }
+  return null;
+}
+
+/**
+ * Hit-tests the floating "🍾 VIP BOTTLE ORDER! TAP TO SERVE" badge or VIP booth foreground table on the active floor.
+ */
+function findTappedVipBoothBottleBadgeAtScreenPoint(
+  screenX: number,
+  screenY: number,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  items: PlacedItem[],
+  activeFloor: FloorLevel,
+  activeBottleServices?: Record<string, ActiveBoothBottleService>
+): PlacedItem | null {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  for (const item of items) {
+    if (item.floor !== activeFloor || !isVipBoothCatalogId(item.catalogId)) continue;
+    const service = activeBottleServices?.[item.uid];
+    if (!service || service.status !== 'ORDERED_WAITING') continue;
+
+    const cat = getCatalogItem(item.catalogId);
+    const fp = cat ? getRotatedFootprint(cat, item.rotation) : { width: 2, depth: 2 };
+    const tableGx = item.gridX + (fp.width >= fp.depth ? 0.20 : 0.66);
+    const tableGy = item.gridY + (fp.depth > fp.width ? 0.20 : 0.66);
+    const tableW = fp.width >= fp.depth ? Math.max(0.6, fp.width - 0.40) : 0.42;
+    const tableD = fp.depth > fp.width ? Math.max(0.6, fp.depth - 0.40) : 0.42;
+
+    const bx = originX + (tableGx + tableW * 0.5 - (tableGy + tableD * 0.5)) * halfW;
+    const by = originY + (tableGx + tableW * 0.5 + (tableGy + tableD * 0.5)) * halfH - 14.0 * scale;
+    const badgeY = by - 25 * scale;
+
+    if (
+      Math.abs(screenX - bx) <= 95 * scale &&
+      Math.abs(screenY - badgeY) <= 22 * scale
+    ) {
+      return item;
+    }
+  }
+  return null;
+}
+
 function computeGuestMoodInfo(
   guest: GuestAgent,
   activeGenre: string | undefined,
   isClubFull: boolean,
-  queueIndex: number = 0
+  queueIndex: number = 0,
+  items: PlacedItem[] = [],
+  activeBottleServices?: Record<string, ActiveBoothBottleService>
 ): SpriteMoodInfo {
   const nameIdx = hashIdToIndex(guest.id, GUEST_NAMES.length);
   const favIdx = hashIdToIndex(guest.id + '_genre', FAVORITE_GENRES.length);
   const favGenre = FAVORITE_GENRES[favIdx];
   const genreMatch =
     activeGenre && activeGenre.toLowerCase() === favGenre.toLowerCase();
+
+  const seatedVipBooth =
+    guest.state === 'RESTING_AT_SEAT' || guest.state === 'WALKING_TO_SEAT'
+      ? findGuestSeatedVipBooth(guest, items)
+      : null;
+  const boothService = seatedVipBooth
+    ? activeBottleServices?.[seatedVipBooth.uid]
+    : undefined;
 
   let moodLabel: SpriteMoodInfo['moodLabel'] = 'VIBING';
   let moodEmoji = '🎶';
@@ -9050,19 +9432,35 @@ function computeGuestMoodInfo(
     activity = 'Sipping Cocktails at the Bar Stool';
     thought = guest.chatText || 'Bartender, another round of neon mix!';
   } else if (guest.state === 'RESTING_AT_SEAT' || guest.state === 'WALKING_TO_SEAT') {
-    moodLabel = genreMatch ? 'HYPED' : 'CHILLING';
-    moodEmoji = genreMatch ? '⚡' : '🥂';
-    moodColor = genreMatch ? '#38bdf8' : '#c084fc';
-    moodScore = genreMatch ? 92 : 85;
-    activity =
-      guest.seatPosture === 'SITTING_SOFA'
-        ? 'Relaxing in the VIP Lounge Booth'
-        : 'Chilling at a High-Top Cocktail Table';
-    thought =
-      guest.chatText ||
-      (genreMatch
-        ? `They're playing ${favGenre}! Best VIP table in the city!`
-        : 'Great view of the LED floor from this table.');
+    if (boothService?.status === 'ACTIVE_SPARKLERS') {
+      moodLabel = 'ECSTATIC';
+      moodEmoji = '🍾';
+      moodColor = '#facc15';
+      moodScore = 100;
+      activity = `VIP Bottle Service (${boothService.trayName} · ${boothService.spendingMultiplier}x Spend)`;
+      thought = `Popping ${boothService.trayName} with sparklers in our VIP booth! 🍾✨`;
+    } else if (boothService?.status === 'ORDERED_WAITING') {
+      moodLabel = 'HYPED';
+      moodEmoji = '🍾';
+      moodColor = '#fb923c';
+      moodScore = 90;
+      activity = `Ordered ${boothService.trayName} at VIP Booth`;
+      thought = 'We ordered a premium Bottle Service tray for our VIP booth! Tap to serve us! 🍾';
+    } else {
+      moodLabel = genreMatch ? 'HYPED' : 'CHILLING';
+      moodEmoji = genreMatch ? '⚡' : '🥂';
+      moodColor = genreMatch ? '#38bdf8' : '#c084fc';
+      moodScore = genreMatch ? 92 : 85;
+      activity =
+        guest.seatPosture === 'SITTING_SOFA'
+          ? 'Relaxing in the VIP Lounge Booth'
+          : 'Chilling at a High-Top Cocktail Table';
+      thought =
+        guest.chatText ||
+        (genreMatch
+          ? `They're playing ${favGenre}! Best VIP table in the city!`
+          : 'Great view of the LED floor from this table.');
+    }
   } else if (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES') {
     if (genreMatch || guest.isCelebrity) {
       moodLabel = 'ECSTATIC';
@@ -9102,6 +9500,7 @@ function computeGuestMoodInfo(
     thought,
     favoriteGenre: favGenre,
     shirtColor: guest.shirtColor,
+    boothUid: seatedVipBooth?.uid,
   };
 }
 
@@ -9202,6 +9601,8 @@ function buildAllSpritesMoodSnapshot(
   guests: GuestAgent[],
   pedestrians: PedestrianAgent[],
   staffMembers: StaffMemberAgent[],
+  items: PlacedItem[],
+  activeBottleServices: Record<string, ActiveBoothBottleService> | undefined,
   activeFloor: FloorLevel,
   activeGenre: string | undefined,
   maxGuests: number
@@ -9228,7 +9629,9 @@ function buildAllSpritesMoodSnapshot(
   // Queued customers on the Red Carpet
   const queued = guests.filter((g) => g.state === 'QUEUEING');
   queued.forEach((g, idx) => {
-    list.push(computeGuestMoodInfo(g, activeGenre, isClubFull, idx));
+    list.push(
+      computeGuestMoodInfo(g, activeGenre, isClubFull, idx, items, activeBottleServices)
+    );
   });
 
   // Inside club patrons on active floor
@@ -9236,7 +9639,9 @@ function buildAllSpritesMoodSnapshot(
     (g) => g.state !== 'QUEUEING' && g.floor === activeFloor
   );
   inside.forEach((g) => {
-    list.push(computeGuestMoodInfo(g, activeGenre, isClubFull, 0));
+    list.push(
+      computeGuestMoodInfo(g, activeGenre, isClubFull, 0, items, activeBottleServices)
+    );
   });
 
   // Exterior pedestrians walking around the building
@@ -9331,6 +9736,7 @@ function findTappedSpriteMoodAtScreenPoint(
   pedestrians: PedestrianAgent[],
   items: PlacedItem[],
   staffMembers: StaffMemberAgent[],
+  activeBottleServices: Record<string, ActiveBoothBottleService> | undefined,
   activeFloor: FloorLevel,
   activeGenre: string | undefined,
   maxGuests: number
@@ -9364,7 +9770,14 @@ function findTappedSpriteMoodAtScreenPoint(
     if (g.state !== 'QUEUEING' && g.floor !== activeFloor) continue;
     const refOriginY = g.state === 'QUEUEING' ? streetOriginY : originY;
     const qIdx = g.state === 'QUEUEING' ? Math.max(0, queuedList.indexOf(g)) : 0;
-    const info = computeGuestMoodInfo(g, activeGenre, isClubFull, qIdx);
+    const info = computeGuestMoodInfo(
+      g,
+      activeGenre,
+      isClubFull,
+      qIdx,
+      items,
+      activeBottleServices
+    );
     checkCandidate(g.gridX, g.gridY, refOriginY, 18 * scale, info);
   }
 
@@ -9416,4 +9829,5 @@ function findTappedSpriteMoodAtScreenPoint(
 
   return bestMatch ? (bestMatch as { dist: number; info: SpriteMoodInfo }).info : null;
 }
+
 

@@ -35,6 +35,7 @@ import {
   SpriteMoodInfo,
 } from './components/IsometricClubCanvas';
 import {
+  ActiveBoothBottleService,
   CATALOG_ITEMS,
   CatalogItem,
   DRINK_MIXES,
@@ -44,6 +45,7 @@ import {
   INITIAL_PLACED_ITEMS,
   INITIAL_QUESTS,
   INITIAL_STAFF_MEMBERS,
+  isVipBoothCatalogId,
   ItemCategory,
   LEVEL_1_DIVE_BAR_ITEMS,
   ParkingUpgradeState,
@@ -52,7 +54,9 @@ import {
   STAFF_CATALOG,
   StaffCatalogItem,
   StaffMemberAgent,
+  VIP_BOTTLE_SERVICE_TRAYS,
   VIP_HOTSPOT_ITEMS,
+  VipBottleServiceTray,
 } from './types/game';
 import {
   buildStaffStationPath,
@@ -747,6 +751,45 @@ export default function App() {
   const [spriteMoodList, setSpriteMoodList] = useState<SpriteMoodInfo[]>([]);
   const [isMoodPanelOpen, setIsMoodPanelOpen] = useState<boolean>(true);
 
+  // VIP Booth Bottle Service State (Premium Drink Trays with Sparklers, Spending Multipliers & Hype Boost)
+  const [selectedBottleTrayId, setSelectedBottleTrayId] = useState<string>('tray_neon_magnum');
+  const [activeBottleServices, setActiveBottleServices] = useState<
+    Record<string, ActiveBoothBottleService>
+  >(() => ({
+    init_booth_bottom: {
+      boothUid: 'init_booth_bottom',
+      floor: 1,
+      trayId: 'tray_neon_magnum',
+      trayName: 'Neon Blue Magnum & Shots Tray',
+      trayColor: '#22d3ee',
+      sparklerColor: '#38bdf8',
+      price: 850,
+      hypeBoost: 68,
+      vibeBoost: 45,
+      spendingMultiplier: 2.8,
+      status: 'ORDERED_WAITING',
+      timer: 24,
+      maxTimer: 24,
+      orderedByGuestName: 'Lady Supernova ★ VIP',
+    },
+    init_couch_left1: {
+      boothUid: 'init_couch_left1',
+      floor: 1,
+      trayId: 'tray_24k_supernova',
+      trayName: '24K Gold Supernova Parade Tray',
+      trayColor: '#facc15',
+      sparklerColor: '#fde047',
+      price: 1480,
+      hypeBoost: 120,
+      vibeBoost: 80,
+      spendingMultiplier: 3.6,
+      status: 'ACTIVE_SPARKLERS',
+      timer: 26,
+      maxTimer: 30,
+      orderedByGuestName: 'DJ Daft Nova ★ VIP',
+    },
+  }));
+
   // Avatar, Music Catalog & Custom 16-Step Beat Studio State
   const [selectedAvatarIdx, setSelectedAvatarIdx] = useState<number>(0);
   const [trackIndex, setTrackIndex] = useState<number>(0);
@@ -819,6 +862,13 @@ export default function App() {
     [activeDrinkId]
   );
 
+  const selectedBottleTray = useMemo<VipBottleServiceTray>(
+    () =>
+      VIP_BOTTLE_SERVICE_TRAYS.find((t) => t.id === selectedBottleTrayId) ||
+      VIP_BOTTLE_SERVICE_TRAYS[1],
+    [selectedBottleTrayId]
+  );
+
   // Subscribe to custom PNG Sprite AssetManager updates so UI badges refresh immediately on upload
   useEffect(() => {
     return assetManager.subscribe(() => {
@@ -826,7 +876,7 @@ export default function App() {
     });
   }, []);
 
-  // Happy Hour Rush countdown timer + Tiered Drink Mix Prep Timer & Serving Counter
+  // Happy Hour Rush countdown timer + Tiered Drink Mix Prep Timer + Active VIP Bottle Service Sparkler Timers
   useEffect(() => {
     const timer = setInterval(() => {
       setHappyHourSeconds((prev) => (prev > 1 ? prev - 1 : 180));
@@ -834,6 +884,35 @@ export default function App() {
         if (prev > 1) return prev - 1;
         setDrinkServingsRemaining((s) => (s > 1 ? s - 1 : 60));
         return Math.max(1, Math.round(activeDrink.prepTimeSec));
+      });
+
+      setActiveBottleServices((prev) => {
+        const entries = Object.values(prev) as ActiveBoothBottleService[];
+        if (entries.length === 0) return prev;
+        let changed = false;
+        let bonusSpendCash = 0;
+        const next: Record<string, ActiveBoothBottleService> = {};
+
+        for (const svc of entries) {
+          if (svc.status === 'ACTIVE_SPARKLERS') {
+            changed = true;
+            const nextTime = svc.timer - 1;
+            if (nextTime > 0) {
+              next[svc.boothUid] = { ...svc, timer: nextTime };
+              // Every 4 seconds of active sparkler bottle service generates bonus VIP guest spending
+              if (nextTime % 4 === 0) {
+                bonusSpendCash += Math.round(65 * svc.spendingMultiplier);
+              }
+            }
+          } else {
+            next[svc.boothUid] = svc;
+          }
+        }
+
+        if (bonusSpendCash > 0) {
+          setCash((c) => c + bonusSpendCash);
+        }
+        return changed ? next : prev;
       });
     }, 1000);
     return () => clearInterval(timer);
@@ -878,6 +957,15 @@ export default function App() {
       }
     }
 
+    // Add live Hype, Vibe, and Spending Multiplier bonuses from all active VIP Booth Bottle Service Trays
+    for (const svc of Object.values(activeBottleServices) as ActiveBoothBottleService[]) {
+      if (svc.status === 'ACTIVE_SPARKLERS') {
+        totalHype += svc.hypeBoost;
+        totalVibe += svc.vibeBoost;
+        tipBonus += (svc.spendingMultiplier - 1) * 0.18;
+      }
+    }
+
     totalHype +=
       activeDrink.hypeBoost +
       (parkingState.lotTier - 1) * 25 +
@@ -902,7 +990,15 @@ export default function App() {
       vibeSegments,
       maxGuests,
     };
-  }, [placedItems, staffMembers, parkingState, unlockedFloors, activeDrink, hypeSurgeBonus]);
+  }, [
+    placedItems,
+    staffMembers,
+    activeBottleServices,
+    parkingState,
+    unlockedFloors,
+    activeDrink,
+    hypeSurgeBonus,
+  ]);
 
   const starRating = useMemo(() => {
     const raw = 4.2 + Math.min(0.8, (clubMetrics.totalHype + clubMetrics.totalVibe) / 600);
@@ -1524,7 +1620,146 @@ export default function App() {
 
     if (activeDockTab === 'DECORATE' && selectedCatalogItem) {
       purchaseAndPlaceCatalogItem(selectedCatalogItem, coord);
+      return;
     }
+
+    // In normal play mode, tapping any placed VIP Booth item (seat_velvet_booth, seat_vip_pod, seat_worn_couch)
+    // triggers the VIP Bottle Service interaction on that booth!
+    const clickedVipBooth = [...placedItems]
+      .reverse()
+      .find((p) => {
+        if (p.floor !== activeFloor || !isVipBoothCatalogId(p.catalogId)) return false;
+        const cat = getCatalogItem(p.catalogId);
+        if (!cat) return false;
+        const fp = getRotatedFootprint(cat, p.rotation);
+        return (
+          coord.x >= p.gridX &&
+          coord.x < p.gridX + fp.width &&
+          coord.y >= p.gridY &&
+          coord.y < p.gridY + fp.depth
+        );
+      });
+    if (clickedVipBooth) {
+      serveVipBoothBottleService(clickedVipBooth.uid);
+    }
+  };
+
+  const serveVipBoothBottleService = (
+    boothUid: string,
+    customTray?: VipBottleServiceTray,
+    actorName?: string
+  ) => {
+    const booth = placedItems.find((p) => p.uid === boothUid);
+    if (!booth) return;
+    const tray = customTray || selectedBottleTray;
+
+    // Check if any VIP Celebrity is seated at or near this VIP booth for an extra celebrity spending bonus
+    const boothGuests = guestsRef.current.filter(
+      (g) =>
+        g.floor === booth.floor &&
+        (g.assignedSlotId?.startsWith(booth.uid) ||
+          Math.hypot(g.gridX - (booth.gridX + 0.8), g.gridY - (booth.gridY + 0.8)) <= 2.4)
+    );
+    const hasCelebrityAtBooth = boothGuests.some((g) => g.isCelebrity);
+    const totalPayout = Math.round(tray.price * (hasCelebrityAtBooth ? 1.35 : 1.0));
+
+    setActiveBottleServices((prev) => ({
+      ...prev,
+      [boothUid]: {
+        boothUid,
+        floor: booth.floor,
+        trayId: tray.id,
+        trayName: tray.name,
+        trayColor: tray.trayColor,
+        sparklerColor: tray.sparklerColor,
+        price: totalPayout,
+        hypeBoost: tray.hypeBoost,
+        vibeBoost: tray.vibeBoost,
+        spendingMultiplier: tray.spendingMultiplier,
+        status: 'ACTIVE_SPARKLERS',
+        timer: tray.durationSec,
+        maxTimer: tray.durationSec,
+        orderedByGuestName:
+          actorName || boothGuests[0]?.name || 'VIP Entourage',
+      },
+    }));
+
+    setCash((c) => c + totalPayout);
+    addXp(65);
+    setHypeSurgeBonus((h) => Math.min(240, h + Math.round(tray.hypeBoost * 0.45)));
+    soundEngine.playCashRegister();
+    soundEngine.playUpgradeFanfare();
+
+    // Boost all guests at this VIP booth to ECSTATIC with BOTTLE_SERVICE bubbles
+    for (const bg of boothGuests) {
+      bg.hype = 100;
+      bg.patience = 100;
+      bg.cashSpent += Math.round(totalPayout / Math.max(1, boothGuests.length));
+      bg.bubble = 'BOTTLE_SERVICE';
+      bg.bubbleTimer = 8.0;
+      bg.chatText = `Popping ${tray.name} with sparklers in VIP!! 🍾✨`;
+      bg.chatTimer = 8.0;
+    }
+
+    floatingTextsRef.current.push({
+      id: `bottle_srv_${performance.now()}_${Math.random()}`,
+      text: `🍾 ${tray.name.toUpperCase()}! +$${totalPayout} · +${tray.hypeBoost}⚡ HYPE`,
+      floor: booth.floor,
+      gridX: booth.gridX + 0.8,
+      gridY: booth.gridY + 0.8,
+      color: tray.trayColor,
+      age: 0,
+    });
+  };
+
+  const handleBottleServiceEvent = (
+    boothUid: string,
+    eventType: 'GUEST_ORDERED' | 'WAITER_DELIVERED' | 'TAPPED_BOOTH',
+    guestName?: string
+  ) => {
+    const booth = placedItems.find((p) => p.uid === boothUid);
+    if (!booth) return;
+
+    if (eventType === 'GUEST_ORDERED') {
+      const tray = selectedBottleTray;
+      setActiveBottleServices((prev) => {
+        if (prev[boothUid]?.status === 'ACTIVE_SPARKLERS') return prev;
+        return {
+          ...prev,
+          [boothUid]: {
+            boothUid,
+            floor: booth.floor,
+            trayId: tray.id,
+            trayName: tray.name,
+            trayColor: tray.trayColor,
+            sparklerColor: tray.sparklerColor,
+            price: tray.price,
+            hypeBoost: tray.hypeBoost,
+            vibeBoost: tray.vibeBoost,
+            spendingMultiplier: tray.spendingMultiplier,
+            status: 'ORDERED_WAITING',
+            timer: tray.durationSec,
+            maxTimer: tray.durationSec,
+            orderedByGuestName: guestName || 'VIP Guest',
+          },
+        };
+      });
+      floatingTextsRef.current.push({
+        id: `bottle_ord_${performance.now()}_${Math.random()}`,
+        text: `🍾 ${
+          guestName ? guestName.toUpperCase() : 'VIP BOOTH'
+        } ORDERED BOTTLE SERVICE! TAP BOOTH TO SERVE`,
+        floor: booth.floor,
+        gridX: booth.gridX + 0.8,
+        gridY: booth.gridY + 0.8,
+        color: '#facc15',
+        age: 0,
+      });
+      return;
+    }
+
+    // WAITER_DELIVERED or TAPPED_BOOTH: ignite the sparkler tray and award cash + hype!
+    serveVipBoothBottleService(boothUid, undefined, guestName);
   };
 
   const nudgeEditingDecoration = (dx: number, dy: number) => {
@@ -1710,6 +1945,8 @@ export default function App() {
             return updated || prev;
           });
         }}
+        activeBottleServices={activeBottleServices}
+        onBottleServiceEvent={handleBottleServiceEvent}
         onCycleTimeReport={setDayNightReport}
         onEarnRevenue={handleEarnRevenue}
         onQueueCountChange={setQueueCount}
@@ -2512,43 +2749,120 @@ export default function App() {
                       &ldquo;{selectedSpriteMood.thought}&rdquo;
                     </div>
 
-                    <button
-                      onClick={() => {
-                        soundEngine.playCashRegister();
-                        setCash((c) => c + 120);
-                        addXp(25);
-                        const g = guestsRef.current.find((x) => x.id === selectedSpriteMood.id);
-                        if (g) {
-                          g.hype = 100;
-                          g.chatText = 'VIP Drink on the house?! Best club ever!! 🔥';
-                          g.chatTimer = 6.5;
-                        }
-                        setSelectedSpriteMood((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                moodLabel: 'ECSTATIC',
-                                moodEmoji: '🔥',
-                                moodColor: '#4ade80',
-                                moodScore: 100,
-                                thought: 'VIP Drink on the house?! Best club ever!! 🔥',
-                              }
-                            : null
-                        );
-                        floatingTextsRef.current.push({
-                          id: `mood_boost_${performance.now()}`,
-                          text: `🔥 ${selectedSpriteMood.name.toUpperCase()} MOOD ECSTATIC! +$120 TIP`,
-                          floor: activeFloor,
-                          gridX: g ? g.gridX : 4,
-                          gridY: g ? g.gridY : 4,
-                          color: '#4ade80',
-                          age: 0,
-                        });
-                      }}
-                      className="w-full py-1 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-[10px] uppercase tracking-wider cursor-pointer"
-                    >
-                      ⚡ Boost Mood (+$120 VIP Tip)
-                    </button>
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => {
+                          soundEngine.playCashRegister();
+                          setCash((c) => c + 120);
+                          addXp(25);
+                          const g = guestsRef.current.find((x) => x.id === selectedSpriteMood.id);
+                          if (g) {
+                            g.hype = 100;
+                            g.chatText = 'VIP Drink on the house?! Best club ever!! 🔥';
+                            g.chatTimer = 6.5;
+                          }
+                          setSelectedSpriteMood((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  moodLabel: 'ECSTATIC',
+                                  moodEmoji: '🔥',
+                                  moodColor: '#4ade80',
+                                  moodScore: 100,
+                                  thought: 'VIP Drink on the house?! Best club ever!! 🔥',
+                                }
+                              : null
+                          );
+                          floatingTextsRef.current.push({
+                            id: `mood_boost_${performance.now()}`,
+                            text: `🔥 ${selectedSpriteMood.name.toUpperCase()} MOOD ECSTATIC! +$120 TIP`,
+                            floor: activeFloor,
+                            gridX: g ? g.gridX : 4,
+                            gridY: g ? g.gridY : 4,
+                            color: '#4ade80',
+                            age: 0,
+                          });
+                        }}
+                        className="w-full py-1 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-[10px] uppercase tracking-wider cursor-pointer"
+                      >
+                        ⚡ Boost Mood (+$120 VIP Tip)
+                      </button>
+
+                      {/* VIP Bottle Service Button in Mood Card */}
+                      <button
+                        onClick={() => {
+                          const targetBooth =
+                            placedItems.find(
+                              (p) =>
+                                p.uid === selectedSpriteMood.boothUid &&
+                                p.floor === activeFloor
+                            ) ||
+                            placedItems.find(
+                              (p) =>
+                                p.floor === activeFloor &&
+                                isVipBoothCatalogId(p.catalogId) &&
+                                activeBottleServices[p.uid]?.status === 'ORDERED_WAITING'
+                            ) ||
+                            placedItems.find(
+                              (p) =>
+                                p.floor === activeFloor &&
+                                isVipBoothCatalogId(p.catalogId)
+                            );
+
+                          if (targetBooth) {
+                            // Seat the selected guest at the VIP booth if they are an interior guest
+                            const g = guestsRef.current.find(
+                              (x) => x.id === selectedSpriteMood.id
+                            );
+                            if (g && g.state !== 'QUEUEING') {
+                              g.isCelebrity = true;
+                              g.state = 'RESTING_AT_SEAT';
+                              g.stateTimer = 18;
+                              g.seatPosture = 'SITTING_SOFA';
+                              g.assignedSlotId = `${targetBooth.uid}_sofa_0`;
+                              g.gridX = targetBooth.gridX + 0.32;
+                              g.gridY = targetBooth.gridY + 0.28;
+                              g.path = [];
+                            }
+                            serveVipBoothBottleService(
+                              targetBooth.uid,
+                              selectedBottleTray,
+                              selectedSpriteMood.name
+                            );
+                            setSelectedSpriteMood((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    role: 'VIP_GUEST',
+                                    moodLabel: 'ECSTATIC',
+                                    moodEmoji: '🍾',
+                                    moodColor: '#facc15',
+                                    moodScore: 100,
+                                    activity: `VIP Bottle Service (${selectedBottleTray.name} · ${selectedBottleTray.spendingMultiplier}x Spend)`,
+                                    thought: `Popping ${selectedBottleTray.name} with sparklers in our VIP booth! 🍾✨`,
+                                    boothUid: targetBooth.uid,
+                                  }
+                                : null
+                            );
+                          } else {
+                            soundEngine.playError();
+                            floatingTextsRef.current.push({
+                              id: `no_vip_booth_${performance.now()}`,
+                              text: 'PLACE A VIP BOOTH IN DECORATE FIRST!',
+                              floor: activeFloor,
+                              gridX: 4,
+                              gridY: 4,
+                              color: '#f43f5e',
+                              age: 0,
+                            });
+                          }
+                        }}
+                        className="w-full py-1 rounded-lg bg-gradient-to-r from-amber-400 via-yellow-300 to-pink-400 hover:from-amber-300 hover:to-pink-300 text-slate-950 font-black text-[10px] uppercase tracking-wider cursor-pointer shadow"
+                      >
+                        🍾 Serve VIP Bottle Tray (+${selectedBottleTray.price} · +
+                        {selectedBottleTray.hypeBoost}⚡)
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="p-2 rounded-xl bg-[#1b1233] text-[11px] text-purple-200">
@@ -3144,6 +3458,71 @@ export default function App() {
                       );
                     })}
                   </div>
+
+                  {/* VIP Booth Bottle Service Trays Selector & Instant Booth Delivery */}
+                  <div className="p-2.5 rounded-xl bg-[#18102e] border-2 border-amber-400/50 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[10px] font-mono uppercase text-amber-300 font-bold">
+                          🍾 VIP BOOTH BOTTLE SERVICE TRAYS · TAP ANY VIP BOOTH OR SERVE BELOW
+                        </div>
+                        <div className="text-xs font-black text-white">
+                          Selected Tray: <span style={{ color: selectedBottleTray.trayColor }}>{selectedBottleTray.name}</span> ({selectedBottleTray.spendingMultiplier}x Guest Spend · +{selectedBottleTray.hypeBoost}⚡ Hype)
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const floorVipBooths = placedItems.filter(
+                            (p) => p.floor === activeFloor && isVipBoothCatalogId(p.catalogId)
+                          );
+                          if (floorVipBooths.length === 0) {
+                            soundEngine.playError();
+                            return;
+                          }
+                          const target =
+                            floorVipBooths.find(
+                              (b) => activeBottleServices[b.uid]?.status !== 'ACTIVE_SPARKLERS'
+                            ) || floorVipBooths[0];
+                          serveVipBoothBottleService(target.uid, selectedBottleTray);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 border border-[#0D0D14] text-slate-950 font-black text-xs cursor-pointer"
+                      >
+                        🍾 Serve VIP Booth (+${selectedBottleTray.price})
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                      {VIP_BOTTLE_SERVICE_TRAYS.map((tray) => {
+                        const isSel = tray.id === selectedBottleTray.id;
+                        return (
+                          <button
+                            key={tray.id}
+                            onClick={() => {
+                              setSelectedBottleTrayId(tray.id);
+                              soundEngine.playClick();
+                            }}
+                            className={`p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                              isSel
+                                ? 'bg-amber-500/25 border-amber-300 ring-1 ring-amber-300'
+                                : 'bg-[#120b22] border-purple-700/40 hover:border-amber-400/60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-white">
+                                {tray.badgeEmoji} {tray.name}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between mt-1 text-[10px] font-mono">
+                              <span className="text-emerald-300 font-bold">+${tray.price}</span>
+                              <span className="text-amber-300">
+                                {tray.spendingMultiplier}x Spend · +{tray.hypeBoost}⚡
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3181,56 +3560,98 @@ export default function App() {
 
               {/* 5. CELEBS TAB */}
               {activeDockTab === 'CELEBS' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {CELEBRITY_NAMES.map((cName, idx) => (
-                    <div
-                      key={cName}
-                      className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#111116] flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="text-xs font-black text-amber-300 flex items-center gap-1">
-                          <Crown className="w-3.5 h-3.5" />
-                          <span>{cName}</span>
-                        </div>
-                        <div className="text-[10px] text-purple-200">3.0x VIP Drink Tips</div>
+                <div className="space-y-2.5">
+                  <div className="p-2.5 rounded-xl bg-[#18102e] border-2 border-amber-400/50 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-mono uppercase text-amber-300 font-bold">
+                        🍾 VIP CELEBRITY BOTTLE SERVICE PARADE
                       </div>
-                      <button
-                        onClick={() => {
-                          if (gems < 2) {
-                            soundEngine.playError();
-                            return;
-                          }
-                          setGems((g) => g - 2);
-                          setCash((c) => c + 650);
-                          addXp(90);
-                          soundEngine.playUpgradeFanfare();
-                          guestsRef.current.push({
-                            id: `celeb_${Date.now()}_${idx}`,
-                            name: cName,
-                            isCelebrity: true,
-                            floor: activeFloor,
-                            targetFloor: activeFloor,
-                            gridX: 4,
-                            gridY: 4,
-                            path: [],
-                            state: 'DANCER_MOVES',
-                            stateTimer: 14,
-                            patience: 100,
-                            hype: 100,
-                            bubble: 'VIP_CROWN',
-                            bubbleTimer: 10,
-                            shirtColor: '#facc15',
-                            hairColor: '#111116',
-                            pantsColor: '#311042',
-                            cashSpent: 650,
-                          });
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 border border-[#111116] text-slate-950 font-black text-[11px] cursor-pointer"
-                      >
-                        Invite (2💎)
-                      </button>
+                      <div className="text-xs text-purple-100">
+                        Deliver <span className="font-black text-amber-300">{selectedBottleTray.name}</span> with sparklers to all VIP booths on Floor {activeFloor} for{' '}
+                        <span className="font-black text-emerald-300">{selectedBottleTray.spendingMultiplier}x guest spending</span> &amp;{' '}
+                        <span className="font-black text-cyan-300">+{selectedBottleTray.hypeBoost}⚡ Hype</span>!
+                      </div>
                     </div>
-                  ))}
+                    <button
+                      onClick={() => {
+                        const floorVipBooths = placedItems.filter(
+                          (p) => p.floor === activeFloor && isVipBoothCatalogId(p.catalogId)
+                        );
+                        if (floorVipBooths.length === 0) {
+                          soundEngine.playError();
+                          return;
+                        }
+                        floorVipBooths.forEach((b) =>
+                          serveVipBoothBottleService(b.uid, selectedBottleTray, 'VIP Celebrity Parade')
+                        );
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 via-yellow-300 to-pink-400 text-slate-950 font-black text-xs cursor-pointer border border-[#111116]"
+                    >
+                      🍾 Sparkler Parade All VIP Booths
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {CELEBRITY_NAMES.map((cName, idx) => (
+                      <div
+                        key={cName}
+                        className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#111116] flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="text-xs font-black text-amber-300 flex items-center gap-1">
+                            <Crown className="w-3.5 h-3.5" />
+                            <span>{cName}</span>
+                          </div>
+                          <div className="text-[10px] text-purple-200">
+                            3.0x VIP Drink Tips · Orders Bottle Service
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (gems < 2) {
+                              soundEngine.playError();
+                              return;
+                            }
+                            const targetBooth = placedItems.find(
+                              (p) => p.floor === activeFloor && isVipBoothCatalogId(p.catalogId)
+                            );
+                            setGems((g) => g - 2);
+                            setCash((c) => c + 650);
+                            addXp(90);
+                            soundEngine.playUpgradeFanfare();
+                            guestsRef.current.push({
+                              id: `celeb_${Date.now()}_${idx}`,
+                              name: cName,
+                              isCelebrity: true,
+                              floor: activeFloor,
+                              targetFloor: activeFloor,
+                              gridX: targetBooth ? targetBooth.gridX + 0.32 : 4,
+                              gridY: targetBooth ? targetBooth.gridY + 0.28 : 4,
+                              path: [],
+                              state: targetBooth ? 'RESTING_AT_SEAT' : 'DANCER_MOVES',
+                              stateTimer: 18,
+                              patience: 100,
+                              hype: 100,
+                              bubble: 'BOTTLE_SERVICE',
+                              bubbleTimer: 10,
+                              shirtColor: '#facc15',
+                              hairColor: '#111116',
+                              pantsColor: '#311042',
+                              cashSpent: 650,
+                              seatPosture: targetBooth ? 'SITTING_SOFA' : undefined,
+                              assignedSlotId: targetBooth ? `${targetBooth.uid}_sofa_0` : undefined,
+                            });
+                            if (targetBooth) {
+                              serveVipBoothBottleService(targetBooth.uid, selectedBottleTray, cName);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 border border-[#111116] text-slate-950 font-black text-[11px] cursor-pointer"
+                        >
+                          Invite + Bottle (2💎)
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
