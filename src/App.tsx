@@ -18,12 +18,21 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { soundEngine } from './audio/soundEngine';
+import {
+  BeatPattern,
+  ClubSongTrack,
+  INITIAL_CLUB_SONGS,
+  PRESET_BEAT_PATTERNS,
+  soundEngine,
+} from './audio/soundEngine';
+import { BeatAndMusicStudioModal } from './components/BeatAndMusicStudioModal';
 import { HypeBlastEvent, HypeBlastOverlay } from './components/HypeBlastOverlay';
 import {
   ClubSimulationMetrics,
   DayNightCycleReport,
+  getClubMoodLightingProfile,
   IsometricClubCanvas,
+  SpriteMoodInfo,
 } from './components/IsometricClubCanvas';
 import {
   CATALOG_ITEMS,
@@ -686,13 +695,6 @@ const INITIAL_GUESTS: GuestAgent[] = [
   },
 ];
 
-const PLAYLIST_TRACKS = [
-  { title: 'Neon Bass Odyssey', artist: 'DJ Daft Nova', genre: 'Electro House', bpm: 124, bonus: '+15% Drink Speed' },
-  { title: 'Midnight Starlight', artist: 'Kyra Vance', genre: 'Synthwave Pop', bpm: 118, bonus: '+25% Dancer Hype' },
-  { title: 'Velvet Rope Rush', artist: 'Jax Sterling', genre: 'Cyber Funk', bpm: 128, bonus: '+35% VIP Tips' },
-  { title: 'Laser Prism Drop', artist: 'Luna Eclipse', genre: 'Future Bass', bpm: 132, bonus: '+40% Party Vibe' },
-];
-
 const AVATAR_STYLES = [
   { id: 'neon_hoodie', label: 'Cyan Neon Street Hoodie', hair: '#ec4899', top: '#22d3ee', cap: '#a855f7' },
   { id: 'gold_vip', label: '24K Gold VIP Tracksuit', hair: '#111116', top: '#facc15', cap: '#f43f5e' },
@@ -737,14 +739,29 @@ export default function App() {
   );
   const [buildRotation, setBuildRotation] = useState<0 | 90 | 180 | 270>(0);
   const [isRemoveMode, setIsRemoveMode] = useState<boolean>(false);
+  const [isEditDecorMode, setIsEditDecorMode] = useState<boolean>(false);
+  const [editingPlacedItemUid, setEditingPlacedItemUid] = useState<string | null>(null);
 
-  // Avatar & Music Player State
+  // Sprite & Crowd Mood Inspection State (Tap any sprite or open the side Mood Panel)
+  const [selectedSpriteMood, setSelectedSpriteMood] = useState<SpriteMoodInfo | null>(null);
+  const [spriteMoodList, setSpriteMoodList] = useState<SpriteMoodInfo[]>([]);
+  const [isMoodPanelOpen, setIsMoodPanelOpen] = useState<boolean>(true);
+
+  // Avatar, Music Catalog & Custom 16-Step Beat Studio State
   const [selectedAvatarIdx, setSelectedAvatarIdx] = useState<number>(0);
   const [trackIndex, setTrackIndex] = useState<number>(0);
+  const [clubSongs, setClubSongs] = useState<ClubSongTrack[]>(INITIAL_CLUB_SONGS);
+  const [activeSongId, setActiveSongId] = useState<string>(INITIAL_CLUB_SONGS[0].id);
+  const [customPatterns, setCustomPatterns] = useState<Record<string, BeatPattern>>(
+    PRESET_BEAT_PATTERNS
+  );
+  const [activePattern, setActivePattern] = useState<BeatPattern>(PRESET_BEAT_PATTERNS.pat_pop_1);
+  const [beatStudioModalTab, setBeatStudioModalTab] = useState<'MUSIC' | 'BEAT_MAKER' | null>(null);
   const [isTrackLiked, setIsTrackLiked] = useState<boolean>(true);
   const [isMusicPaused, setIsMusicPaused] = useState<boolean>(false);
-  const [selectedBpm, setSelectedBpm] = useState<number>(124);
+  const [selectedBpm, setSelectedBpm] = useState<number>(INITIAL_CLUB_SONGS[0].bpm);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isAudioReady, setIsAudioReady] = useState<boolean>(() => soundEngine.isAudioRunning());
 
   // Club Status, Party & Happy Hour Rush State
   const [isClubOpenStatus, setIsClubOpenStatus] = useState<boolean>(true);
@@ -783,7 +800,18 @@ export default function App() {
   const floatingTextsRef = useRef<FloatingText[]>([]);
 
   const xpToNextLevel = level * 150;
-  const currentTrack = PLAYLIST_TRACKS[trackIndex % PLAYLIST_TRACKS.length];
+  const activeSong = useMemo(
+    () =>
+      clubSongs.find((s) => s.id === activeSongId) ||
+      clubSongs[trackIndex % clubSongs.length] ||
+      INITIAL_CLUB_SONGS[0],
+    [clubSongs, activeSongId, trackIndex]
+  );
+  const currentTrack = activeSong;
+  const activeMoodProfile = useMemo(
+    () => getClubMoodLightingProfile(currentTrack.genre),
+    [currentTrack.genre]
+  );
   const currentAvatar = AVATAR_STYLES[selectedAvatarIdx % AVATAR_STYLES.length];
 
   const activeDrink = useMemo(
@@ -959,15 +987,79 @@ export default function App() {
     [addXp]
   );
 
-  // Subtle rhythmic club beat audio pulse when not muted and not paused
+  // Sync soundEngine pause/mute state & subscribe to AudioContext unlock status
+  useEffect(() => {
+    return soundEngine.subscribeAudioState((running) => {
+      setIsAudioReady(running);
+    });
+  }, []);
+
+  useEffect(() => {
+    soundEngine.setPaused(isMusicPaused);
+  }, [isMusicPaused]);
+
+  useEffect(() => {
+    soundEngine.setMuted(isMuted);
+  }, [isMuted]);
+
+  // 16-Step Multi-Track Club Drum & Synth Sequencer when not muted and not paused
   useEffect(() => {
     if (isMuted || isMusicPaused) return;
-    const msPerBeat = Math.round((60 / selectedBpm) * 1000 * 2);
+    const msPerStep = Math.max(70, Math.round((60 / selectedBpm / 4) * 1000));
     const id = setInterval(() => {
-      soundEngine.playBeatPulse(clubMetrics.hypeSegments);
-    }, msPerBeat);
+      soundEngine.playBeatStep(clubMetrics.hypeSegments);
+    }, msPerStep);
     return () => clearInterval(id);
   }, [isMuted, isMusicPaused, selectedBpm, clubMetrics.hypeSegments]);
+
+  const handleSelectSong = useCallback(
+    (song: ClubSongTrack) => {
+      setActiveSongId(song.id);
+      const idx = clubSongs.findIndex((s) => s.id === song.id);
+      if (idx >= 0) setTrackIndex(idx);
+      setSelectedBpm(song.bpm);
+      soundEngine.setBpm(song.bpm);
+      if (song.customAudioUrl) {
+        soundEngine.setCustomAudioUrl(song.customAudioUrl);
+      } else {
+        soundEngine.setCustomAudioUrl(null);
+        const pat =
+          customPatterns[song.patternId] ||
+          PRESET_BEAT_PATTERNS[song.patternId] ||
+          activePattern;
+        setActivePattern(pat);
+        soundEngine.setActivePattern(pat);
+      }
+      addXp(20);
+      floatingTextsRef.current.push({
+        id: `song_${performance.now()}`,
+        text: `♫ DJ SPINNING: ${song.title.toUpperCase()} (${song.bpm} BPM)`,
+        floor: activeFloor,
+        gridX: 5,
+        gridY: 0.8,
+        color: '#22d3ee',
+        age: 0,
+      });
+    },
+    [clubSongs, customPatterns, activePattern, addXp, activeFloor]
+  );
+
+  const handleTriggerBassDrop = useCallback(() => {
+    soundEngine.triggerBassDrop();
+    setEnergy((e) => (e >= 2 ? e - 2 : maxEnergy));
+    setCash((c) => c + 320);
+    addXp(55);
+    triggerHypeBlast(48, clubMetrics.totalHype + 48, clubMetrics.tipBonus + 0.15);
+    floatingTextsRef.current.push({
+      id: `bass_${performance.now()}`,
+      text: '🔊 BASS CANNON DROPPED! +$320 TIPS & CROWD SURGE!',
+      floor: activeFloor,
+      gridX: 4,
+      gridY: 3.5,
+      color: '#a855f7',
+      age: 0,
+    });
+  }, [addXp, triggerHypeBlast, clubMetrics.totalHype, clubMetrics.tipBonus, activeFloor]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -978,6 +1070,7 @@ export default function App() {
       } else if (e.key === 'Escape') {
         setActiveDockTab(null);
         setActiveTopLeftModal(null);
+        setBeatStudioModalTab(null);
         setIsRemoveMode(false);
         setPlacementModeStaff(null);
         setRelocatingStaffUid(null);
@@ -1324,8 +1417,137 @@ export default function App() {
       return;
     }
 
+    // EDIT DECORATION POSITION MODE: Click an existing decoration to pick it up, then click any tile to move it ($0 cost)
+    if (isEditDecorMode || editingPlacedItemUid) {
+      if (editingPlacedItemUid) {
+        const movingItem = placedItems.find((p) => p.uid === editingPlacedItemUid);
+        const cat = movingItem ? getCatalogItem(movingItem.catalogId) : null;
+        if (movingItem && cat) {
+          const fp = getRotatedFootprint(cat, buildRotation);
+          const nextX = Math.max(0, Math.min(GRID_SIZE - fp.width, coord.x));
+          const nextY = Math.max(0, Math.min(GRID_SIZE - fp.depth, coord.y));
+          const others = placedItems.filter((p) => p.uid !== editingPlacedItemUid);
+
+          if (canPlaceItem(others, cat, activeFloor, nextX, nextY, buildRotation)) {
+            setPlacedItems((prev) =>
+              prev.map((p) =>
+                p.uid === editingPlacedItemUid
+                  ? {
+                      ...p,
+                      floor: activeFloor,
+                      gridX: nextX,
+                      gridY: nextY,
+                      rotation: buildRotation,
+                    }
+                  : p
+              )
+            );
+            soundEngine.playPlaceItem();
+            floatingTextsRef.current.push({
+              id: `move_decor_${performance.now()}`,
+              text: `MOVED ${cat.name.toUpperCase()} TO (${nextX}, ${nextY})`,
+              floor: activeFloor,
+              gridX: nextX,
+              gridY: nextY,
+              color: '#38bdf8',
+              age: 0,
+            });
+            setEditingPlacedItemUid(null);
+            return;
+          } else {
+            // Check if the user tapped a different decoration on this floor to switch selection
+            const tappedOther = placedItems.find((p) => {
+              if (p.floor !== activeFloor || p.uid === editingPlacedItemUid) return false;
+              const c = getCatalogItem(p.catalogId);
+              if (!c) return false;
+              const f = getRotatedFootprint(c, p.rotation);
+              return (
+                coord.x >= p.gridX &&
+                coord.x < p.gridX + f.width &&
+                coord.y >= p.gridY &&
+                coord.y < p.gridY + f.depth
+              );
+            });
+            if (tappedOther) {
+              setEditingPlacedItemUid(tappedOther.uid);
+              setBuildRotation(tappedOther.rotation);
+              soundEngine.playClick();
+              return;
+            }
+            soundEngine.playError();
+            floatingTextsRef.current.push({
+              id: `move_blocked_${performance.now()}`,
+              text: 'TILE BLOCKED — TAP AN OPEN TILE!',
+              floor: activeFloor,
+              gridX: nextX,
+              gridY: nextY,
+              color: '#f87171',
+              age: 0,
+            });
+            return;
+          }
+        }
+      }
+
+      // No decoration currently picked up: pick up whichever placed item is at `coord`
+      const clickedPlaced = [...placedItems]
+        .reverse()
+        .find((p) => {
+          if (p.floor !== activeFloor) return false;
+          const cat = getCatalogItem(p.catalogId);
+          if (!cat) return false;
+          const fp = getRotatedFootprint(cat, p.rotation);
+          return (
+            coord.x >= p.gridX &&
+            coord.x < p.gridX + fp.width &&
+            coord.y >= p.gridY &&
+            coord.y < p.gridY + fp.depth
+          );
+        });
+      if (clickedPlaced) {
+        setEditingPlacedItemUid(clickedPlaced.uid);
+        setBuildRotation(clickedPlaced.rotation);
+        soundEngine.playClick();
+        const cat = getCatalogItem(clickedPlaced.catalogId);
+        floatingTextsRef.current.push({
+          id: `pick_decor_${performance.now()}`,
+          text: `EDITING ${cat?.name.toUpperCase() || 'ITEM'} — TAP NEW TILE!`,
+          floor: activeFloor,
+          gridX: clickedPlaced.gridX,
+          gridY: clickedPlaced.gridY,
+          color: '#38bdf8',
+          age: 0,
+        });
+      }
+      return;
+    }
+
     if (activeDockTab === 'DECORATE' && selectedCatalogItem) {
       purchaseAndPlaceCatalogItem(selectedCatalogItem, coord);
+    }
+  };
+
+  const nudgeEditingDecoration = (dx: number, dy: number) => {
+    if (!editingPlacedItemUid) return;
+    const movingItem = placedItems.find((p) => p.uid === editingPlacedItemUid);
+    if (!movingItem) return;
+    const cat = getCatalogItem(movingItem.catalogId);
+    if (!cat) return;
+    const fp = getRotatedFootprint(cat, buildRotation);
+    const nextX = Math.max(0, Math.min(GRID_SIZE - fp.width, movingItem.gridX + dx));
+    const nextY = Math.max(0, Math.min(GRID_SIZE - fp.depth, movingItem.gridY + dy));
+    const others = placedItems.filter((p) => p.uid !== editingPlacedItemUid);
+    if (canPlaceItem(others, cat, movingItem.floor, nextX, nextY, buildRotation)) {
+      setPlacedItems((prev) =>
+        prev.map((p) =>
+          p.uid === editingPlacedItemUid
+            ? { ...p, gridX: nextX, gridY: nextY, rotation: buildRotation }
+            : p
+        )
+      );
+      soundEngine.playPlaceItem();
+    } else {
+      soundEngine.playError();
     }
   };
 
@@ -1378,6 +1600,8 @@ export default function App() {
   const handleLoadPreset = (preset: 'DIVE_BAR_LVL1' | 'NEON_CORNER' | 'VIP_MEGA') => {
     setPlacementModeStaff(null);
     setRelocatingStaffUid(null);
+    setIsEditDecorMode(false);
+    setEditingPlacedItemUid(null);
     if (preset === 'DIVE_BAR_LVL1') {
       setClubName('LVL 1 DIVE BAR');
       setLevel(1);
@@ -1447,14 +1671,22 @@ export default function App() {
         guestsRef={guestsRef}
         floatingTextsRef={floatingTextsRef}
         buildModeItem={
-          activeDockTab === 'DECORATE' && !isRemoveMode && !placementModeStaff && !relocatingStaffUid
+          activeDockTab === 'DECORATE' &&
+          !isRemoveMode &&
+          !isEditDecorMode &&
+          !editingPlacedItemUid &&
+          !placementModeStaff &&
+          !relocatingStaffUid
             ? selectedCatalogItem
             : null
         }
         placementModeStaff={placementModeStaff}
         relocatingStaffUid={relocatingStaffUid}
+        editingPlacedItemUid={editingPlacedItemUid}
+        isEditDecorMode={isEditDecorMode}
         buildRotation={buildRotation}
         activeDrink={activeDrink}
+        activeGenre={currentTrack.genre}
         parkingState={parkingState}
         clubMetrics={clubMetrics}
         clubBpm={selectedBpm}
@@ -1462,6 +1694,22 @@ export default function App() {
         cameraZoom={cameraZoom}
         cameraResetTick={cameraResetTick}
         dayNightOverrideHour={dayNightOverrideHour}
+        selectedSpriteId={selectedSpriteMood?.id || null}
+        onSelectSprite={(info) => {
+          setSelectedSpriteMood(info);
+          if (info) {
+            setIsMoodPanelOpen(true);
+            soundEngine.playClick();
+          }
+        }}
+        onSpriteMoodListReport={(list) => {
+          setSpriteMoodList(list);
+          setSelectedSpriteMood((prev) => {
+            if (!prev) return list[2] || list[0] || null;
+            const updated = list.find((s) => s.id === prev.id);
+            return updated || prev;
+          });
+        }}
         onCycleTimeReport={setDayNightReport}
         onEarnRevenue={handleEarnRevenue}
         onQueueCountChange={setQueueCount}
@@ -1589,24 +1837,37 @@ export default function App() {
                 </span>
               </button>
 
-              {/* 3 Circular Purple Buttons: GENRE, BASS, DEDICATE with yellow bolt badges */}
-              <div className="flex items-center gap-2">
+              {/* 4 Circular Purple DJ Action Buttons: GENRE, BEAT, BASS, DEDICATE with yellow bolt badges */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 {(
                   [
                     { id: 'GENRE', label: 'GENRE', icon: '♫', cost: 1 },
+                    { id: 'BEAT', label: 'BEAT', icon: '🎛️', cost: 1 },
                     { id: 'BASS', label: 'BASS', icon: '◎', cost: 2 },
                     { id: 'DEDICATE', label: 'DEDICATE', icon: '♥', cost: 2 },
                   ] as const
                 ).map((btn) => {
-                  const isActive = activeTopLeftModal === btn.id;
+                  const isActive =
+                    (btn.id === 'GENRE' && beatStudioModalTab === 'MUSIC') ||
+                    (btn.id === 'BEAT' && beatStudioModalTab === 'BEAT_MAKER') ||
+                    activeTopLeftModal === btn.id;
                   return (
                     <button
                       key={btn.id}
                       onClick={() => {
                         soundEngine.playClick();
-                        setActiveTopLeftModal((m) => (m === btn.id ? null : btn.id));
+                        if (btn.id === 'GENRE') {
+                          setActiveTopLeftModal(null);
+                          setBeatStudioModalTab((t) => (t === 'MUSIC' ? null : 'MUSIC'));
+                        } else if (btn.id === 'BEAT') {
+                          setActiveTopLeftModal(null);
+                          setBeatStudioModalTab((t) => (t === 'BEAT_MAKER' ? null : 'BEAT_MAKER'));
+                        } else {
+                          setBeatStudioModalTab(null);
+                          setActiveTopLeftModal((m) => (m === btn.id ? null : btn.id));
+                        }
                       }}
-                      className={`relative flex flex-col items-center group cursor-pointer`}
+                      className="relative flex flex-col items-center group cursor-pointer"
                     >
                       {/* Yellow Lightning Bolt Badge */}
                       <span className="absolute -top-1 -right-1 z-10 px-1 py-0.2 rounded-full bg-[#facc15] border-[1.8px] border-[#111116] text-[#111116] text-[8px] font-black flex items-center gap-0.5 shadow">
@@ -1630,13 +1891,36 @@ export default function App() {
               </div>
             </div>
 
-            {/* Row 3: Dark Translucent "Now Playing" Music Card (CHANGE, LIKE, Pause Buttons) */}
-            <div className="p-2.5 rounded-2xl bg-[#130d24]/90 backdrop-blur-md border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116] flex flex-col gap-1.5">
+            {/* Row 3: Dark Translucent "Now Playing" Music Card (CHOOSE MUSIC, CUSTOM BEAT, LIKE, Pause Buttons) */}
+            <div className="p-2.5 rounded-2xl bg-[#130d24]/92 backdrop-blur-md border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116] flex flex-col gap-1.5">
+              {(!isAudioReady || isMuted || isMusicPaused) && (
+                <button
+                  onClick={() => {
+                    setIsMuted(false);
+                    setIsMusicPaused(false);
+                    soundEngine.setMuted(false);
+                    soundEngine.setPaused(false);
+                    soundEngine.unlockAudio();
+                    soundEngine.playBeatStep(clubMetrics.hypeSegments);
+                  }}
+                  className="w-full py-1 px-2 rounded-lg bg-gradient-to-r from-emerald-400 via-cyan-400 to-fuchsia-400 text-slate-950 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow animate-pulse cursor-pointer"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>TAP TO ENABLE CLUB MUSIC &amp; BASS</span>
+                </button>
+              )}
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+                <div
+                  onClick={() => {
+                    soundEngine.unlockAudio();
+                    soundEngine.playClick();
+                    setBeatStudioModalTab('MUSIC');
+                  }}
+                  className="flex items-center gap-2 min-w-0 cursor-pointer group"
+                >
                   <div
                     className={`w-7 h-7 rounded-full bg-gradient-to-br from-fuchsia-500 to-cyan-400 border-2 border-[#111116] flex items-center justify-center shrink-0 text-xs font-black text-white ${
-                      !isMusicPaused ? 'animate-spin' : ''
+                      !isMusicPaused && !isMuted ? 'animate-spin' : ''
                     }`}
                     style={{ animationDuration: '6s' }}
                   >
@@ -1646,36 +1930,73 @@ export default function App() {
                     <div className="text-[9px] font-mono uppercase tracking-widest text-cyan-300 leading-none">
                       NOW PLAYING · {selectedBpm} BPM
                     </div>
-                    <div className="text-xs font-black text-white truncate mt-0.5">
-                      {currentTrack.title}
+                    <div className="text-xs font-black text-white group-hover:text-cyan-300 truncate mt-0.5">
+                      {currentTrack.title} — {currentTrack.artist}
                     </div>
                   </div>
                 </div>
 
-                {/* Pause / Play Button */}
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setIsMusicPaused((p) => !p);
-                  }}
-                  title={isMusicPaused ? 'Resume Track' : 'Pause Track'}
-                  className="w-7 h-7 rounded-lg bg-[#251842] hover:bg-[#36225e] border-2 border-[#111116] text-cyan-300 flex items-center justify-center shrink-0 cursor-pointer"
-                >
-                  {isMusicPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-                </button>
+                {/* Mute & Pause / Play Buttons */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => {
+                      const nextMuted = !isMuted;
+                      setIsMuted(nextMuted);
+                      soundEngine.setMuted(nextMuted);
+                      if (!nextMuted) {
+                        setIsMusicPaused(false);
+                        soundEngine.setPaused(false);
+                        soundEngine.unlockAudio();
+                        soundEngine.playBeatStep(clubMetrics.hypeSegments);
+                      }
+                    }}
+                    title={isMuted ? 'Unmute Club Audio' : 'Mute Club Audio'}
+                    className={`w-7 h-7 rounded-lg border-2 border-[#111116] flex items-center justify-center shrink-0 cursor-pointer ${
+                      isMuted
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-[#251842] hover:bg-[#36225e] text-emerald-300'
+                    }`}
+                  >
+                    {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      soundEngine.unlockAudio();
+                      soundEngine.playClick();
+                      setIsMusicPaused((p) => !p);
+                    }}
+                    title={isMusicPaused ? 'Resume Track' : 'Pause Track'}
+                    className="w-7 h-7 rounded-lg bg-[#251842] hover:bg-[#36225e] border-2 border-[#111116] text-cyan-300 flex items-center justify-center shrink-0 cursor-pointer"
+                  >
+                    {isMusicPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-purple-500/20">
-                <span className="text-[10px] font-mono text-purple-300 truncate">
-                  {currentTrack.genre} ({currentTrack.bonus})
-                </span>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] font-mono text-purple-300 truncate">
+                    {currentTrack.genre} ({currentTrack.bonus})
+                  </span>
+                  <span
+                    className="text-[9px] font-black uppercase tracking-wider truncate flex items-center gap-1 mt-0.5"
+                    style={{ color: activeMoodProfile.primaryHex }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full inline-block shrink-0"
+                      style={{
+                        backgroundColor: activeMoodProfile.primaryHex,
+                        boxShadow: `0 0 6px ${activeMoodProfile.primaryHex}`,
+                      }}
+                    />
+                    <span>MOOD: {activeMoodProfile.moodName}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => {
                       soundEngine.playClick();
-                      const nextIdx = (trackIndex + 1) % PLAYLIST_TRACKS.length;
-                      setTrackIndex(nextIdx);
-                      setSelectedBpm(PLAYLIST_TRACKS[nextIdx].bpm);
+                      setBeatStudioModalTab('MUSIC');
                     }}
                     className="px-2 py-0.5 rounded-md bg-purple-700 hover:bg-purple-600 border border-[#111116] text-[9px] font-black uppercase text-white cursor-pointer"
                   >
@@ -1684,20 +2005,77 @@ export default function App() {
                   <button
                     onClick={() => {
                       soundEngine.playClick();
+                      setBeatStudioModalTab('BEAT_MAKER');
+                    }}
+                    className="px-2 py-0.5 rounded-md bg-cyan-400 hover:bg-cyan-300 border border-[#111116] text-[9px] font-black uppercase text-slate-950 cursor-pointer"
+                  >
+                    🎛️ BEAT
+                  </button>
+                  <button
+                    onClick={() => {
+                      soundEngine.playClick();
                       setIsTrackLiked((l) => !l);
                       addXp(15);
                     }}
-                    className={`px-2 py-0.5 rounded-md border border-[#111116] text-[9px] font-black uppercase flex items-center gap-1 cursor-pointer ${
+                    className={`px-1.5 py-0.5 rounded-md border border-[#111116] text-[9px] font-black uppercase flex items-center gap-0.5 cursor-pointer ${
                       isTrackLiked
                         ? 'bg-pink-600 text-white'
                         : 'bg-[#23173d] text-purple-200 hover:bg-purple-800'
                     }`}
                   >
                     <Heart className={`w-2.5 h-2.5 ${isTrackLiked ? 'fill-white' : ''}`} />
-                    <span>LIKE</span>
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Row 4: Left-Side Active Staff Roster Badges + Edit Decor Quick Toggle */}
+            <div className="hidden sm:flex items-center gap-1.5 flex-wrap">
+              <div
+                onClick={() => {
+                  soundEngine.playClick();
+                  setBeatStudioModalTab('BEAT_MAKER');
+                }}
+                title="DJ Nova spinning live at the turntable — Click to Customize Beat"
+                className="px-2 py-1 rounded-xl bg-[#130d24]/90 border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center gap-1.5 cursor-pointer hover:border-cyan-400 transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <span className="text-[10px] font-black text-white">🎧 DJ Nova</span>
+                <span className="text-[9px] font-mono text-cyan-300">Turntable</span>
+              </div>
+              <div
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveDockTab('STAFF');
+                }}
+                title="Bartenders stationed behind the Bar Counters"
+                className="px-2 py-1 rounded-xl bg-[#130d24]/90 border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center gap-1.5 cursor-pointer hover:border-fuchsia-400 transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-[10px] font-black text-white">
+                  🍸 {staffMembers.filter((s) => s.role === 'BARTENDER').length} Bartenders
+                </span>
+                <span className="text-[9px] font-mono text-purple-300">In Bar</span>
+              </div>
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  const next = !isEditDecorMode;
+                  setIsEditDecorMode(next);
+                  setIsRemoveMode(false);
+                  if (!next) setEditingPlacedItemUid(null);
+                }}
+                title="Edit Position of Placed Decorations on the Floor"
+                className={`px-2 py-1 rounded-xl border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center gap-1 cursor-pointer transition-colors ${
+                  isEditDecorMode || editingPlacedItemUid
+                    ? 'bg-cyan-400 text-slate-950 font-black'
+                    : 'bg-[#130d24]/90 text-cyan-300 hover:border-cyan-400 font-black'
+                }`}
+              >
+                <span className="text-[10px]">
+                  ✥ {isEditDecorMode || editingPlacedItemUid ? 'EDITING DECOR' : 'EDIT DECOR'}
+                </span>
+              </button>
             </div>
 
             {/* TOP-LEFT ACTION MODAL (GENRE / BASS / DEDICATE) */}
@@ -1705,7 +2083,7 @@ export default function App() {
               <div className="p-3 rounded-2xl bg-[#160f2b]/96 border-[2.5px] border-purple-400 shadow-2xl text-white space-y-2">
                 <div className="flex items-center justify-between border-b border-purple-500/30 pb-1.5">
                   <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
-                    {activeTopLeftModal === 'GENRE' && 'Switch Club Music Genre (⚡1)'}
+                    {activeTopLeftModal === 'GENRE' && 'Switch Music Genre & Club Mood Lighting (⚡1)'}
                     {activeTopLeftModal === 'BASS' && 'Bass Cannon & Tempo Boost (⚡2)'}
                     {activeTopLeftModal === 'DEDICATE' && 'Dedicate Song to Crowd (⚡2)'}
                   </span>
@@ -1718,30 +2096,47 @@ export default function App() {
                 </div>
 
                 {activeTopLeftModal === 'GENRE' && (
-                  <div className="space-y-1.5">
-                    {PLAYLIST_TRACKS.map((tr, idx) => (
-                      <button
-                        key={tr.title}
-                        onClick={() => {
-                          setTrackIndex(idx);
-                          setSelectedBpm(tr.bpm);
-                          setEnergy((e) => Math.max(0, e - 1));
-                          addXp(25);
-                          soundEngine.playClick();
-                        }}
-                        className={`w-full p-2 rounded-xl border text-left flex items-center justify-between cursor-pointer ${
-                          trackIndex === idx
-                            ? 'bg-purple-700/60 border-cyan-300 text-white'
-                            : 'bg-purple-950/60 border-purple-700/40 text-purple-200'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-xs font-black">{tr.genre} · {tr.title}</div>
-                          <div className="text-[10px] text-cyan-300">{tr.bonus}</div>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold">{tr.bpm} BPM</span>
-                      </button>
-                    ))}
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {clubSongs.map((song) => {
+                      const mood = getClubMoodLightingProfile(song.genre);
+                      const isCurrentSong = song.id === currentTrack.id;
+                      return (
+                        <button
+                          key={song.id}
+                          onClick={() => {
+                            handleSelectSong(song);
+                            setEnergy((e) => Math.max(0, e - 1));
+                            soundEngine.playClick();
+                          }}
+                          className={`w-full p-2 rounded-xl border text-left flex items-center justify-between cursor-pointer ${
+                            isCurrentSong
+                              ? 'bg-purple-700/60 border-cyan-300 text-white'
+                              : 'bg-purple-950/60 border-purple-700/40 text-purple-200'
+                          }`}
+                        >
+                          <div className="min-w-0 pr-2">
+                            <div className="text-xs font-black flex items-center gap-1.5 truncate">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: mood.primaryHex }}
+                              />
+                              <span>
+                                {song.genre} · {song.title}
+                              </span>
+                            </div>
+                            <div
+                              className="text-[10px] font-bold truncate"
+                              style={{ color: mood.secondaryHex }}
+                            >
+                              Mood: {mood.moodName} ({song.bonus})
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold shrink-0">
+                            {song.bpm} BPM
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1771,11 +2166,7 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => {
-                        setEnergy((e) => (e >= 2 ? e - 2 : maxEnergy));
-                        setCash((c) => c + 320);
-                        addXp(55);
-                        soundEngine.playUpgradeFanfare();
-                        triggerHypeBlast(45, clubMetrics.totalHype + 45, clubMetrics.tipBonus);
+                        handleTriggerBassDrop();
                         setActiveTopLeftModal(null);
                       }}
                       className="w-full py-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-cyan-400 text-slate-950 font-black text-xs cursor-pointer"
@@ -1868,6 +2259,35 @@ export default function App() {
               </span>
             </div>
 
+            {/* Active Club Mood Lighting Indicator Pill */}
+            <button
+              onClick={() => {
+                soundEngine.playClick();
+                setBeatStudioModalTab('MUSIC');
+              }}
+              title="Genre-Reactive Club Mood Lighting & Automatic Dance Floor Color Filter"
+              className="flex items-center gap-1.5 pr-3 border-r border-purple-500/30 text-left cursor-pointer"
+            >
+              <span
+                className="w-3 h-3 rounded-full border border-white/60 shrink-0"
+                style={{
+                  backgroundColor: activeMoodProfile.primaryHex,
+                  boxShadow: `0 0 8px ${activeMoodProfile.primaryHex}`,
+                }}
+              />
+              <div className="leading-none">
+                <div
+                  className="text-[9px] font-black uppercase"
+                  style={{ color: activeMoodProfile.primaryHex }}
+                >
+                  {activeMoodProfile.moodName}
+                </div>
+                <div className="text-[10px] font-mono text-purple-200 mt-0.5">
+                  {currentTrack.genre} Filter
+                </div>
+              </div>
+            </button>
+
             {/* Active Drink Prep Timer & Servings Pill + Quick Starter Mode Switch */}
             <button
               onClick={() => {
@@ -1914,12 +2334,24 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Crowd Pill */}
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#130d24]/92 border-2 border-[#111116] shadow-[0_3px_0_#111116]">
+              {/* Crowd & Red Carpet Queue Pill */}
+              <div
+                onClick={() => {
+                  soundEngine.playClick();
+                  setIsMoodPanelOpen((o) => !o);
+                }}
+                title="Inside Crowd & Red Carpet Door Line (Click to toggle Sprite Moods Panel)"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#130d24]/92 border-2 border-[#111116] shadow-[0_3px_0_#111116] cursor-pointer hover:border-cyan-400"
+              >
                 <span className="text-[10px] font-black uppercase text-cyan-300">CROWD</span>
                 <span className="text-xs sm:text-sm font-black text-white tabular-nums">
-                  {guestsRef.current.length}/{clubMetrics.maxGuests}
+                  {guestsRef.current.filter((g) => g.state !== 'QUEUEING').length}/{clubMetrics.maxGuests}
                 </span>
+                {queueCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-rose-500/30 border border-rose-400/50 text-[9px] font-black text-rose-200">
+                    +{queueCount} Line
+                  </span>
+                )}
               </div>
 
               {/* Gems Pill */}
@@ -1982,32 +2414,272 @@ export default function App() {
         </div>
 
         {/* -------------------------------------------------------------------
-            MIDDLE ZONE: ACTIVE DRAWER / MODAL + FAR-RIGHT VERTICAL VIBE THERMOMETER & ZOOM
+            MIDDLE ZONE: SIDE SPRITE MOOD PANEL + ACTIVE DRAWER / MODAL + FAR-RIGHT VERTICAL VIBE THERMOMETER & ZOOM
            ------------------------------------------------------------------- */}
         <div className="flex-1 flex items-center justify-between relative my-1">
-          {/* ACTIVE PLACEMENT / RELOCATION BANNER */}
-          {(placementModeStaff || relocatingStaffUid) && (
-            <div className="mx-auto mt-auto mb-3 pointer-events-auto w-[320px] sm:w-[460px] bg-[#160d2e]/95 border-2 border-cyan-300 rounded-2xl px-4 py-2.5 shadow-2xl text-white flex items-center justify-between gap-2">
+          {/* ==================== LEFT-SIDE SPRITE & CROWD MOOD INSPECTOR PANEL ==================== */}
+          <div className="pointer-events-auto self-center flex flex-col gap-1.5 z-10">
+            {!isMoodPanelOpen ? (
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setIsMoodPanelOpen(true);
+                }}
+                className="px-3 py-2 rounded-2xl bg-[#130d24]/94 border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116] text-left flex items-center gap-2 cursor-pointer hover:border-cyan-400 transition-all"
+              >
+                <span className="text-base">{selectedSpriteMood?.moodEmoji || '🔥'}</span>
+                <div>
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-cyan-300 font-bold">
+                    SPRITE MOODS ({spriteMoodList.length})
+                  </div>
+                  <div className="text-xs font-black text-white">
+                    {selectedSpriteMood
+                      ? `${selectedSpriteMood.name}: ${selectedSpriteMood.moodLabel}`
+                      : 'Tap Any Sprite'}
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div className="w-[235px] sm:w-[265px] rounded-2xl bg-[#130d24]/94 backdrop-blur-md border-[2.5px] border-[#111116] shadow-[0_6px_0_#111116] p-2.5 text-white flex flex-col gap-2">
+                <div className="flex items-center justify-between border-b border-purple-500/25 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">💬</span>
+                    <div>
+                      <div className="text-[9px] font-mono uppercase tracking-widest text-cyan-300 leading-none">
+                        TAP ANY SPRITE ON FLOOR
+                      </div>
+                      <div className="text-xs font-black text-white leading-tight mt-0.5">
+                        SPRITE &amp; CROWD MOODS
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setIsMoodPanelOpen(false);
+                    }}
+                    title="Minimize Mood Panel"
+                    className="w-6 h-6 rounded-lg bg-purple-900/70 hover:bg-purple-800 flex items-center justify-center text-purple-200 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Selected Sprite Live Mood Card */}
+                {selectedSpriteMood ? (
+                  <div className="p-2 rounded-xl bg-[#1b1233] border border-purple-500/30 space-y-1.5">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0"
+                          style={{ backgroundColor: selectedSpriteMood.shirtColor }}
+                        >
+                          {selectedSpriteMood.moodEmoji}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-black text-white truncate">
+                            {selectedSpriteMood.name}
+                          </div>
+                          <div className="text-[9px] font-mono text-purple-300 uppercase">
+                            {selectedSpriteMood.role.replace('_', ' ')} · Fav:{' '}
+                            <span className="text-cyan-300">{selectedSpriteMood.favoriteGenre}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <span
+                        className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase shrink-0 text-slate-950"
+                        style={{ backgroundColor: selectedSpriteMood.moodColor }}
+                      >
+                        {selectedSpriteMood.moodLabel}
+                      </span>
+                    </div>
+
+                    {/* Mood Score Meter */}
+                    <div className="w-full h-2 rounded-full bg-[#090514] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${selectedSpriteMood.moodScore}%`,
+                          backgroundColor: selectedSpriteMood.moodColor,
+                        }}
+                      />
+                    </div>
+
+                    <div className="text-[10px] font-bold text-cyan-200 leading-snug">
+                      {selectedSpriteMood.activity}
+                    </div>
+                    <div className="text-[10px] italic text-purple-200 bg-[#120b24] px-2 py-1 rounded-lg">
+                      &ldquo;{selectedSpriteMood.thought}&rdquo;
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        soundEngine.playCashRegister();
+                        setCash((c) => c + 120);
+                        addXp(25);
+                        const g = guestsRef.current.find((x) => x.id === selectedSpriteMood.id);
+                        if (g) {
+                          g.hype = 100;
+                          g.chatText = 'VIP Drink on the house?! Best club ever!! 🔥';
+                          g.chatTimer = 6.5;
+                        }
+                        setSelectedSpriteMood((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                moodLabel: 'ECSTATIC',
+                                moodEmoji: '🔥',
+                                moodColor: '#4ade80',
+                                moodScore: 100,
+                                thought: 'VIP Drink on the house?! Best club ever!! 🔥',
+                              }
+                            : null
+                        );
+                        floatingTextsRef.current.push({
+                          id: `mood_boost_${performance.now()}`,
+                          text: `🔥 ${selectedSpriteMood.name.toUpperCase()} MOOD ECSTATIC! +$120 TIP`,
+                          floor: activeFloor,
+                          gridX: g ? g.gridX : 4,
+                          gridY: g ? g.gridY : 4,
+                          color: '#4ade80',
+                          age: 0,
+                        });
+                      }}
+                      className="w-full py-1 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-[10px] uppercase tracking-wider cursor-pointer"
+                    >
+                      ⚡ Boost Mood (+$120 VIP Tip)
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-2 rounded-xl bg-[#1b1233] text-[11px] text-purple-200">
+                    Tap any dancer, VIP guest, queued customer, pedestrian, DJ, or bartender to inspect their mood!
+                  </div>
+                )}
+
+                {/* Live Scrollable List of Sprites & Their Moods */}
+                <div className="max-h-32 overflow-y-auto space-y-1 pr-0.5">
+                  {spriteMoodList.slice(0, 14).map((sp) => {
+                    const isSel = selectedSpriteMood?.id === sp.id;
+                    return (
+                      <button
+                        key={sp.id}
+                        onClick={() => {
+                          setSelectedSpriteMood(sp);
+                          soundEngine.playClick();
+                        }}
+                        className={`w-full px-2 py-1 rounded-lg text-left flex items-center justify-between gap-1.5 cursor-pointer transition-colors ${
+                          isSel
+                            ? 'bg-purple-700/70 border border-cyan-300'
+                            : 'bg-[#18102c] hover:bg-[#231740]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs shrink-0">{sp.moodEmoji}</span>
+                          <span className="text-[10px] font-black text-white truncate">
+                            {sp.name}
+                          </span>
+                        </div>
+                        <span
+                          className="text-[9px] font-black uppercase shrink-0"
+                          style={{ color: sp.moodColor }}
+                        >
+                          {sp.moodLabel}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ACTIVE PLACEMENT / RELOCATION / DECORATION EDIT BANNER */}
+          {(placementModeStaff || relocatingStaffUid || isEditDecorMode || editingPlacedItemUid) && (
+            <div className="mx-auto mt-auto mb-3 pointer-events-auto w-[330px] sm:w-[500px] bg-[#160d2e]/95 border-2 border-cyan-300 rounded-2xl px-4 py-2.5 shadow-2xl text-white flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300 font-bold">
                   {placementModeStaff
                     ? `Hiring ${placementModeStaff.name} ($${placementModeStaff.hireCostCash})`
-                    : 'Relocating Staff Station'}
+                    : relocatingStaffUid
+                    ? 'Relocating Staff Station'
+                    : editingPlacedItemUid
+                    ? `Moving ${
+                        getCatalogItem(
+                          placedItems.find((p) => p.uid === editingPlacedItemUid)?.catalogId || ''
+                        )?.name || 'Decoration'
+                      } ($0 Free Move)`
+                    : 'Edit Decoration Position Mode'}
                 </div>
                 <div className="text-xs sm:text-sm font-extrabold text-white">
-                  Tap any isometric tile on Floor {activeFloor} to station staff!
+                  {placementModeStaff || relocatingStaffUid
+                    ? `Tap any isometric tile on Floor ${activeFloor} to station staff!`
+                    : editingPlacedItemUid
+                    ? 'Tap any green tile on the floor or use arrows to reposition!'
+                    : 'Tap any placed decoration on the floor to move or rotate it!'}
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setPlacementModeStaff(null);
-                  setRelocatingStaffUid(null);
-                  soundEngine.playClick();
-                }}
-                className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold cursor-pointer shrink-0"
-              >
-                Cancel
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                {editingPlacedItemUid && (
+                  <>
+                    <button
+                      onClick={() => nudgeEditingDecoration(-1, 0)}
+                      title="Nudge Back-Left (-X)"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                    >
+                      ↖
+                    </button>
+                    <button
+                      onClick={() => nudgeEditingDecoration(1, 0)}
+                      title="Nudge Front-Right (+X)"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                    >
+                      ↘
+                    </button>
+                    <button
+                      onClick={() => nudgeEditingDecoration(0, -1)}
+                      title="Nudge Back-Right (-Y)"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                    >
+                      ↗
+                    </button>
+                    <button
+                      onClick={() => nudgeEditingDecoration(0, 1)}
+                      title="Nudge Front-Left (+Y)"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                    >
+                      ↙
+                    </button>
+                    <button
+                      onClick={() => {
+                        const nextRot = ((buildRotation + 90) % 360) as 0 | 90 | 180 | 270;
+                        setBuildRotation(nextRot);
+                        setPlacedItems((prev) =>
+                          prev.map((p) =>
+                            p.uid === editingPlacedItemUid ? { ...p, rotation: nextRot } : p
+                          )
+                        );
+                        soundEngine.playClick();
+                      }}
+                      title="Rotate 90°"
+                      className="px-2 py-1 rounded-lg bg-cyan-500 text-slate-950 text-xs font-black cursor-pointer"
+                    >
+                      ↻ {buildRotation}°
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    setPlacementModeStaff(null);
+                    setRelocatingStaffUid(null);
+                    setEditingPlacedItemUid(null);
+                    setIsEditDecorMode(false);
+                    soundEngine.playClick();
+                  }}
+                  className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold cursor-pointer shrink-0"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           )}
 
@@ -2021,7 +2693,7 @@ export default function App() {
                     {activeDockTab}
                   </span>
                   <h3 className="text-sm sm:text-base font-black text-white">
-                    {activeDockTab === 'DECORATE' && `Decorate & Build Catalog (Floor ${activeFloor})`}
+                    {activeDockTab === 'DECORATE' && `Decorate & Edit Positions (Floor ${activeFloor})`}
                     {activeDockTab === 'STAFF' && `Club Staff & Security Roster (${staffMembers.length} Active)`}
                     {activeDockTab === 'TONIGHT' && `Tonight's Drink Mixes & Bar Menu`}
                     {activeDockTab === 'DRESSING' && `Chibi Streetwear & DJ Style`}
@@ -2039,7 +2711,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 1. DECORATE TAB (Furniture & Equipment Placement) */}
+              {/* 1. DECORATE TAB (Furniture & Equipment Placement + Edit Decoration Position Mode) */}
               {activeDockTab === 'DECORATE' && (
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2.5">
@@ -2071,6 +2743,23 @@ export default function App() {
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => {
+                          const next = !isEditDecorMode;
+                          setIsEditDecorMode(next);
+                          setIsRemoveMode(false);
+                          if (!next) setEditingPlacedItemUid(null);
+                          soundEngine.playClick();
+                        }}
+                        className={`px-2.5 py-1 rounded-lg border border-[#111116] text-xs font-black flex items-center gap-1 cursor-pointer ${
+                          isEditDecorMode || editingPlacedItemUid
+                            ? 'bg-cyan-400 text-slate-950'
+                            : 'bg-purple-900 text-cyan-200 hover:bg-purple-800'
+                        }`}
+                      >
+                        <span>✥</span>
+                        <span>{isEditDecorMode || editingPlacedItemUid ? 'Editing Pos' : 'Edit Position'}</span>
+                      </button>
+                      <button
+                        onClick={() => {
                           setBuildRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270);
                           soundEngine.playClick();
                         }}
@@ -2080,7 +2769,11 @@ export default function App() {
                         <span>{buildRotation}°</span>
                       </button>
                       <button
-                        onClick={() => setIsRemoveMode((p) => !p)}
+                        onClick={() => {
+                          setIsRemoveMode((p) => !p);
+                          setIsEditDecorMode(false);
+                          setEditingPlacedItemUid(null);
+                        }}
                         className={`px-2 py-1 rounded-lg border border-[#111116] text-xs font-bold flex items-center gap-1 cursor-pointer ${
                           isRemoveMode ? 'bg-rose-600 text-white' : 'bg-purple-900 text-rose-300'
                         }`}
@@ -2091,15 +2784,56 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Placed Decorations Quick-Reposition Bar when in Edit Position Mode */}
+                  {(isEditDecorMode || editingPlacedItemUid) && (
+                    <div className="mb-2.5 p-2 rounded-xl bg-[#1b1233] border border-cyan-400/50">
+                      <div className="text-[10px] font-mono uppercase text-cyan-300 font-bold mb-1.5">
+                        Placed Decorations on Floor {activeFloor} — Tap any item below or on the floor to move it:
+                      </div>
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                        {placedItems
+                          .filter((p) => p.floor === activeFloor)
+                          .map((p) => {
+                            const cat = getCatalogItem(p.catalogId);
+                            if (!cat) return null;
+                            const isMoving = editingPlacedItemUid === p.uid;
+                            return (
+                              <button
+                                key={p.uid}
+                                onClick={() => {
+                                  setEditingPlacedItemUid(p.uid);
+                                  setBuildRotation(p.rotation);
+                                  soundEngine.playClick();
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black whitespace-nowrap cursor-pointer border ${
+                                  isMoving
+                                    ? 'bg-cyan-400 text-slate-950 border-white'
+                                    : 'bg-purple-950 text-purple-200 border-purple-600/40 hover:border-cyan-300'
+                                }`}
+                              >
+                                {cat.name} ({p.gridX},{p.gridY})
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2 overflow-x-auto pb-1.5">
                     {filteredCatalog.map((item) => {
-                      const isSelected = selectedCatalogItem?.id === item.id && !isRemoveMode;
+                      const isSelected =
+                        selectedCatalogItem?.id === item.id &&
+                        !isRemoveMode &&
+                        !isEditDecorMode &&
+                        !editingPlacedItemUid;
                       const canAfford = cash >= item.costCash;
                       return (
                         <div
                           key={item.id}
                           onClick={() => {
                             setIsRemoveMode(false);
+                            setIsEditDecorMode(false);
+                            setEditingPlacedItemUid(null);
                             setSelectedCatalogItem(item);
                             soundEngine.playClick();
                           }}
@@ -2126,6 +2860,8 @@ export default function App() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setIsRemoveMode(false);
+                                setIsEditDecorMode(false);
+                                setEditingPlacedItemUid(null);
                                 setSelectedCatalogItem(item);
                                 purchaseAndPlaceCatalogItem(item);
                               }}
@@ -2740,6 +3476,29 @@ export default function App() {
               </span>
             </button>
 
+            {/* Quick Bar Supply Restock Pill (Matching #supply from Neon Nights reference) */}
+            <button
+              onClick={() => {
+                setDrinkServingsRemaining((s) => Math.min(120, s + 36));
+                setCash((c) => c + activeDrink.sellPrice * 3);
+                addXp(25);
+                soundEngine.playCashRegister();
+                floatingTextsRef.current.push({
+                  id: `restock_${performance.now()}`,
+                  text: `🍸 BAR RESTOCKED! +36 SERVINGS`,
+                  floor: activeFloor,
+                  gridX: 7,
+                  gridY: 3.5,
+                  color: '#4ade80',
+                  age: 0,
+                });
+              }}
+              title="Restock Bar Drink Servings (+36 Drinks)"
+              className="px-2 py-1 rounded-xl bg-gradient-to-b from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 border-2 border-[#111116] shadow-[0_3px_0_#111116] text-slate-950 font-black text-[9px] uppercase tracking-wider cursor-pointer active:translate-y-0.5"
+            >
+              RESTOCK ({drinkServingsRemaining})
+            </button>
+
             {/* Zoom & Camera Controls Below Thermometer */}
             <div className="flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-[#130d24]/92 border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116]">
               <button
@@ -2944,6 +3703,52 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* =====================================================================
+          BEAT & MUSIC STUDIO MODAL (CHOOSE MUSIC + 16-STEP CUSTOM BEAT MAKER)
+         ===================================================================== */}
+      <BeatAndMusicStudioModal
+        isOpen={beatStudioModalTab !== null}
+        initialTab={beatStudioModalTab || 'MUSIC'}
+        songs={clubSongs}
+        activeSongId={activeSong.id}
+        activePattern={activePattern}
+        selectedBpm={selectedBpm}
+        playerLevel={level}
+        onClose={() => setBeatStudioModalTab(null)}
+        onSelectSong={handleSelectSong}
+        onUpdatePattern={(nextPattern) => {
+          setActivePattern(nextPattern);
+          setSelectedBpm(nextPattern.bpm);
+          soundEngine.setBpm(nextPattern.bpm);
+          setCustomPatterns((prev) => ({ ...prev, [nextPattern.id]: nextPattern }));
+        }}
+        onSaveCustomBeatSong={(newSong, newPattern) => {
+          setCustomPatterns((prev) => ({ ...prev, [newPattern.id]: newPattern }));
+          setActivePattern(newPattern);
+          setClubSongs((prev) => [newSong, ...prev]);
+          setActiveSongId(newSong.id);
+          setSelectedBpm(newSong.bpm);
+          soundEngine.setBpm(newSong.bpm);
+          soundEngine.setCustomAudioUrl(null);
+          soundEngine.setActivePattern(newPattern);
+          addXp(45);
+          floatingTextsRef.current.push({
+            id: `custom_beat_${performance.now()}`,
+            text: `🎛️ NEW CUSTOM BEAT LIVE: ${newSong.title.toUpperCase()} (${newSong.bpm} BPM)!`,
+            floor: activeFloor,
+            gridX: 5,
+            gridY: 0.8,
+            color: '#f472b6',
+            age: 0,
+          });
+        }}
+        onUploadCustomAudioSong={(uploadedSong) => {
+          setClubSongs((prev) => [uploadedSong, ...prev]);
+          handleSelectSong(uploadedSong);
+        }}
+        onTriggerBassDrop={handleTriggerBassDrop}
+      />
     </div>
   );
 }

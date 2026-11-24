@@ -46,6 +46,180 @@ export interface DayNightCycleReport {
   emissiveMultiplier: number; // 1.0..2.25
 }
 
+export interface ClubMoodLightingProfile {
+  genreKey: string;
+  moodName: string;
+  moodIcon: string;
+  primaryHex: string;
+  secondaryHex: string;
+  tertiaryHex: string;
+  filterOverlayRgba: string;
+  filterBorderHex: string;
+  tilePalette: [string, string, string, string, string, string];
+}
+
+export const CLUB_MOOD_PROFILES: Record<string, ClubMoodLightingProfile> = {
+  Pop: {
+    genreKey: 'Pop',
+    moodName: 'NEON MAGENTA BLISS',
+    moodIcon: '💖',
+    primaryHex: '#ff4fa0',
+    secondaryHex: '#c084fc',
+    tertiaryHex: '#38bdf8',
+    filterOverlayRgba: 'rgba(255, 79, 160, 0.24)',
+    filterBorderHex: '#ff4fa0',
+    tilePalette: ['#ff4fa0', '#f472b6', '#c084fc', '#38bdf8', '#facc15', '#fb7185'],
+  },
+  Dance: {
+    genreKey: 'Dance',
+    moodName: 'CYBER AQUA RAVE',
+    moodIcon: '🪩',
+    primaryHex: '#22d3ee',
+    secondaryHex: '#3b82f6',
+    tertiaryHex: '#a855f7',
+    filterOverlayRgba: 'rgba(34, 211, 238, 0.24)',
+    filterBorderHex: '#22d3ee',
+    tilePalette: ['#22d3ee', '#38bdf8', '#60a5fa', '#818cf8', '#2dd4bf', '#e879f9'],
+  },
+  'Hip Hop': {
+    genreKey: 'Hip Hop',
+    moodName: '24K GOLD VIP LOUNGE',
+    moodIcon: '👑',
+    primaryHex: '#facc15',
+    secondaryHex: '#f59e0b',
+    tertiaryHex: '#a855f7',
+    filterOverlayRgba: 'rgba(250, 204, 21, 0.24)',
+    filterBorderHex: '#facc15',
+    tilePalette: ['#facc15', '#fbbf24', '#f59e0b', '#a855f7', '#fde047', '#fb923c'],
+  },
+  Latin: {
+    genreKey: 'Latin',
+    moodName: 'TROPICAL SUNSET FIESTA',
+    moodIcon: '🔥',
+    primaryHex: '#fb923c',
+    secondaryHex: '#f43f5e',
+    tertiaryHex: '#fde047',
+    filterOverlayRgba: 'rgba(251, 146, 60, 0.25)',
+    filterBorderHex: '#fb923c',
+    tilePalette: ['#fb923c', '#f97316', '#f43f5e', '#fde047', '#fb7185', '#facc15'],
+  },
+  Electro: {
+    genreKey: 'Electro',
+    moodName: 'EMERALD LASER OVERDRIVE',
+    moodIcon: '⚡',
+    primaryHex: '#4ade80',
+    secondaryHex: '#22d3ee',
+    tertiaryHex: '#a3e635',
+    filterOverlayRgba: 'rgba(74, 222, 128, 0.24)',
+    filterBorderHex: '#4ade80',
+    tilePalette: ['#4ade80', '#22c55e', '#a3e635', '#22d3ee', '#10b981', '#fde047'],
+  },
+  Rock: {
+    genreKey: 'Rock',
+    moodName: 'CRIMSON VOLTAGE STAGE',
+    moodIcon: '🎸',
+    primaryHex: '#ef4444',
+    secondaryHex: '#f97316',
+    tertiaryHex: '#facc15',
+    filterOverlayRgba: 'rgba(239, 68, 68, 0.25)',
+    filterBorderHex: '#ef4444',
+    tilePalette: ['#ef4444', '#f43f5e', '#f97316', '#facc15', '#fb7185', '#dc2626'],
+  },
+  Custom: {
+    genreKey: 'Custom',
+    moodName: 'PRISM HYPER-SYNC',
+    moodIcon: '🎛️',
+    primaryHex: '#22d3ee',
+    secondaryHex: '#e879f9',
+    tertiaryHex: '#4ade80',
+    filterOverlayRgba: 'rgba(168, 85, 247, 0.22)',
+    filterBorderHex: '#e879f9',
+    tilePalette: ['#22d3ee', '#38bdf8', '#e879f9', '#4ade80', '#fde047', '#fb923c'],
+  },
+};
+
+export function getClubMoodLightingProfile(genre?: string): ClubMoodLightingProfile {
+  if (!genre) return CLUB_MOOD_PROFILES.Pop;
+  const g = genre.toLowerCase();
+  if (g.includes('dance') || g.includes('house') || g.includes('techno')) {
+    return CLUB_MOOD_PROFILES.Dance;
+  }
+  if (g.includes('hip') || g.includes('funk') || g.includes('r&b') || g.includes('rap')) {
+    return CLUB_MOOD_PROFILES['Hip Hop'];
+  }
+  if (g.includes('latin') || g.includes('salsa') || g.includes('reggaeton')) {
+    return CLUB_MOOD_PROFILES.Latin;
+  }
+  if (g.includes('electro') || g.includes('future') || g.includes('synth') || g.includes('cyber')) {
+    return CLUB_MOOD_PROFILES.Electro;
+  }
+  if (g.includes('rock') || g.includes('punk') || g.includes('metal')) {
+    return CLUB_MOOD_PROFILES.Rock;
+  }
+  if (g.includes('custom') || g.includes('beat')) {
+    return CLUB_MOOD_PROFILES.Custom;
+  }
+  return CLUB_MOOD_PROFILES.Pop;
+}
+
+export interface SpriteMoodInfo {
+  id: string;
+  name: string;
+  role:
+    | 'VIP_GUEST'
+    | 'GUEST'
+    | 'PEDESTRIAN'
+    | 'BARTENDER'
+    | 'DJ'
+    | 'SECURITY'
+    | 'WAITER';
+  moodLabel:
+    | 'ECSTATIC'
+    | 'HYPED'
+    | 'VIBING'
+    | 'CHILLING'
+    | 'THIRSTY'
+    | 'WAITING IN LINE'
+    | 'STROLLING';
+  moodEmoji: string;
+  moodColor: string;
+  moodScore: number; // 0..100
+  activity: string;
+  thought: string;
+  favoriteGenre: string;
+  shirtColor: string;
+}
+
+interface TrafficCarAgent {
+  id: string;
+  lane: 'FRONT_EAST' | 'FRONT_WEST' | 'LEFT_SOUTH';
+  gridX: number;
+  gridY: number;
+  speed: number;
+  bodyColor: string;
+  shadeColor: string;
+  isTaxi: boolean;
+  stopCooldown: number;
+}
+
+interface PedestrianAgent {
+  id: string;
+  name: string;
+  gridX: number;
+  gridY: number;
+  waypoints: Array<{ x: number; y: number }>;
+  wpIndex: number;
+  speed: number;
+  shirtColor: string;
+  hairColor: string;
+  pantsColor: string;
+  facingDir: 'NE' | 'NW' | 'SE' | 'SW';
+  bubble: BubbleType | null;
+  bubbleTimer: number;
+  favoriteGenre: string;
+  hype: number;
+}
+
 interface IsometricClubCanvasProps {
   isPlaying: boolean;
   activeFloor: FloorLevel;
@@ -63,7 +237,13 @@ interface IsometricClubCanvasProps {
   parkingState: ParkingUpgradeState;
   clubMetrics: ClubSimulationMetrics;
   clubBpm?: number;
+  activeGenre?: string;
   isRemoveMode: boolean;
+  isEditDecorMode?: boolean;
+  editingPlacedItemUid?: string | null;
+  selectedSpriteId?: string | null;
+  onSelectSprite?: (info: SpriteMoodInfo) => void;
+  onSpriteMoodListReport?: (list: SpriteMoodInfo[]) => void;
   cameraZoom: number;
   cameraResetTick: number;
   dayNightOverrideHour?: number | null;
@@ -264,7 +444,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   parkingState,
   clubMetrics,
   clubBpm = 124,
+  activeGenre = 'Pop',
   isRemoveMode,
+  isEditDecorMode = false,
+  editingPlacedItemUid = null,
+  selectedSpriteId = null,
+  onSelectSprite,
+  onSpriteMoodListReport,
   cameraZoom,
   cameraResetTick,
   dayNightOverrideHour = null,
@@ -307,6 +493,201 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   const dancerParticlesRef = useRef<DancerHypeParticle[]>([]);
   const prevHypeSegmentsRef = useRef<number>(clubMetrics.hypeSegments);
 
+  // Moving Road Traffic Vehicles (Eastbound front avenue, Westbound front avenue, Southbound side street)
+  const trafficCarsRef = useRef<TrafficCarAgent[]>([
+    {
+      id: 'car_taxi_east_1',
+      lane: 'FRONT_EAST',
+      gridX: -5.5,
+      gridY: 13.55,
+      speed: 2.35,
+      bodyColor: '#facc15',
+      shadeColor: '#ca8a04',
+      isTaxi: true,
+      stopCooldown: 0,
+    },
+    {
+      id: 'car_cyber_east_2',
+      lane: 'FRONT_EAST',
+      gridX: 4.5,
+      gridY: 13.55,
+      speed: 2.65,
+      bodyColor: '#38bdf8',
+      shadeColor: '#0284c7',
+      isTaxi: false,
+      stopCooldown: 0,
+    },
+    {
+      id: 'car_coupe_west_1',
+      lane: 'FRONT_WEST',
+      gridX: 14.5,
+      gridY: 14.65,
+      speed: 2.85,
+      bodyColor: '#f43f5e',
+      shadeColor: '#be123c',
+      isTaxi: false,
+      stopCooldown: 0,
+    },
+    {
+      id: 'car_taxi_west_2',
+      lane: 'FRONT_WEST',
+      gridX: 3.2,
+      gridY: 14.65,
+      speed: 2.45,
+      bodyColor: '#facc15',
+      shadeColor: '#ca8a04',
+      isTaxi: true,
+      stopCooldown: 0,
+    },
+    {
+      id: 'car_sedan_south_1',
+      lane: 'LEFT_SOUTH',
+      gridX: -3.15,
+      gridY: -4.5,
+      speed: 2.25,
+      bodyColor: '#a855f7',
+      shadeColor: '#6b21a8',
+      isTaxi: false,
+      stopCooldown: 0,
+    },
+  ]);
+
+  // Sidewalk Pedestrians Walking Around All 4 Sides of the Building Perimeter
+  const pedestriansRef = useRef<PedestrianAgent[]>([
+    {
+      id: 'ped_perimeter_1',
+      name: 'Sora',
+      gridX: -1.18,
+      gridY: 3.2,
+      waypoints: [
+        { x: -1.18, y: 11.12 },
+        { x: 10.75, y: 11.12 },
+        { x: 10.75, y: -0.95 },
+        { x: -1.18, y: -0.95 },
+      ],
+      wpIndex: 0,
+      speed: 0.92,
+      shirtColor: '#38bdf8',
+      hairColor: '#1e1b4b',
+      pantsColor: '#0f172a',
+      facingDir: 'SW',
+      bubble: 'MUSIC',
+      bubbleTimer: 4,
+      favoriteGenre: 'Dance',
+      hype: 84,
+    },
+    {
+      id: 'ped_perimeter_2',
+      name: 'Elena',
+      gridX: 6.4,
+      gridY: 11.12,
+      waypoints: [
+        { x: 10.75, y: 11.12 },
+        { x: 10.75, y: -0.95 },
+        { x: -1.18, y: -0.95 },
+        { x: -1.18, y: 11.12 },
+      ],
+      wpIndex: 0,
+      speed: 0.86,
+      shirtColor: '#f472b6',
+      hairColor: '#facc15',
+      pantsColor: '#1e293b',
+      facingDir: 'SE',
+      bubble: 'SPARKLE',
+      bubbleTimer: 5,
+      favoriteGenre: 'Pop',
+      hype: 89,
+    },
+    {
+      id: 'ped_perimeter_3',
+      name: 'Marcus V.',
+      gridX: 10.75,
+      gridY: 6.5,
+      waypoints: [
+        { x: 10.75, y: -0.95 },
+        { x: -1.18, y: -0.95 },
+        { x: -1.18, y: 11.12 },
+        { x: 10.75, y: 11.12 },
+      ],
+      wpIndex: 0,
+      speed: 0.96,
+      shirtColor: '#4ade80',
+      hairColor: '#451a03',
+      pantsColor: '#1e3a8a',
+      facingDir: 'NE',
+      bubble: 'CHAT',
+      bubbleTimer: 3.5,
+      favoriteGenre: 'Electro',
+      hype: 82,
+    },
+    {
+      id: 'ped_perimeter_4',
+      name: 'Nadia',
+      gridX: 4.5,
+      gridY: -0.95,
+      waypoints: [
+        { x: -1.18, y: -0.95 },
+        { x: -1.18, y: 11.12 },
+        { x: 10.75, y: 11.12 },
+        { x: 10.75, y: -0.95 },
+      ],
+      wpIndex: 0,
+      speed: 0.88,
+      shirtColor: '#facc15',
+      hairColor: '#7c2d12',
+      pantsColor: '#0f172a',
+      facingDir: 'NW',
+      bubble: 'MUSIC',
+      bubbleTimer: 4.5,
+      favoriteGenre: 'Hip Hop',
+      hype: 87,
+    },
+    {
+      id: 'ped_perimeter_5',
+      name: 'Devon',
+      gridX: 8.8,
+      gridY: 11.18,
+      waypoints: [
+        { x: -1.18, y: 11.18 },
+        { x: -1.18, y: -0.95 },
+        { x: 10.75, y: -0.95 },
+        { x: 10.75, y: 11.18 },
+      ],
+      wpIndex: 0,
+      speed: 0.91,
+      shirtColor: '#a855f7',
+      hairColor: '#0f172a',
+      pantsColor: '#1e293b',
+      facingDir: 'NW',
+      bubble: null,
+      bubbleTimer: 0,
+      favoriteGenre: 'Latin',
+      hype: 85,
+    },
+    {
+      id: 'ped_perimeter_6',
+      name: 'Tessa',
+      gridX: -1.18,
+      gridY: 8.4,
+      waypoints: [
+        { x: -1.18, y: -0.95 },
+        { x: 10.75, y: -0.95 },
+        { x: 10.75, y: 11.18 },
+        { x: -1.18, y: 11.18 },
+      ],
+      wpIndex: 0,
+      speed: 0.84,
+      shirtColor: '#fb923c',
+      hairColor: '#111116',
+      pantsColor: '#1e1b4b',
+      facingDir: 'NE',
+      bubble: 'COCKTAIL',
+      bubbleTimer: 4,
+      favoriteGenre: 'Rock',
+      hype: 86,
+    },
+  ]);
+
   useEffect(() => {
     panOffsetRef.current = { x: 0, y: 0 };
   }, [cameraResetTick]);
@@ -333,7 +714,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     parkingState,
     clubMetrics,
     clubBpm,
+    activeGenre,
     isRemoveMode,
+    isEditDecorMode,
+    editingPlacedItemUid,
+    selectedSpriteId,
+    onSelectSprite,
+    onSpriteMoodListReport,
     cameraZoom,
     dayNightOverrideHour,
     onCycleTimeReport,
@@ -359,7 +746,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     parkingState,
     clubMetrics,
     clubBpm,
+    activeGenre,
     isRemoveMode,
+    isEditDecorMode,
+    editingPlacedItemUid,
+    selectedSpriteId,
+    onSelectSprite,
+    onSpriteMoodListReport,
     cameraZoom,
     dayNightOverrideHour,
     onCycleTimeReport,
@@ -407,6 +800,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     let lastTimeMs = performance.now();
     let spawnAccumulator = 0;
     let particleEmitAccumulator = 0;
+    let moodReportAccumulator = 0;
     let lastReportedQueueCount = -1;
 
     let viewportWidth = canvas.clientWidth || window.innerWidth;
@@ -478,6 +872,82 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
+      // 0A. Update Exterior Road Traffic Cars (2-way Front Avenue + Side Street)
+      const trafficCars = trafficCarsRef.current;
+      for (let cIdx = 0; cIdx < trafficCars.length; cIdx++) {
+        const car = trafficCars[cIdx];
+        if (car.stopCooldown > 0) {
+          car.stopCooldown -= dt;
+        }
+        // Taxis briefly slow down near the front red carpet crosswalk (gx = 1.6..2.8) to drop off clubgoers
+        let speedMult = 1.0;
+        if (
+          car.isTaxi &&
+          car.lane === 'FRONT_EAST' &&
+          car.gridX >= 1.2 &&
+          car.gridX <= 2.6 &&
+          car.stopCooldown <= 0
+        ) {
+          speedMult = 0.25;
+          if (car.gridX >= 2.35) {
+            car.stopCooldown = 6.0;
+          }
+        }
+        if (car.lane === 'FRONT_EAST') {
+          car.gridX += car.speed * speedMult * dt;
+          if (car.gridX > 16.5) {
+            car.gridX = -7.5 - Math.random() * 2.5;
+          }
+        } else if (car.lane === 'FRONT_WEST') {
+          car.gridX -= car.speed * speedMult * dt;
+          if (car.gridX < -7.5) {
+            car.gridX = 16.5 + Math.random() * 2.5;
+          }
+        } else {
+          car.gridY += car.speed * dt;
+          if (car.gridY > 16.2) {
+            car.gridY = -6.5 - Math.random() * 2.5;
+          }
+        }
+      }
+
+      // 0B. Update Exterior Sidewalk Pedestrians Strolling Around the Building
+      const peds = pedestriansRef.current;
+      for (let pIdx = 0; pIdx < peds.length; pIdx++) {
+        const ped = peds[pIdx];
+        if (ped.bubbleTimer > 0) {
+          ped.bubbleTimer -= dt;
+          if (ped.bubbleTimer <= 0) {
+            ped.bubble = null;
+          }
+        } else if (Math.random() < dt * 0.18) {
+          const pedBubbles: BubbleType[] = ['MUSIC', 'CHAT', 'SPARKLE', 'COCKTAIL'];
+          ped.bubble = pedBubbles[Math.floor(Math.random() * pedBubbles.length)];
+          ped.bubbleTimer = 3.5 + Math.random() * 2.5;
+        }
+
+        const targetWp = ped.waypoints[ped.wpIndex % ped.waypoints.length];
+        const dx = targetWp.x - ped.gridX;
+        const dy = targetWp.y - ped.gridY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0.01) {
+          if (Math.abs(dx) >= Math.abs(dy)) {
+            ped.facingDir = dx >= 0 ? 'SE' : 'NW';
+          } else {
+            ped.facingDir = dy >= 0 ? 'SW' : 'NE';
+          }
+        }
+        const step = ped.speed * dt;
+        if (dist <= step) {
+          ped.gridX = targetWp.x;
+          ped.gridY = targetWp.y;
+          ped.wpIndex = (ped.wpIndex + 1) % ped.waypoints.length;
+        } else {
+          ped.gridX += (dx / dist) * step;
+          ped.gridY += (dy / dist) * step;
+        }
+      }
+
       const guests = guestsRef.current;
 
       // Update Max-Hype (3/3 segments) Dancer Confetti & Bubbles Particle System at 60fps
@@ -495,10 +965,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         p.offsetX += (p.vx + swayVelX) * dt;
         p.offsetY += p.vy * dt;
         if (p.kind === 'CONFETTI') {
-          // Confetti pops up above the dancer, then flutters gently downward
           p.vy += 36 * dt;
         } else {
-          // Bubbles accelerate slightly upward with buoyancy
           p.vy -= 4 * dt;
         }
       }
@@ -510,7 +978,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         const activeDancers = guests.filter(
           (g) => g.state === 'DANCING' || g.state === 'DANCER_MOVES'
         );
-        // Celebrate immediately when Hype reaches maximum 3 segments
         if (prevHypeSegmentsRef.current < 3 && activeDancers.length > 0) {
           for (const d of activeDancers) {
             spawnParticlesAboveDancer(d, 7);
@@ -533,10 +1000,64 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       // Ensure all currently seated/ordering guests occupy distinct, valid furniture slots (no clustering on a single seat)
       reconcileOccupiedFurnitureSlots(items, guests);
 
+      // Separate interior club guests from customers waiting outside on the Red Carpet queue line
+      let insideGuestsCount = guests.filter((g) => g.state !== 'QUEUEING').length;
+      const queuedList = guests.filter((g) => g.state === 'QUEUEING');
+
+      // Smoothly advance queued customers along the Red Carpet into single-file line slots leading to the Red Carpet Door (x=2.25, y=10.0)
+      for (let qIdx = 0; qIdx < queuedList.length; qIdx++) {
+        const qg = queuedList[qIdx];
+        const slotX = 2.22 - qIdx * 0.72;
+        const slotY = 10.42 + (qIdx % 2) * 0.08;
+        const qdx = slotX - qg.gridX;
+        const qdy = slotY - qg.gridY;
+        const qDist = Math.hypot(qdx, qdy);
+        if (qDist > 0.03) {
+          const walkStep = Math.min(qDist, 1.35 * dt);
+          qg.gridX += (qdx / qDist) * walkStep;
+          qg.gridY += (qdy / qDist) * walkStep;
+          qg.facingDir = qdx >= 0 ? 'SE' : 'NE';
+        } else {
+          qg.gridX = slotX;
+          qg.gridY = slotY;
+          qg.facingDir = 'NE';
+        }
+      }
+
       for (let i = guests.length - 1; i >= 0; i--) {
         const guest = guests[i];
-        guest.stateTimer -= dt;
-        if (guest.bubbleTimer > 0) {
+
+        // If the guest is QUEUEING on the Red Carpet:
+        if (guest.state === 'QUEUEING') {
+          if (guest.bubbleTimer > 0) {
+            guest.bubbleTimer -= dt;
+            if (guest.bubbleTimer <= 0) guest.bubble = null;
+          }
+          const qIdx = queuedList.indexOf(guest);
+          const isAtRedCarpetDoor =
+            qIdx === 0 && Math.hypot(guest.gridX - 2.22, guest.gridY - 10.42) < 0.25;
+          const isClubFull = insideGuestsCount >= metrics.maxGuests;
+
+          if (isClubFull) {
+            // Club is at max capacity: customers fall in line along the red carpet and wait for an interior guest to leave
+            guest.stateTimer = Math.max(0.45, guest.stateTimer);
+            if (!guest.bubble && Math.random() < dt * 0.35) {
+              guest.bubble = qIdx === 0 ? 'EXCLAMATION' : 'MUSIC';
+              guest.bubbleTimer = 3.2;
+            }
+            continue;
+          }
+
+          // Only the customer at the front of the red carpet line steps through the Red Carpet Door
+          if (!isAtRedCarpetDoor) {
+            continue;
+          }
+          guest.stateTimer -= dt;
+        } else {
+          guest.stateTimer -= dt;
+        }
+
+        if (guest.bubbleTimer > 0 && guest.state !== 'QUEUEING') {
           guest.bubbleTimer -= dt;
           if (guest.bubbleTimer <= 0) {
             guest.bubble = null;
@@ -549,7 +1070,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
             guest.dancePhaseOffset = Math.random() * Math.PI * 2;
           }
-          // Automatically promote DANCING guests into DANCER_MOVES after their initial warm-up beat
           if (guest.state === 'DANCING' && guest.stateTimer < 6.5) {
             guest.state = 'DANCER_MOVES';
             guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
@@ -558,7 +1078,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           if (guest.state === 'DANCER_MOVES') {
             guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 8) - dt;
             if (guest.danceMoveTimer <= 0) {
-              // Randomize next dance sprite animation move on a relaxed 8-beat musical phrase boundary
               guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
               guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
             }
@@ -566,8 +1085,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
 
         if (guest.path.length > 0) {
-          // On the final approach step toward a bar stool or chair, verify that the target seat slot is still available;
-          // if another sprite just occupied it, run a proximity search to divert smoothly to the nearest open stool/chair.
           if (
             guest.path.length === 1 &&
             (guest.state === 'WALKING_TO_BAR' || guest.state === 'WALKING_TO_SEAT')
@@ -600,7 +1117,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           const dy = nextWp.y - guest.gridY;
           const dist = Math.hypot(dx, dy);
 
-          // Update natural isometric facing direction from movement vector
           if (dist > 0.01) {
             if (Math.abs(dx) >= Math.abs(dy)) {
               guest.facingDir = dx >= 0 ? 'SE' : 'NW';
@@ -609,7 +1125,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             }
           }
 
-          // Smooth, natural human walking speed with gentle ease-out arrival on the final step
           const isFinalStep = guest.path.length === 1;
           const arrivalEase = isFinalStep && dist < 0.45 ? Math.max(0.55, dist / 0.45) : 1.0;
           const speed = 1.06 * arrivalEase * dt;
@@ -626,8 +1141,14 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
         if (guest.stateTimer <= 0) {
           if (guest.state === 'QUEUEING') {
-            guest.gridX = DOOR_COORD.x;
-            guest.gridY = DOOR_COORD.y;
+            if (insideGuestsCount >= metrics.maxGuests) {
+              guest.stateTimer = 0.5;
+              continue;
+            }
+            // Customer enters through the Red Carpet Door at DOOR_COORD (x=2, y=9)!
+            insideGuestsCount += 1;
+            guest.gridX = DOOR_COORD.x + 0.35;
+            guest.gridY = DOOR_COORD.y + 0.55;
             guest.floor = 1;
             const wantsUpperFloor = maxFloors >= 2 && Math.random() < 0.36;
             if (wantsUpperFloor) {
@@ -638,14 +1159,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               guest.path = findGridPath(
                 items,
                 1,
-                guest.gridX,
-                guest.gridY,
+                DOOR_COORD.x,
+                DOOR_COORD.y,
                 STAIRS_COORD.x,
                 STAIRS_COORD.y + 1
               );
               guest.stateTimer = 0.8;
             } else {
-              // Verify seat availability at the bar first; if full, check open table seats before defaulting to dance floor
               const availBarSlot = findAvailableBarSlot(items, guests, guest.floor, guest.id);
               const availSeatSlot = !availBarSlot
                 ? findAvailableSeatOrTableSlot(items, guests, guest.floor, guest.id)
@@ -669,8 +1189,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 const path = findGridPath(
                   items,
                   guest.floor,
-                  guest.gridX,
-                  guest.gridY,
+                  DOOR_COORD.x,
+                  DOOR_COORD.y,
                   Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(danceSlot.x))),
                   Math.min(GRID_SIZE - 1, Math.max(0, Math.floor(danceSlot.y)))
                 );
@@ -707,11 +1227,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             guest.bubbleTimer = 4;
             guest.stateTimer = 0.9;
           } else if (guest.state === 'WALKING_TO_BAR') {
-            // Re-verify that the assigned bar stool/slot is still unoccupied on arrival
             const arrivalStatus = verifyOrReassignGuestSlotOnArrival(guest, items, guests, 'BAR');
             if (arrivalStatus === 'ARRIVED') {
               guest.state = 'ORDERING_DRINK';
-              // Stay seated on the bar stool enjoying a drink long enough so all bar stools stay occupied naturally
               guest.stateTimer = 8.5 + Math.random() * 5.0;
               guest.bubble = drink.tier >= 3 ? 'COCKTAIL' : 'BEER';
               guest.bubbleTimer = 4.5;
@@ -740,6 +1258,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             );
             earnedCashThisFrame += drinkRevenue;
             earnedXpThisFrame += 12;
+            guest.cashSpent += drinkRevenue;
+            guest.hype = Math.min(100, guest.hype + 6);
 
             if (fts.length < 18) {
               fts.push({
@@ -753,7 +1273,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
 
-            // Check if an unoccupied chair, VIP booth cushion, or cocktail table slot is available before assignment
             const availSeatSlot = findAvailableSeatOrTableSlot(
               items,
               guests,
@@ -800,7 +1319,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 : 'SPARKLE';
             guest.bubbleTimer = 5.5;
           } else if (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES') {
-            // 25% chance to chain into another DANCER_MOVES freestyle burst before heading to an open chair, table, or bar stool
             const danceTiles = items.filter(
               (it) =>
                 it.floor === guest.floor &&
@@ -814,7 +1332,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               guest.bubble = Math.random() < 0.5 ? 'MUSIC' : 'SPARKLE';
               guest.bubbleTimer = 4.0;
             } else {
-              // Verify seat availability at both bar stools and tables/VIP booths before assigning
               const availBarSlot = findAvailableBarSlot(items, guests, guest.floor, guest.id);
               const availSeatSlot = findAvailableSeatOrTableSlot(
                 items,
@@ -845,7 +1362,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               }
             }
           } else if (guest.state === 'WALKING_TO_SEAT') {
-            // Re-verify that the assigned chair/sofa/table slot is still unoccupied on arrival
             const arrivalStatus = verifyOrReassignGuestSlotOnArrival(guest, items, guests, 'SEAT');
             if (arrivalStatus === 'ARRIVED') {
               guest.state = 'RESTING_AT_SEAT';
@@ -876,6 +1392,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             );
             earnedCashThisFrame += seatTip;
             earnedXpThisFrame += 15;
+            guest.cashSpent += seatTip;
 
             if (fts.length < 18) {
               fts.push({
@@ -889,7 +1406,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
 
-            // Verify bar seat availability before sending a rested guest to grab another drink at the bar
             const availBarSlot =
               Math.random() < 0.48
                 ? findAvailableBarSlot(items, guests, guest.floor, guest.id)
@@ -948,7 +1464,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
-      // 2A-Bis. Continuous Personal-Space Separation Pass for free-roaming/dancing patrons (never pushes seated/bar-stool guests off their chair!)
+      // 2A-Bis. Continuous Personal-Space Separation Pass for free-roaming/dancing patrons
       applyGuestPersonalSpaceSeparation(guests, dt);
 
       // 2B. Update all hired Staff Members (Bartenders, Bouncers, Waiters) at 60fps
@@ -963,7 +1479,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           if (staff.bubbleTimer <= 0) staff.actionBubble = null;
         }
 
-        // Smooth 60fps natural walking transition along A* waypoints between stations
         if (staff.path.length > 0) {
           const nextWp = staff.path[0];
           const dx = nextWp.x - staff.gridX;
@@ -986,10 +1501,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           continue;
         }
 
-        // Guarantee zero instant jumping: if a staff member is away from their assigned post
-        // (and not a Waiter mid-delivery), smoothly pathfind back to (postGridX, postGridY)
         if (
-          staff.role !== 'WAITER' &&
+          staff.role === 'BOUNCER' &&
           Math.hypot(staff.postGridX - staff.gridX, staff.postGridY - staff.gridY) > 0.12 &&
           staff.taskTimer <= 0.35
         ) {
@@ -1004,10 +1517,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           if (staff.path.length > 0) continue;
         }
 
-        // Role-specific automated tasks & station-to-station patrol walks when timer completes
         if (staff.taskTimer <= 0) {
           if (staff.role === 'BARTENDER') {
-            // Serve drinks to patrons seated at the bar stools without prematurely kicking them off their stools
             const orderingGuests = guests.filter(
               (g) => g.floor === staff.floor && g.state === 'ORDERING_DRINK'
             );
@@ -1020,42 +1531,39 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             earnedXpThisFrame += 6;
             staff.drinksServed += 1;
             staff.actionBubble = '🍸';
-            staff.bubbleTimer = 2.2;
+            staff.bubbleTimer = 2.4;
             staff.taskState = 'MIXING_DRINK';
-            staff.taskTimer = 3.2 + Math.random() * 1.4;
+            staff.taskTimer = 3.0 + Math.random() * 1.4;
             props.onStaffTaskComplete?.(staff.uid, 'SERVED_DRINK');
 
-            // Smooth station transition along the bar counter between pours
             const floorBars = items.filter(
               (it) =>
                 it.floor === staff.floor &&
                 getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
             );
-            const atAssignedPost =
-              Math.hypot(staff.postGridX - staff.gridX, staff.postGridY - staff.gridY) < 0.25;
-            if (atAssignedPost && floorBars.length > 0) {
-              const barUnit = floorBars[staff.drinksServed % floorBars.length];
-              const patrolX = Math.max(0, Math.min(GRID_SIZE - 1, barUnit.gridX + 1));
-              const patrolY = Math.max(0, Math.min(GRID_SIZE - 1, barUnit.gridY + 1));
-              if (Math.hypot(patrolX - staff.gridX, patrolY - staff.gridY) > 0.4) {
-                staff.path = buildStaffStationPath(
-                  items,
-                  staff.floor,
-                  staff.gridX,
-                  staff.gridY,
-                  patrolX,
-                  patrolY
-                );
+            if (floorBars.length > 0) {
+              let homeBar = floorBars[0];
+              let bestBarDist = Infinity;
+              for (const b of floorBars) {
+                const d = Math.hypot(b.gridX - staff.postGridX, b.gridY - staff.postGridY);
+                if (d < bestBarDist) {
+                  bestBarDist = d;
+                  homeBar = b;
+                }
               }
-            } else if (!atAssignedPost) {
-              staff.path = buildStaffStationPath(
-                items,
-                staff.floor,
-                staff.gridX,
-                staff.gridY,
-                staff.postGridX,
-                staff.postGridY
-              );
+              const bCat = getCatalogItem(homeBar.catalogId);
+              const bFp = bCat
+                ? getRotatedFootprint(bCat, homeBar.rotation)
+                : { width: 1, depth: 2 };
+              const bAlongY = bFp.depth > bFp.width;
+              const stationOffset = 0.25 + ((staff.drinksServed % 2) * 0.5);
+              staff.gridX = bAlongY
+                ? homeBar.gridX + 0.28
+                : homeBar.gridX + stationOffset * bFp.width;
+              staff.gridY = bAlongY
+                ? homeBar.gridY + stationOffset * bFp.depth
+                : homeBar.gridY + 0.28;
+              staff.path = [];
             }
 
             if (fts.length < 18) {
@@ -1070,7 +1578,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
           } else if (staff.role === 'BOUNCER') {
-            // Accelerate outside queue admission & collect VIP security cover charge
             const queuedGuest = guests.find((g) => g.state === 'QUEUEING');
             if (queuedGuest && queuedGuest.stateTimer > 0.35) {
               queuedGuest.stateTimer = Math.max(0.2, queuedGuest.stateTimer - 1.4);
@@ -1086,7 +1593,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             staff.taskTimer = 3.6 + Math.random() * 1.4;
             props.onStaffTaskComplete?.(staff.uid, 'CHECKED_IN_GUEST');
 
-            // Smooth security patrol transition between assigned post and front rope entrance
             const atPost =
               Math.hypot(staff.postGridX - staff.gridX, staff.postGridY - staff.gridY) < 0.25;
             const patrolTarget = atPost
@@ -1118,7 +1624,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
           } else if (staff.role === 'WAITER') {
-            // Waiter A* Patrol Cycle: Bar Counter -> Lounge Seat/Table -> Serve Drink Tray -> Return
             const floorBars = items.filter(
               (it) =>
                 it.floor === staff.floor &&
@@ -1134,7 +1639,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               staff.taskState === 'IDLE_STATION' ||
               staff.taskState === 'RETURNING_TO_BAR'
             ) {
-              // Pick up glowing drink tray from bar and A* pathfind to a Lounge Table or assigned post
               staff.carryingDrinkColor = drink.color;
               staff.actionBubble = '🍸';
               staff.bubbleTimer = 2.5;
@@ -1158,7 +1662,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               staff.bubbleTimer = 2.2;
               staff.taskTimer = 1.4;
             } else {
-              // Deliver tray service & collect table tip!
               const traySale = Math.round(drink.sellPrice * (1.15 + metrics.tipBonus * 0.4));
               earnedCashThisFrame += traySale;
               earnedXpThisFrame += 10;
@@ -1180,7 +1683,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 });
               }
 
-              // Path back to bar counter to pick up next tray
               const targetBar =
                 floorBars.length > 0
                   ? floorBars[0]
@@ -1204,31 +1706,39 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         props.onEarnRevenue(earnedCashThisFrame, earnedXpThisFrame);
       }
 
+      // 2C. Spawn Arriving Customers onto the Red Carpet (Even when the club is full, up to 7 customers fall in line!)
       spawnAccumulator += dt;
-      if (spawnAccumulator >= 0.7) {
+      if (spawnAccumulator >= 0.75) {
         spawnAccumulator = 0;
-        if (guests.length < metrics.maxGuests && Math.random() < 0.65) {
+        const currentQueueLen = guests.filter((g) => g.state === 'QUEUEING').length;
+        const maxQueueLine = 7;
+        const shouldSpawnCustomer =
+          currentQueueLen < maxQueueLine &&
+          (insideGuestsCount < metrics.maxGuests ? Math.random() < 0.72 : Math.random() < 0.55);
+
+        if (shouldSpawnCustomer) {
           const isCeleb = metrics.totalHype >= 130 && Math.random() < 0.22;
           const namePool = isCeleb ? CELEBRITY_NAMES : GUEST_NAMES;
           const bouncerStaffCount = staffList.filter((s) => s.role === 'BOUNCER').length;
           const queueWait = Math.max(
-            0.8,
-            4.2 - (bouncers + bouncerStaffCount) * 0.75
+            0.7,
+            3.4 - (bouncers + bouncerStaffCount) * 0.65
           );
-          const bubbles: BubbleType[] = ['MUSIC', 'CHAT'];
+          const bubbles: BubbleType[] = ['MUSIC', 'CHAT', 'SPARKLE'];
           guests.push({
             id: `guest_${performance.now()}_${Math.random()}`,
             name: namePool[Math.floor(Math.random() * namePool.length)],
             isCelebrity: isCeleb,
             floor: 1,
             targetFloor: 1,
-            gridX: 1.2,
-            gridY: 9.85,
+            // Spawn at the tail of the Red Carpet so they visibly walk up into line
+            gridX: Math.min(-1.6, 2.22 - (currentQueueLen + 1) * 0.72),
+            gridY: 10.42 + ((currentQueueLen + 1) % 2) * 0.08,
             path: [],
             state: 'QUEUEING',
             stateTimer: queueWait,
             patience: 100,
-            hype: 75,
+            hype: isCeleb ? 96 : 78 + Math.floor(Math.random() * 18),
             bubble: isCeleb
               ? 'VIP_CROWN'
               : bubbles[Math.floor(Math.random() * bubbles.length)],
@@ -1239,6 +1749,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             hairColor: HAIR_COLORS[Math.floor(Math.random() * HAIR_COLORS.length)],
             pantsColor: PANTS_COLORS[Math.floor(Math.random() * PANTS_COLORS.length)],
             cashSpent: 0,
+            facingDir: 'SE',
           });
         }
 
@@ -1247,6 +1758,21 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           lastReportedQueueCount = qLen;
           props.onQueueCountChange(qLen);
         }
+      }
+
+      // 2D. Periodically report all Sprite Moods (Guests, Red Carpet Queue, Pedestrians, DJ, Staff) to the HUD Side Mood Panel
+      moodReportAccumulator += dt;
+      if (moodReportAccumulator >= 0.7 && props.onSpriteMoodListReport) {
+        moodReportAccumulator = 0;
+        const moodList = buildAllSpritesMoodSnapshot(
+          guests,
+          pedestriansRef.current,
+          props.staffMembers,
+          props.activeFloor,
+          props.activeGenre || 'Pop',
+          metrics.maxGuests
+        );
+        props.onSpriteMoodListReport(moodList);
       }
     };
 
@@ -1261,12 +1787,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
       const props = latestPropsRef.current;
 
-      // Advance Day/Night Cycle game time smoothly (1 full 24h cycle every ~75s when not locked to a manual preset)
       if (props.isPlaying && typeof props.dayNightOverrideHour !== 'number') {
         gameHourRef.current = (gameHourRef.current + dt * 0.32) % 24;
       }
 
       const cycle = computeDayNightCycleState(gameHourRef.current);
+      const moodProfile = getClubMoodLightingProfile(props.activeGenre);
 
       cycleReportTimer += dt;
       if (cycleReportTimer >= 0.65 && props.onCycleTimeReport) {
@@ -1304,16 +1830,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
       drawIllustratedCitySkyline(ctx, originX, originY, scale, t);
 
-      // Negative isometric Z-offset & negative z-index layer offset relative to the building's floor level (Floors 2+)
-      // On Floor 1: zOffset = 0, carZIndex = 100 (foreground street level)
-      // On Floor 2+: negative zOffset (-92 * (activeFloor - 1) * scale) and negative carZIndex (-100 * (activeFloor - 1))
-      // so parked cars and street elements render visually and depth-wise *underneath* the elevated building structure.
       const streetZOffset = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 92 * scale : 0;
       const parkedCarsZIndex = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 100 : 100;
       const floorDropH = -streetZOffset;
       const streetOriginY = originY - streetZOffset;
 
-      // 2. GROUND-LEVEL ENTRANCE PLAZA, SIDEWALK, CROSSWALK & PARKING LOT (At negative zOffset below the building)
+      // 2. GROUND-LEVEL ENTRANCE PLAZA, SIDEWALK, CROSSWALK & PARKING LOT
       drawIllustratedParkingAndStreet(
         ctx,
         originX,
@@ -1326,7 +1848,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         guestsRef.current
       );
 
-      // 2A. CONDITIONAL NEGATIVE Z-INDEX PARKED CARS PASS (When activeFloor >= 2, carZIndex < 0 so cars render UNDERNEATH the building slab & understructure)
+      // 2A. CONDITIONAL NEGATIVE Z-INDEX PARKED CARS & TRAFFIC PASS (When activeFloor >= 2)
       if (parkedCarsZIndex < 0) {
         drawForegroundQueueCarsAndLamps(
           ctx,
@@ -1338,11 +1860,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           props.parkingState,
           streetZOffset,
           parkedCarsZIndex,
-          props.activeFloor
+          props.activeFloor,
+          trafficCarsRef.current
         );
       }
 
-      // 2B. LOWER BUILDING 1ST-FLOOR EXTERIOR FACADE UNDERSTRUCTURE & OVERHANG SHADOW (When on Floor 2+)
+      // 2B. LOWER BUILDING 1ST-FLOOR EXTERIOR FACADE UNDERSTRUCTURE (When on Floor 2+)
       if (props.activeFloor >= 2) {
         drawLowerBuildingUnderstructure(
           ctx,
@@ -1360,7 +1883,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       const activeBpm = props.clubBpm || 124;
       const sequencer = computeRhythmicLightingSequencer(t, activeBpm);
 
-      // 3. CLUB CUTAWAY WALLS, NEON STRIPS, SIGNS, TRUSSES & DISCO BALL
+      // 3. CLUB CUTAWAY WALLS, NEON STRIPS, SIGNS, TRUSSES & DISCO BALL (Shifted by Genre Mood Lighting Profile!)
       drawIllustratedClubShell(
         ctx,
         originX,
@@ -1373,18 +1896,72 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         props.unlockedFloors,
         props.playerLevel,
         stairsHitboxRef,
-        sequencer
+        sequencer,
+        moodProfile
       );
 
-      // 4. SUNKEN BEVELED DANCE FLOOR GRID WITH BPM-SYNCED RHYTHMIC SEQUENCER PULSING
+      // 4. SUNKEN BEVELED DANCE FLOOR GRID + AUTOMATIC GENRE MOOD COLOR FILTER OVERLAY
       const floorItems = props.placedItems.filter((p) => p.floor === props.activeFloor);
       for (const item of floorItems) {
         const cat = getCatalogItem(item.catalogId);
         if (!cat || cat.category !== 'DANCE_TILE') continue;
-        drawIllustratedDanceTile(ctx, item, cat, originX, originY, tileW, tileH, scale, t, sequencer);
+        drawIllustratedDanceTile(
+          ctx,
+          item,
+          cat,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale,
+          t,
+          sequencer,
+          moodProfile
+        );
+        drawDanceFloorMoodFilterOverlay(
+          ctx,
+          item,
+          cat,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale,
+          t,
+          sequencer,
+          moodProfile
+        );
       }
 
-      // 5. GHOSTED PLACEMENT PREVIEW OVERLAY (Furniture OR Staff Stationing)
+      // 4B. HIGHLIGHT CURRENTLY SELECTED PLACED DECORATION IN EDIT POSITION MODE
+      if (props.editingPlacedItemUid) {
+        const editingItem = floorItems.find((p) => p.uid === props.editingPlacedItemUid);
+        if (editingItem) {
+          const editCat = getCatalogItem(editingItem.catalogId);
+          if (editCat) {
+            const editFp = getRotatedFootprint(editCat, editingItem.rotation);
+            for (let dx = 0; dx < editFp.width; dx++) {
+              for (let dy = 0; dy < editFp.depth; dy++) {
+                drawIsoTilePolygon(
+                  ctx,
+                  editingItem.gridX + dx,
+                  editingItem.gridY + dy,
+                  1.5 * scale,
+                  originX,
+                  originY,
+                  tileW,
+                  tileH,
+                  'rgba(250, 204, 21, 0.32)',
+                  '#facc15',
+                  2.4 * scale
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // 5. GHOSTED PLACEMENT PREVIEW OVERLAY (Furniture, Edit Position Move, OR Staff Stationing)
       const hoveredGrid = hoveredGridRef.current;
       if ((props.placementModeStaff || props.relocatingStaffUid) && hoveredGrid) {
         drawIsoTilePolygon(
@@ -1399,6 +1976,52 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           'rgba(56, 189, 248, 0.5)',
           '#22d3ee',
           2.5
+        );
+      } else if (props.editingPlacedItemUid && hoveredGrid) {
+        const editingItem = props.placedItems.find((p) => p.uid === props.editingPlacedItemUid);
+        const editCat = editingItem ? getCatalogItem(editingItem.catalogId) : null;
+        if (editingItem && editCat) {
+          const valid = canPlaceItem(
+            props.placedItems,
+            editCat,
+            props.activeFloor,
+            hoveredGrid.x,
+            hoveredGrid.y,
+            props.buildRotation,
+            editingItem.uid
+          );
+          const fp = getRotatedFootprint(editCat, props.buildRotation);
+          for (let dx = 0; dx < fp.width; dx++) {
+            for (let dy = 0; dy < fp.depth; dy++) {
+              drawIsoTilePolygon(
+                ctx,
+                hoveredGrid.x + dx,
+                hoveredGrid.y + dy,
+                0,
+                originX,
+                originY,
+                tileW,
+                tileH,
+                valid ? 'rgba(56, 189, 248, 0.48)' : 'rgba(248, 113, 113, 0.5)',
+                valid ? '#22d3ee' : '#f87171',
+                2.2
+              );
+            }
+          }
+        }
+      } else if (props.isEditDecorMode && hoveredGrid) {
+        drawIsoTilePolygon(
+          ctx,
+          hoveredGrid.x,
+          hoveredGrid.y,
+          0,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          'rgba(250, 204, 21, 0.36)',
+          '#facc15',
+          2.2
         );
       } else if (props.buildModeItem && hoveredGrid) {
         const valid = canPlaceItem(
@@ -1445,7 +2068,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         );
       }
 
-      // 6. PAINTER'S ALGORITHM DEPTH & Z-INDEX SORT FOR 3D FURNITURE, HIRED STAFF, GUESTS & FRONT QUEUE
+      // 6. PAINTER'S ALGORITHM DEPTH & Z-INDEX SORT FOR 3D FURNITURE, HIRED STAFF, GUESTS, PEDESTRIANS & RED CARPET QUEUE
       const drawables: Array<{ zIndex: number; depth: number; draw: () => void }> = [];
 
       for (const item of floorItems) {
@@ -1454,7 +2077,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         const fp = getRotatedFootprint(cat, item.rotation);
 
         if (cat.category === 'BAR_UNIT') {
-          // 1. Bar Counter & Tall Back-Bar Bottle Shelves
           const barDepth = item.gridX + item.gridY + (fp.width + fp.depth) * 0.35;
           drawables.push({
             zIndex: 0,
@@ -1474,13 +2096,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 props.activeDrink
               ),
           });
-          // 2. Individual Bar Stools depth-sorted separately so each seated patron renders ON TOP of their stool
           if (!assetManager.hasSprite('bar_counter')) {
             const stools = getBarStoolCoords(item, fp);
             for (const st of stools) {
               drawables.push({
                 zIndex: 0,
-                depth: st.gx + st.gy + 0.30,
+                depth: st.gx + st.gy + 0.3,
                 draw: () =>
                   drawBarStool(ctx, st.gx, st.gy, originX, originY, tileW, tileH, scale),
               });
@@ -1488,8 +2109,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           }
         } else if (cat.category === 'SEATING') {
           if (cat.id === 'seat_bistro') {
-            // Split High-Top Cocktail Table into Back Chair -> Central Table -> Front Chair
-            // so seated patrons sit ON the chairs and NEVER on top of the table!
             const chairBackGx = item.gridX + 0.14;
             const chairBackGy = item.gridY + 0.52;
             const chairFrontGx = item.gridX + 0.86;
@@ -1498,7 +2117,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             if (!assetManager.hasSprite('cocktail_table')) {
               drawables.push({
                 zIndex: 0,
-                depth: chairBackGx + chairBackGy + 0.30,
+                depth: chairBackGx + chairBackGy + 0.3,
                 draw: () =>
                   drawCushionedClubChairAtGrid(
                     ctx,
@@ -1525,7 +2144,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             if (!assetManager.hasSprite('cocktail_table')) {
               drawables.push({
                 zIndex: 0,
-                depth: chairFrontGx + chairFrontGy + 0.30,
+                depth: chairFrontGx + chairFrontGy + 0.3,
                 draw: () =>
                   drawCushionedClubChairAtGrid(
                     ctx,
@@ -1542,7 +2161,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               });
             }
           } else {
-            // Split VIP Lounge Booth into Tufted Purple Sofa (behind seated patrons) + Sleek Black VIP Table (in front of seated patrons' knees)
             drawables.push({
               zIndex: 0,
               depth: item.gridX + item.gridY + 0.35,
@@ -1584,45 +2202,32 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 tileH,
                 scale,
                 t,
-                props.activeDrink
+                props.activeDrink,
+                moodProfile
               ),
           });
         }
       }
 
-      // DJ NPC with purple headphones behind the DJ booth
-      const primaryDj = floorItems.find(
-        (i) => getCatalogItem(i.catalogId)?.category === 'DJ_BOOTH'
+      const hasBarOnFloor = floorItems.some(
+        (it) => getCatalogItem(it.catalogId)?.category === 'BAR_UNIT'
       );
-      if (primaryDj) {
-        drawables.push({
-          zIndex: 0,
-          depth: primaryDj.gridX + primaryDj.gridY + 0.35,
-          draw: () =>
-            drawIllustratedStaff(
-              ctx,
-              primaryDj.gridX + 0.65,
-              primaryDj.gridY - 0.15,
-              originX,
-              originY,
-              tileW,
-              tileH,
-              scale,
-              t,
-              'DJ'
-            ),
-        });
-      }
-
-      // Render all Hired Staff Members on the active floor (Bartenders, Bouncers, Waiters)
       const floorStaff = props.staffMembers.filter((s) => s.floor === props.activeFloor);
       for (let i = 0; i < floorStaff.length; i++) {
         const sm = floorStaff[i];
+        if (
+          sm.role === 'BARTENDER' &&
+          hasBarOnFloor &&
+          sm.path.length === 0 &&
+          props.relocatingStaffUid !== sm.uid
+        ) {
+          continue;
+        }
         const depth = sm.gridX + sm.gridY + 0.58;
         drawables.push({
           zIndex: 0,
           depth,
-          draw: () =>
+          draw: () => {
             drawHiredStaffAgent(
               ctx,
               sm,
@@ -1633,12 +2238,42 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               scale,
               t,
               props.relocatingStaffUid === sm.uid
-            ),
+            );
+            if (props.selectedSpriteId === sm.uid) {
+              const mappedRole =
+                sm.role === 'BOUNCER'
+                  ? 'SECURITY'
+                  : sm.role === 'WAITER'
+                  ? 'WAITER'
+                  : 'BARTENDER';
+              const info = computeStaffMoodInfo(
+                sm.uid,
+                mappedRole,
+                props.activeGenre || 'Pop',
+                sm.name
+              );
+              drawSelectedSpriteMoodOverlay(
+                ctx,
+                sm.gridX,
+                sm.gridY,
+                originX,
+                originY,
+                tileW,
+                tileH,
+                scale,
+                t,
+                info
+              );
+            }
+          },
         });
       }
 
       // Active Floor Interior Guests
       const allGuests = guestsRef.current;
+      const insideCountNow = allGuests.filter((g) => g.state !== 'QUEUEING').length;
+      const isClubFullNow = insideCountNow >= props.clubMetrics.maxGuests;
+
       for (let i = 0; i < allGuests.length; i++) {
         const guest = allGuests[i];
         if (guest.floor !== props.activeFloor || guest.state === 'QUEUEING') continue;
@@ -1646,7 +2281,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         drawables.push({
           zIndex: 0,
           depth,
-          draw: () =>
+          draw: () => {
             drawIllustratedCharacter(
               ctx,
               guest,
@@ -1659,28 +2294,58 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               scale,
               t,
               activeBpm
-            ),
+            );
+            if (props.selectedSpriteId === guest.id) {
+              const info = computeGuestMoodInfo(
+                guest,
+                props.activeGenre || 'Pop',
+                isClubFullNow
+              );
+              drawSelectedSpriteMoodOverlay(
+                ctx,
+                guest.gridX,
+                guest.gridY,
+                originX,
+                originY,
+                tileW,
+                tileH,
+                scale,
+                t,
+                info
+              );
+            }
+          },
         });
       }
 
-      // Foreground Entrance Archway Wall Cutaway & Neon Entry Sign (only on Floor 1 at zIndex 0; on Floor 2+ it sits under the building facade)
+      // Foreground Red Carpet Entrance Archway Door & Neon Entry Sign (Floor 1)
       if (props.activeFloor === 1) {
         drawables.push({
           zIndex: 0,
           depth: DOOR_COORD.x + DOOR_COORD.y + 1.15,
-          draw: () => drawEntranceArchwayCutaway(ctx, originX, streetOriginY, tileW, tileH, scale),
+          draw: () =>
+            drawEntranceArchwayCutaway(
+              ctx,
+              originX,
+              streetOriginY,
+              tileW,
+              tileH,
+              scale,
+              isClubFullNow,
+              moodProfile
+            ),
         });
       }
 
-      // Front Sidewalk Queueing Guests standing right in front of the ground-level Entrance Archway
+      // Front Red Carpet Queueing Customers walking/waiting in line to enter the Red Carpet Door
       const queueGuests = allGuests.filter((g) => g.state === 'QUEUEING');
-      queueGuests.forEach((qg, idx) => {
-        const qx = 1.65 - idx * 0.88;
-        const qy = 10.42 + (idx % 2) * 0.14;
+      queueGuests.forEach((qg) => {
+        const qx = qg.gridX;
+        const qy = qg.gridY;
         drawables.push({
           zIndex: parkedCarsZIndex < 0 ? parkedCarsZIndex + 10 : 0,
           depth: qx + qy + 2.5,
-          draw: () =>
+          draw: () => {
             drawIllustratedCharacter(
               ctx,
               qg,
@@ -1693,7 +2358,87 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               scale,
               t,
               activeBpm
-            ),
+            );
+            if (props.selectedSpriteId === qg.id) {
+              const info = computeGuestMoodInfo(
+                qg,
+                props.activeGenre || 'Pop',
+                isClubFullNow
+              );
+              drawSelectedSpriteMoodOverlay(
+                ctx,
+                qx,
+                qy,
+                originX,
+                streetOriginY,
+                tileW,
+                tileH,
+                scale,
+                t,
+                info
+              );
+            }
+          },
+        });
+      });
+
+      // Sidewalk Pedestrians walking around the building exterior
+      const pedestrians = pedestriansRef.current;
+      pedestrians.forEach((ped) => {
+        const pedAsGuest: GuestAgent = {
+          id: ped.id,
+          name: ped.name,
+          isCelebrity: false,
+          floor: 1,
+          targetFloor: 1,
+          gridX: ped.gridX,
+          gridY: ped.gridY,
+          path: [{ x: ped.gridX + 0.1, y: ped.gridY + 0.1 }],
+          state: 'WALKING_TO_DANCE',
+          stateTimer: 5,
+          patience: 95,
+          hype: ped.hype,
+          bubble: ped.bubble,
+          bubbleTimer: ped.bubbleTimer,
+          shirtColor: ped.shirtColor,
+          hairColor: ped.hairColor,
+          pantsColor: ped.pantsColor,
+          cashSpent: 0,
+          facingDir: ped.facingDir,
+        };
+        drawables.push({
+          zIndex: parkedCarsZIndex < 0 ? parkedCarsZIndex + 8 : 0,
+          depth: ped.gridX + ped.gridY + 2.2,
+          draw: () => {
+            drawIllustratedCharacter(
+              ctx,
+              pedAsGuest,
+              ped.gridX,
+              ped.gridY,
+              originX,
+              streetOriginY,
+              tileW,
+              tileH,
+              scale,
+              t,
+              activeBpm
+            );
+            if (props.selectedSpriteId === ped.id) {
+              const info = computePedestrianMoodInfo(ped, props.activeGenre || 'Pop');
+              drawSelectedSpriteMoodOverlay(
+                ctx,
+                ped.gridX,
+                ped.gridY,
+                originX,
+                streetOriginY,
+                tileW,
+                tileH,
+                scale,
+                t,
+                info
+              );
+            }
+          },
         });
       });
 
@@ -1702,7 +2447,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         drawables[i].draw();
       }
 
-      // 6B. FOREGROUND PARKED CARS PASS (Only when parkedCarsZIndex >= 0 on Floor 1)
+      // 6B. FOREGROUND PARKED CARS & MOVING TRAFFIC CARS PASS (When parkedCarsZIndex >= 0 on Floor 1)
       if (parkedCarsZIndex >= 0) {
         drawForegroundQueueCarsAndLamps(
           ctx,
@@ -1714,7 +2459,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           props.parkingState,
           streetZOffset,
           parkedCarsZIndex,
-          props.activeFloor
+          props.activeFloor,
+          trafficCarsRef.current
         );
       }
 
@@ -1746,14 +2492,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         sequencer
       );
 
-      for (const lItem of floorItems) {
-        const cat = getCatalogItem(lItem.catalogId);
-        if (cat && cat.category === 'LIGHTING' && cat.tier >= 2) {
-          drawLightingBeams(ctx, lItem, cat, originX, originY, tileW, tileH, scale, t);
-        }
-      }
-
-      // 8B. MAX-HYPE (3/3 SEGMENTS) DANCER CONFETTI & BUBBLES PARTICLE SYSTEM
+      // 8B. MAX-HYPE (3/3 SEGMENTS) DANCER CONFETTI & BUBBLES PARTICLE SYSTEM (Clean lineless particles & bubbles)
       const dancerParticles = dancerParticlesRef.current;
       if (dancerParticles.length > 0) {
         ctx.save();
@@ -1777,59 +2516,32 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
           if (p.kind === 'BUBBLE') {
             const r = p.size * (1 + lifeRatio * 0.28) * scale;
-            if (lifeRatio > 0.88) {
-              // Tiny bubble pop ring burst at end of lifetime
-              ctx.strokeStyle = p.color;
-              ctx.lineWidth = 1.4 * scale;
-              ctx.beginPath();
-              ctx.arc(sx, sy, r * 1.45, 0, Math.PI * 2);
-              ctx.stroke();
-            } else {
-              // Translucent glossy neon bubble with dark cel outline & white catchlight
-              ctx.fillStyle = p.color;
-              ctx.globalAlpha = alpha * 0.32;
-              ctx.beginPath();
-              ctx.arc(sx, sy, r, 0, Math.PI * 2);
-              ctx.fill();
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = alpha * 0.48;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            ctx.fill();
 
-              ctx.globalAlpha = alpha;
-              ctx.strokeStyle = INK;
-              ctx.lineWidth = 1.3 * scale;
-              ctx.beginPath();
-              ctx.arc(sx, sy, r, 0, Math.PI * 2);
-              ctx.stroke();
-
-              ctx.strokeStyle = p.color;
-              ctx.lineWidth = 1.1 * scale;
-              ctx.beginPath();
-              ctx.arc(sx, sy, Math.max(0.5, r - 0.8 * scale), 0, Math.PI * 2);
-              ctx.stroke();
-
-              // Specular bubble highlight dot
-              ctx.fillStyle = '#ffffff';
-              ctx.beginPath();
-              ctx.arc(
-                sx - r * 0.34,
-                sy - r * 0.34,
-                Math.max(0.7, r * 0.26),
-                0,
-                Math.PI * 2
-              );
-              ctx.fill();
-            }
+            ctx.globalAlpha = alpha * 0.9;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(
+              sx - r * 0.34,
+              sy - r * 0.34,
+              Math.max(0.7, r * 0.26),
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
           } else {
-            // 3D tumbling cyber-neon confetti ribbon with dark cel-shaded outline
             const w = p.size * 1.55 * scale;
             const h = p.size * 0.85 * Math.max(0.28, Math.abs(Math.cos(p.rotation * 1.6))) * scale;
             ctx.translate(sx, sy);
             ctx.rotate(p.rotation);
             ctx.fillStyle = p.color;
-            ctx.strokeStyle = INK;
-            ctx.lineWidth = 1.1 * scale;
             ctx.beginPath();
             ctx.rect(-w / 2, -h / 2, w, h);
             ctx.fill();
-            ctx.stroke();
           }
 
           ctx.restore();
@@ -1967,11 +2679,63 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       return;
     }
 
-    const { tileW, tileH, originX, originY } = getViewportTransform(
+    const { scale, tileW, tileH, originX, originY } = getViewportTransform(
       rect.width,
       rect.height,
       props.cameraZoom
     );
+
+    // When NOT in active furniture placement/removal/edit-decor or staff placement mode,
+    // check if the user tapped on ANY sprite (Guest, Queued Customer, Sidewalk Pedestrian, DJ, or Staff) to inspect their Mood!
+    const isEditingGridMode =
+      Boolean(props.buildModeItem) ||
+      props.isRemoveMode ||
+      Boolean(props.isEditDecorMode) ||
+      Boolean(props.editingPlacedItemUid) ||
+      Boolean(props.placementModeStaff) ||
+      Boolean(props.relocatingStaffUid);
+
+    if (!isEditingGridMode && props.onSelectSprite) {
+      const streetZOffset = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 92 * scale : 0;
+      const streetOriginY = originY - streetZOffset;
+      const insideCountNow = guestsRef.current.filter((g) => g.state !== 'QUEUEING').length;
+      const isClubFullNow = insideCountNow >= props.clubMetrics.maxGuests;
+
+      const tappedMood = findTappedSpriteMoodAtScreenPoint(
+        sx,
+        sy,
+        originX,
+        originY,
+        streetOriginY,
+        tileW,
+        tileH,
+        scale,
+        guestsRef.current,
+        pedestriansRef.current,
+        props.placedItems,
+        props.staffMembers,
+        props.activeFloor,
+        props.activeGenre || 'Pop',
+        props.clubMetrics.maxGuests
+      );
+
+      if (tappedMood) {
+        // Trigger a fun reaction bubble on the tapped sprite
+        const matchedGuest = guestsRef.current.find((g) => g.id === tappedMood.id);
+        if (matchedGuest) {
+          matchedGuest.bubble = matchedGuest.isCelebrity ? 'VIP_CROWN' : 'SPARKLE';
+          matchedGuest.bubbleTimer = 4.0;
+        }
+        const matchedPed = pedestriansRef.current.find((p) => p.id === tappedMood.id);
+        if (matchedPed) {
+          matchedPed.bubble = 'MUSIC';
+          matchedPed.bubbleTimer = 4.0;
+        }
+        props.onSelectSprite(tappedMood);
+        return;
+      }
+    }
+
     const iso = screenToIso(sx, sy, originX, originY, tileW, tileH);
     if (iso.x >= 0 && iso.x < GRID_SIZE && iso.y >= 0 && iso.y < GRID_SIZE) {
       hoveredGridRef.current = iso;
@@ -2440,9 +3204,35 @@ function drawIllustratedParkingAndStreet(
     ctx.stroke();
   };
 
-  // Back-left wall entrance red carpet runner + front VIP carpet runner
+  // Back-left wall entrance red carpet runner + extended front Red Carpet Door & Queue Runner
   drawRedCarpet(-1.3, 6.1, 0.05, 7.35);
-  drawRedCarpet(1.65, 10.0, 3.15, 11.3);
+  drawRedCarpet(-1.85, 10.0, 3.15, 11.25);
+
+  // 5B. Dashed Yellow/White Road Lane Divider Lines for Moving Traffic Lanes (gy = 14.1 & gx = -2.65)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(250, 204, 21, 0.52)';
+  ctx.lineWidth = 2.0 * scale;
+  for (let gx = -4.5; gx <= 13.5; gx += 1.4) {
+    const p1x = originX + (gx - 14.1) * halfW;
+    const p1y = originY + (gx + 14.1) * halfH;
+    const p2x = originX + (gx + 0.75 - 14.1) * halfW;
+    const p2y = originY + (gx + 0.75 + 14.1) * halfH;
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.stroke();
+  }
+  for (let gy = -3.8; gy <= 11.8; gy += 1.4) {
+    const p1x = originX + (-2.65 - gy) * halfW;
+    const p1y = originY + (-2.65 + gy) * halfH;
+    const p2x = originX + (-2.65 - (gy + 0.75)) * halfW;
+    const p2y = originY + (-2.65 + (gy + 0.75)) * halfH;
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.stroke();
+  }
+  ctx.restore();
 
   // 6. Exterior Street Props (Matching IMG_1506_5bdf15ca.jpeg):
   // 6A. Purple/Magenta Circular Manhole Cover on Bottom-Right Asphalt (gx=11.7, gy=7.8)
@@ -2662,8 +3452,7 @@ function drawIllustratedParkingAndStreet(
 
 /**
  * Draws the foreground velvet rope queue barriers, front parked cars (including the Boxy Yellow Taxi Cab),
- * and curved streetlamps using a conditional negative z-index offset and negative vertical zOffset
- * relative to the building's floor level when on Floor 2 or higher.
+ * and realistic moving road traffic vehicles passing along the surrounding streets.
  */
 function drawForegroundQueueCarsAndLamps(
   ctx: CanvasRenderingContext2D,
@@ -2675,7 +3464,8 @@ function drawForegroundQueueCarsAndLamps(
   parkingState: ParkingUpgradeState,
   zOffset: number = 0,
   zIndex: number = 100,
-  activeFloor: number = 1
+  activeFloor: number = 1,
+  trafficCars: TrafficCarAgent[] = []
 ) {
   const effectiveOriginY = originY - zOffset;
   const isUnderBuilding = zIndex < 0 || activeFloor >= 2;
@@ -2855,6 +3645,98 @@ function drawForegroundQueueCarsAndLamps(
       zIndex
     );
   }
+
+  // 3. Realistic Passing Road Traffic Vehicles (Eastbound gy=13.55, Westbound gy=14.65, Southbound gx=-3.15)
+  const sortedTraffic = [...trafficCars].sort((a, b) => a.gridX + a.gridY - (b.gridX + b.gridY));
+  for (const tc of sortedTraffic) {
+    drawMovingTrafficCar(
+      ctx,
+      tc.gridX,
+      tc.gridY + underBuildingGyShift,
+      originX,
+      originY,
+      tileW,
+      tileH,
+      scale,
+      tc,
+      zOffset,
+      zIndex
+    );
+  }
+}
+
+function drawMovingTrafficCar(
+  ctx: CanvasRenderingContext2D,
+  gx: number,
+  gy: number,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  car: TrafficCarAgent,
+  zOffset: number,
+  zIndex: number
+) {
+  const cx = originX + (gx - gy) * (tileW / 2);
+  const cy = originY + (gx + gy) * (tileH / 2) - zOffset;
+  const carScale = (zIndex < 0 ? scale * 0.92 : scale) * 0.96;
+
+  // Draw warm headlight beam cones & taillight trails on the asphalt road before drawing the car body
+  ctx.save();
+  const isMovingRight = car.lane === 'FRONT_EAST';
+  const beamDir = isMovingRight ? 1 : -1;
+
+  // Headlight road glow
+  const headX = cx + beamDir * 28 * carScale;
+  const headY = cy - 3 * carScale;
+  const beamGrad = ctx.createRadialGradient(
+    headX,
+    headY,
+    2 * carScale,
+    headX + beamDir * 24 * carScale,
+    headY + 8 * carScale,
+    36 * carScale
+  );
+  beamGrad.addColorStop(0, 'rgba(254, 240, 138, 0.42)');
+  beamGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
+  ctx.fillStyle = beamGrad;
+  ctx.beginPath();
+  ctx.ellipse(
+    headX + beamDir * 16 * carScale,
+    headY + 6 * carScale,
+    28 * carScale,
+    12 * carScale,
+    isMovingRight ? 0.25 : -0.25,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
+
+  // Red taillight streak
+  const tailX = cx - beamDir * 28 * carScale;
+  const tailY = cy - 3 * carScale;
+  ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(tailX - beamDir * 7 * carScale, tailY + 2 * carScale, 11 * carScale, 4.5 * carScale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  drawCar(
+    ctx,
+    gx,
+    gy,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale * 0.96,
+    car.bodyColor,
+    car.shadeColor,
+    car.isTaxi,
+    zOffset,
+    zIndex
+  );
 }
 
 /**
@@ -3397,10 +4279,14 @@ function drawIllustratedClubShell(
   unlockedFloors: FloorLevel,
   _playerLevel: number,
   stairsHitboxRef: React.MutableRefObject<{ x: number; y: number; w: number; h: number }>,
-  sequencer: RhythmicLightingSequencerState
+  sequencer: RhythmicLightingSequencerState,
+  moodProfile?: ClubMoodLightingProfile
 ) {
   const halfW = tileW / 2;
   const halfH = tileH / 2;
+  const moodPrimary = moodProfile?.primaryHex || '#f472b6';
+  const moodSecondary = moodProfile?.secondaryHex || '#22d3ee';
+  const moodTertiary = moodProfile?.tertiaryHex || '#fde047';
   // Low-to-medium open-air walls matching IMG_1506_5bdf15ca.jpeg (no tall enclosing walls blocking view!)
   const wallH = 64 * scale;
   const slabThickness = 7 * scale;
@@ -3476,11 +4362,11 @@ function drawIllustratedClubShell(
     }
   }
 
-  // Glowing Neon Pink/Magenta Perimeter Border Tube around the open-air slab front edges (BPM-pulsed)
+  // Glowing Genre-Mood Neon Perimeter Border Tube around the open-air slab front edges (BPM-pulsed)
   ctx.save();
-  ctx.strokeStyle = '#f472b6';
-  ctx.lineWidth = (2.4 + sequencer.kickEnvelope * 1.1) * scale;
-  ctx.globalAlpha = Math.min(1, 0.65 + sequencer.kickEnvelope * 0.35);
+  ctx.strokeStyle = moodPrimary;
+  ctx.lineWidth = (2.6 + sequencer.kickEnvelope * 1.25) * scale;
+  ctx.globalAlpha = Math.min(1, 0.72 + sequencer.kickEnvelope * 0.28);
   ctx.beginPath();
   ctx.moveTo(sw.x, sw.y);
   ctx.lineTo(s.x, s.y);
@@ -3522,17 +4408,17 @@ function drawIllustratedClubShell(
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // Glowing Magenta/Pink Neon Top & Base Trim Strips along both Back Walls
+  // Glowing Genre-Mood Neon Top & Base Trim Strips along both Back Walls
   ctx.save();
-  ctx.strokeStyle = '#f472b6';
-  ctx.lineWidth = (2.3 + sequencer.kickEnvelope * 0.9) * scale;
+  ctx.strokeStyle = moodPrimary;
+  ctx.lineWidth = (2.4 + sequencer.kickEnvelope * 0.95) * scale;
   ctx.beginPath();
   ctx.moveTo(sw.x, sw.y - wallH);
   ctx.lineTo(nw.x, nw.y - wallH);
   ctx.lineTo(se.x, se.y - wallH);
   ctx.stroke();
 
-  ctx.strokeStyle = '#ec4899';
+  ctx.strokeStyle = moodSecondary;
   ctx.lineWidth = 2 * scale;
   ctx.beginPath();
   ctx.moveTo(sw.x, sw.y - 1.5 * scale);
@@ -3540,16 +4426,16 @@ function drawIllustratedClubShell(
   ctx.lineTo(se.x, se.y - 1.5 * scale);
   ctx.stroke();
 
-  // Vertical Glowing Cyan & Magenta Neon Light Strips along both Back Walls (Sequenced to BPM!)
+  // Vertical Glowing Genre-Mood Neon Light Strips along both Back Walls (Sequenced to BPM!)
   const leftStrips = [0.18, 0.34, 0.56, 0.84];
   for (let i = 0; i < leftStrips.length; i++) {
     const u = leftStrips[i];
     const sx = nw.x + (sw.x - nw.x) * u;
     const sy = nw.y + (sw.y - nw.y) * u;
     const stripSeq = sequencer.getDecorEmissiveState(0, u * 10, i);
-    ctx.strokeStyle = i % 2 === 0 ? '#22d3ee' : '#f472b6';
-    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.32;
-    ctx.lineWidth = (stripSeq.toggledOn ? 2.6 : 1.6) * scale;
+    ctx.strokeStyle = i % 2 === 0 ? moodSecondary : moodPrimary;
+    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.35;
+    ctx.lineWidth = (stripSeq.toggledOn ? 2.8 : 1.7) * scale;
     ctx.beginPath();
     ctx.moveTo(sx, sy - 6 * scale);
     ctx.lineTo(sx, sy - wallH + 6 * scale);
@@ -3562,9 +4448,9 @@ function drawIllustratedClubShell(
     const sx = nw.x + (se.x - nw.x) * u;
     const sy = nw.y + (se.y - nw.y) * u;
     const stripSeq = sequencer.getDecorEmissiveState(u * 10, 0, i + 4);
-    ctx.strokeStyle = i % 2 === 0 ? '#f472b6' : '#22d3ee';
-    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.32;
-    ctx.lineWidth = (stripSeq.toggledOn ? 2.6 : 1.6) * scale;
+    ctx.strokeStyle = i % 2 === 0 ? moodPrimary : moodSecondary;
+    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.35;
+    ctx.lineWidth = (stripSeq.toggledOn ? 2.8 : 1.7) * scale;
     ctx.beginPath();
     ctx.moveTo(sx, sy - 6 * scale);
     ctx.lineTo(sx, sy - wallH + 6 * scale);
@@ -3590,12 +4476,12 @@ function drawIllustratedClubShell(
   ctx.lineTo(doorTopA.x, doorTopA.y - doorH);
   ctx.closePath();
   const doorGrad = ctx.createLinearGradient(doorTopA.x, doorTopA.y - doorH, doorTopB.x, doorTopB.y);
-  doorGrad.addColorStop(0, '#22d3ee');
-  doorGrad.addColorStop(0.5, '#7e22ce');
+  doorGrad.addColorStop(0, moodSecondary);
+  doorGrad.addColorStop(0.5, moodPrimary);
   doorGrad.addColorStop(1, '#090514');
   ctx.fillStyle = doorGrad;
   ctx.fill();
-  ctx.strokeStyle = '#38bdf8';
+  ctx.strokeStyle = moodSecondary;
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
@@ -3643,7 +4529,7 @@ function drawIllustratedClubShell(
     nw.y + (sw.y - nw.y) * 0.25 - 40 * scale,
     isoAngleLeft,
     'CLUB NEON',
-    '#22d3ee',
+    moodSecondary,
     '#e0f2fe',
     12.5,
     1
@@ -3653,7 +4539,7 @@ function drawIllustratedClubShell(
     nw.y + (sw.y - nw.y) * 0.56 - 42 * scale,
     isoAngleLeft,
     'GOOD TIMES',
-    '#a855f7',
+    moodPrimary,
     '#f3e8ff',
     9.5,
     2
@@ -3665,7 +4551,7 @@ function drawIllustratedClubShell(
     nw.y + (se.x - nw.x) * 0.22 - 44 * scale,
     isoAngleRight,
     'LOVE THE BASS',
-    '#06b6d4',
+    moodSecondary,
     '#67e8f9',
     11.0,
     3
@@ -3675,7 +4561,7 @@ function drawIllustratedClubShell(
     nw.y + (se.y - nw.y) * 0.83 - 38 * scale,
     isoAngleRight,
     'COCKTAILS',
-    '#ec4899',
+    moodPrimary,
     '#fbcfe8',
     10.5,
     4
@@ -3693,7 +4579,7 @@ function drawIllustratedClubShell(
     ctx.lineWidth = 3.2 * scale;
     ctx.strokeRect(tx - tw / 2, ty - th, tw, th);
 
-    ctx.strokeStyle = '#f43f5e';
+    ctx.strokeStyle = moodPrimary;
     ctx.lineWidth = 1.8 * scale;
     ctx.strokeRect(tx - tw / 2, ty - th, tw, th);
 
@@ -3709,10 +4595,10 @@ function drawIllustratedClubShell(
     }
     ctx.stroke();
 
-    // Mounted Cyan/Blue Spotlight Cans (Crisp vector art — NO blurry spotlight fog cones)
+    // Mounted Genre-Mood Spotlight Cans (Crisp vector art — NO blurry spotlight fog cones)
     for (let sp = 0; sp < 3; sp++) {
       const ly = ty - th + (10 + sp * 16) * scale;
-      ctx.fillStyle = sp % 2 === 0 ? '#38bdf8' : '#22d3ee';
+      ctx.fillStyle = sp % 2 === 0 ? moodSecondary : moodTertiary;
       ctx.beginPath();
       ctx.arc(tx + 5 * scale, ly, 3.4 * scale, 0, Math.PI * 2);
       ctx.fill();
@@ -3907,31 +4793,33 @@ function drawIllustratedClubShell(
   drawGoldenDanceCage(0.85, 7.85);
   drawGoldenDanceCage(5.2, 6.2);
 
-  // 9. OVERHEAD SILVER MIRROR DISCO BALL & VOLUMETRIC LASER PYRAMID CONE (Centerpiece of IMG_1506_5bdf15ca.jpeg)
+  // 9. OVERHEAD SILVER MIRROR DISCO BALL & GENRE-TINTED LASER PYRAMID RAYS (Centerpiece of IMG_1506_5bdf15ca.jpeg)
   const discoX = originX + (3.2 - 3.6) * halfW;
   const discoY = originY + (3.2 + 3.6) * halfH - 86 * scale;
   const apexY = discoY - 26 * scale;
 
-  // Volumetric multi-ray laser pyramid radiating from above the disco ball down across the dance floor
+  // Multi-ray laser pyramid radiating from above the disco ball down across the dance floor, colored by active genre mood
   ctx.save();
   const rayTargets = [
-    { dx: -75, dy: 92, c: 'rgba(34, 211, 238, 0.55)' },
-    { dx: -42, dy: 112, c: 'rgba(250, 204, 21, 0.5)' },
-    { dx: -12, dy: 120, c: 'rgba(34, 211, 238, 0.6)' },
-    { dx: 22, dy: 115, c: 'rgba(244, 114, 182, 0.5)' },
-    { dx: 58, dy: 98, c: 'rgba(56, 189, 248, 0.55)' },
-    { dx: 138, dy: 72, c: 'rgba(250, 204, 21, 0.45)' },
+    { dx: -75, dy: 92, c: moodSecondary },
+    { dx: -42, dy: 112, c: moodTertiary },
+    { dx: -12, dy: 120, c: moodPrimary },
+    { dx: 22, dy: 115, c: moodSecondary },
+    { dx: 58, dy: 98, c: moodPrimary },
+    { dx: 138, dy: 72, c: moodTertiary },
   ];
   for (let r = 0; r < rayTargets.length; r++) {
     const rt = rayTargets[r];
     const wobble = Math.sin(t * 2.4 + r) * 6 * scale;
     ctx.strokeStyle = rt.c;
-    ctx.lineWidth = 1.8 * scale;
+    ctx.globalAlpha = 0.56 + sequencer.kickEnvelope * 0.24;
+    ctx.lineWidth = (1.8 + sequencer.kickEnvelope * 0.6) * scale;
     ctx.beginPath();
     ctx.moveTo(discoX, apexY);
     ctx.lineTo(discoX + rt.dx * scale + wobble, discoY + rt.dy * scale);
     ctx.stroke();
   }
+  ctx.globalAlpha = 1;
   ctx.restore();
 
   // Faceted Silver Mirror Disco Ball with #111116 outline & grid facets
@@ -3987,7 +4875,7 @@ function drawIllustratedClubShell(
     signBox.h,
     5 * scale,
     'rgba(13, 13, 20, 0.92)',
-    unlockedFloors >= 3 ? '#4ade80' : '#22d3ee',
+    unlockedFloors >= 3 ? '#4ade80' : moodSecondary,
     1.8 * scale
   );
   ctx.fillStyle = '#67e8f9';
@@ -4100,7 +4988,8 @@ function drawBackbarBottleShelves(
 }
 
 /**
- * Compact doorway accent helper (kept non-obstructive for the open-air layout).
+ * Draws the glowing Red Carpet Entrance Archway Door at the front entrance (gx = 1.65..3.15, gy = 10)
+ * where customers enter from the red carpet into the club (or queue in line when full).
  */
 function drawEntranceArchwayCutaway(
   ctx: CanvasRenderingContext2D,
@@ -4108,7 +4997,9 @@ function drawEntranceArchwayCutaway(
   originY: number,
   tileW: number,
   tileH: number,
-  scale: number
+  scale: number,
+  isClubFull: boolean = false,
+  moodProfile?: ClubMoodLightingProfile
 ) {
   const gy = 10;
   const doorLeft = {
@@ -4119,13 +5010,82 @@ function drawEntranceArchwayCutaway(
     x: originX + (3.15 - gy) * (tileW / 2),
     y: originY + (3.15 + gy) * (tileH / 2),
   };
+  const pillarH = 38 * scale;
+  const accentColor = isClubFull
+    ? '#f43f5e'
+    : moodProfile?.secondaryHex || '#22d3ee';
+  const secondaryColor = moodProfile?.primaryHex || '#e879f9';
+
   ctx.save();
-  ctx.strokeStyle = '#22d3ee';
-  ctx.lineWidth = 2.6 * scale;
+
+  // 1. Glowing Red Carpet Threshold Strip on the ground between the pillars
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 3.2 * scale;
   ctx.beginPath();
   ctx.moveTo(doorLeft.x, doorLeft.y);
   ctx.lineTo(doorRight.x, doorRight.y);
   ctx.stroke();
+
+  // 2. Left & Right Illuminated Entrance Door Pillars
+  for (const pt of [doorLeft, doorRight]) {
+    fillStrokeRoundedRect(
+      ctx,
+      pt.x - 3.5 * scale,
+      pt.y - pillarH,
+      7 * scale,
+      pillarH,
+      2.5 * scale,
+      '#1e1338',
+      INK,
+      1.8 * scale
+    );
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.8 * scale;
+    ctx.beginPath();
+    ctx.moveTo(pt.x, pt.y - 3 * scale);
+    ctx.lineTo(pt.x, pt.y - pillarH + 3 * scale);
+    ctx.stroke();
+  }
+
+  // 3. Red Velvet Canopy Header Arch linking the two pillars above the Red Carpet Door
+  ctx.beginPath();
+  ctx.moveTo(doorLeft.x - 3 * scale, doorLeft.y - pillarH);
+  ctx.lineTo(doorRight.x + 3 * scale, doorRight.y - pillarH);
+  ctx.lineTo(doorRight.x + 3 * scale, doorRight.y - pillarH + 9 * scale);
+  ctx.lineTo(doorLeft.x - 3 * scale, doorLeft.y - pillarH + 9 * scale);
+  ctx.closePath();
+  ctx.fillStyle = '#9f1239';
+  ctx.fill();
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 1.8 * scale;
+  ctx.stroke();
+
+  // 4. Floating Neon Marquee Badge on the Red Carpet Entrance Arch ("RED CARPET ENTRY" or "CLUB FULL · LINE UP")
+  const midX = (doorLeft.x + doorRight.x) * 0.5;
+  const midY = (doorLeft.y + doorRight.y) * 0.5 - pillarH - 6 * scale;
+  const badgeW = 94 * scale;
+  const badgeH = 14 * scale;
+  fillStrokeRoundedRect(
+    ctx,
+    midX - badgeW * 0.5,
+    midY - badgeH * 0.5,
+    badgeW,
+    badgeH,
+    4 * scale,
+    'rgba(12, 8, 26, 0.92)',
+    isClubFull ? '#f43f5e' : secondaryColor,
+    1.6 * scale
+  );
+  ctx.fillStyle = isClubFull ? '#fda4af' : '#f8fafc';
+  ctx.font = `900 ${Math.max(6, Math.round(7.2 * scale))}px "JetBrains Mono", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(
+    isClubFull ? 'CLUB FULL · LINE UP' : 'RED CARPET ENTRY · OPEN',
+    midX,
+    midY
+  );
+
   ctx.restore();
 }
 
@@ -4167,7 +5127,7 @@ function drawWallStringLights(
 
 /**
  * Draws the sunken-look grid of glowing square dance floor tiles cycling smoothly through
- * cyan, magenta, lime green, yellow, and orange with a thick #111116 dark outline and subtle inner bevel.
+ * the active music genre's curated Mood palette with a thick #111116 dark outline and subtle inner bevel.
  */
 function drawTile(
   ctx: CanvasRenderingContext2D,
@@ -4179,10 +5139,11 @@ function drawTile(
   tileH: number,
   scale: number,
   t: number,
-  sequencer?: RhythmicLightingSequencerState
+  sequencer?: RhythmicLightingSequencerState,
+  moodProfile?: ClubMoodLightingProfile
 ) {
   const fp = getRotatedFootprint(cat, item.rotation);
-  const palette = [
+  const palette = moodProfile?.tilePalette || [
     '#22d3ee', // glowing cyan
     '#38bdf8', // electric aqua
     '#e879f9', // vibrant magenta
@@ -4205,8 +5166,8 @@ function drawTile(
       const ix = Math.round(gx * 2);
       const iy = Math.round(gy * 2);
       const stepIndex = sequencer ? sequencer.step16 : Math.floor(t * 2.5);
-      const isCyanBase = (ix + iy) % 2 === 0;
-      const colorIdx = isCyanBase
+      const isPrimaryBase = (ix + iy) % 2 === 0;
+      const colorIdx = isPrimaryBase
         ? (ix + iy + Math.floor(stepIndex * 0.5)) % 2
         : Math.abs(ix * 3 + iy * 5 + Math.floor(stepIndex * 0.5)) % palette.length;
       const baseColor = palette[colorIdx];
@@ -4300,6 +5261,74 @@ function drawTile(
 const drawIllustratedDanceTile = drawTile;
 
 /**
+ * Automatically applies a genre-reactive color filter overlay across each placed dance floor footprint
+ * so shifting the music genre visibly bathes the dance floor in the genre's Mood lighting color.
+ */
+function drawDanceFloorMoodFilterOverlay(
+  ctx: CanvasRenderingContext2D,
+  item: PlacedItem,
+  cat: CatalogItem,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number,
+  sequencer: RhythmicLightingSequencerState,
+  moodProfile: ClubMoodLightingProfile
+) {
+  const fp = getRotatedFootprint(cat, item.rotation);
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  const gx0 = item.gridX;
+  const gy0 = item.gridY;
+  const gx1 = item.gridX + fp.width;
+  const gy1 = item.gridY + fp.depth;
+
+  const pTop = {
+    x: originX + (gx0 - gy0) * halfW,
+    y: originY + (gx0 + gy0) * halfH,
+  };
+  const pRight = {
+    x: originX + (gx1 - gy0) * halfW,
+    y: originY + (gx1 + gy0) * halfH,
+  };
+  const pBottom = {
+    x: originX + (gx1 - gy1) * halfW,
+    y: originY + (gx1 + gy1) * halfH,
+  };
+  const pLeft = {
+    x: originX + (gx0 - gy1) * halfW,
+    y: originY + (gx0 + gy1) * halfH,
+  };
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pTop.x, pTop.y);
+  ctx.lineTo(pRight.x, pRight.y);
+  ctx.lineTo(pBottom.x, pBottom.y);
+  ctx.lineTo(pLeft.x, pLeft.y);
+  ctx.closePath();
+
+  // Genre-reactive color filter wash across the dance floor
+  const filterGrad = ctx.createLinearGradient(pTop.x, pTop.y, pBottom.x, pBottom.y);
+  filterGrad.addColorStop(0, moodProfile.filterOverlayRgba);
+  filterGrad.addColorStop(0.5, moodProfile.filterOverlayRgba);
+  filterGrad.addColorStop(1, moodProfile.filterOverlayRgba);
+  ctx.fillStyle = filterGrad;
+  ctx.globalAlpha = Math.min(1, 0.75 + sequencer.kickEnvelope * 0.25 + Math.sin(t * 3.2) * 0.08);
+  ctx.fill();
+
+  // Pulsing genre-colored perimeter rim border framing the dance floor filter
+  ctx.strokeStyle = moodProfile.filterBorderHex || moodProfile.primaryHex;
+  ctx.lineWidth = (1.9 + sequencer.kickEnvelope * 1.1) * scale;
+  ctx.globalAlpha = Math.min(1, 0.62 + sequencer.kickEnvelope * 0.35);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
  * Dispatches furniture rendering to the detailed multi-layered vector art renderers:
  * - drawBar: Padded neon-trimmed bar counter, glossy white top, round cushioned bar stools, and tall liquor bottle shelving
  * - drawDJBooth: Black-and-neon console table, two circular vinyl turntables, central mixer with glowing faders, angled laptop, stacked black studio monitor speakers with gold/silver cones, gold record plaques & golden crown trophy
@@ -4316,7 +5345,8 @@ function drawIllustratedFurniture(
   tileH: number,
   scale: number,
   t: number,
-  activeDrink: DrinkMix
+  activeDrink: DrinkMix,
+  moodProfile?: ClubMoodLightingProfile
 ) {
   if (cat.category === 'BAR_UNIT') {
     drawBar(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t, activeDrink);
@@ -4325,7 +5355,7 @@ function drawIllustratedFurniture(
   } else if (cat.category === 'SEATING') {
     drawTable(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t);
   } else if (cat.category === 'LIGHTING') {
-    drawLightingFixture(ctx, item, cat, originX, originY, tileW, tileH, scale, t);
+    drawLightingFixture(ctx, item, cat, originX, originY, tileW, tileH, scale, t, moodProfile);
   }
 }
 
@@ -4386,13 +5416,34 @@ function drawBar(
     scale
   );
 
+  // 1.5. Stationed Bartender Staff Member(s) working right behind the Bar Counter (between the bottle shelves and the front glossy counter!)
+  drawBartenderBehindCounter(
+    ctx,
+    item,
+    fp,
+    alongY,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    _t,
+    activeDrink
+  );
+
   // 2. Main Bar Counter Chassis with Padded Purple/Magenta Panels & Glossy White Countertop
+  // Offset slightly forward along the counter depth so the Bartender stands cleanly in the service lane behind the counter!
+  const counterGx = alongY ? item.gridX + 0.34 : item.gridX;
+  const counterGy = alongY ? item.gridY : item.gridY + 0.34;
+  const counterW = alongY ? Math.max(0.62, fp.width - 0.34) : fp.width;
+  const counterD = alongY ? fp.depth : Math.max(0.62, fp.depth - 0.34);
+
   drawIsoPrism(
     ctx,
-    item.gridX,
-    item.gridY,
-    fp.width,
-    fp.depth,
+    counterGx,
+    counterGy,
+    counterW,
+    counterD,
     0,
     h,
     originX,
@@ -4407,10 +5458,10 @@ function drawBar(
   );
 
   // 3. Glowing Neon Magenta/Cyan Beveled Trim Inset on the Front Face of the Bar Counter
-  const panelStartGx = item.gridX + 0.15;
-  const panelStartGy = item.gridY + fp.depth;
-  const panelEndGx = item.gridX + fp.width - 0.15;
-  const panelEndGy = item.gridY + fp.depth;
+  const panelStartGx = counterGx + 0.12;
+  const panelStartGy = counterGy + counterD;
+  const panelEndGx = counterGx + counterW - 0.12;
+  const panelEndGy = counterGy + counterD;
 
   const p1x = originX + (panelStartGx - panelStartGy) * halfW;
   const p1y = originY + (panelStartGx + panelStartGy) * halfH;
@@ -4433,8 +5484,8 @@ function drawBar(
   const numStations = Math.max(2, lengthTiles);
   for (let s = 0; s < numStations; s++) {
     const u = (s + 0.5) / numStations;
-    const gx = item.gridX + (alongY ? 0.5 : u * fp.width);
-    const gy = item.gridY + (alongY ? u * fp.depth : 0.5);
+    const gx = counterGx + (alongY ? counterW * 0.5 : u * counterW);
+    const gy = counterGy + (alongY ? u * counterD : counterD * 0.5);
     const cx = originX + (gx - gy) * halfW;
     const cy = originY + (gx + gy) * halfH - h;
 
@@ -4582,7 +5633,7 @@ function drawDJBooth(
     2.0 * scale
   );
 
-  // 2. Flanking Tall Stacked Black Studio Monitor Speakers with Gold & Silver Speaker Cones (Left & Right of DJ Console)
+  // 2. Left Flanking Stacked Black Studio Monitor Speaker Tower (Behind/Left of DJ Console)
   drawStudioMonitorSpeakerStack(
     ctx,
     item.gridX - 0.35,
@@ -4595,21 +5646,18 @@ function drawDJBooth(
     scale,
     t
   );
-  drawStudioMonitorSpeakerStack(
-    ctx,
-    item.gridX + fp.width + 0.25,
-    item.gridY + 0.45,
-    riserH,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    scale,
-    t
-  );
+
+  const consoleH = 18 * scale;
+  const deckCenterX = originX + (item.gridX + fp.width * 0.5 - (item.gridY + 0.45)) * halfW;
+  const deckCenterY =
+    originY + (item.gridX + fp.width * 0.5 + (item.gridY + 0.45)) * halfH - (riserH + consoleH);
+
+  // 2.5. Resident DJ Character standing ON the DJ Stage Platform Riser directly behind the Dual Vinyl Turntables!
+  // Rendered before the DJ Console Table so the DJ's lower waist sits behind the console while the DJ's upper torso,
+  // head, spiky magenta hair, oversized headphones, and arms reach right onto the spinning turntables & mixer!
+  drawResidentDjAtTurntable(ctx, deckCenterX, deckCenterY, scale, t, 'BODY');
 
   // 3. Detailed Black-and-Neon DJ Console Table
-  const consoleH = 18 * scale;
   drawIsoPrism(
     ctx,
     item.gridX + 0.08,
@@ -4652,12 +5700,7 @@ function drawDJBooth(
     ctx.fillRect(frontX + (-11 + b * 5) * scale, frontY + 3.5 * scale - bh, 3.2 * scale, bh);
   }
 
-  // 4. Two Circular Vinyl Turntables + Central Mixer with Glowing Faders + Angled Laptop on Console Top
-  const deckCenterX = originX + (item.gridX + fp.width * 0.5 - (item.gridY + 0.45)) * halfW;
-  const deckCenterY =
-    originY + (item.gridX + fp.width * 0.5 + (item.gridY + 0.45)) * halfH - (riserH + consoleH);
-
-  // Left & Right Circular Vinyl Turntables
+  // 4. Two Circular Spinning Vinyl Turntables + Central Mixer with Glowing Faders + Angled Laptop on Console Top
   for (const side of [-1, 1]) {
     const tx = deckCenterX + side * 12 * scale;
     const ty = deckCenterY + side * 4.5 * scale;
@@ -4677,6 +5720,15 @@ function drawDJBooth(
     ctx.ellipse(tx, ty, 6.2 * scale, 3.5 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // Spinning vinyl record light groove highlight
+    const spinAngle = t * (side < 0 ? 4.5 : -4.5);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = 1.0 * scale;
+    ctx.beginPath();
+    ctx.moveTo(tx + Math.cos(spinAngle) * 2.0 * scale, ty + Math.sin(spinAngle) * 1.1 * scale);
+    ctx.lineTo(tx + Math.cos(spinAngle) * 5.2 * scale, ty + Math.sin(spinAngle) * 2.9 * scale);
+    ctx.stroke();
+
     // Glowing cyan/magenta center record label
     ctx.fillStyle = side < 0 ? '#22d3ee' : '#f43f5e';
     ctx.beginPath();
@@ -4691,6 +5743,23 @@ function drawDJBooth(
     ctx.lineTo(tx + 2 * scale, ty + 1 * scale);
     ctx.stroke();
   }
+
+  // 4.5. Draw the DJ's Hands actively scratching the left Vinyl Turntable & working the Central Mixer!
+  drawResidentDjAtTurntable(ctx, deckCenterX, deckCenterY, scale, t, 'HANDS_AND_BADGE');
+
+  // Right Flanking Stacked Studio Monitor Speaker Tower
+  drawStudioMonitorSpeakerStack(
+    ctx,
+    item.gridX + fp.width + 0.25,
+    item.gridY + 0.45,
+    riserH,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    t
+  );
 
   // Central 4-Channel DJ Mixer with Glowing Faders
   fillStrokeRoundedRect(
@@ -5272,13 +6341,15 @@ function drawLightingFixture(
   tileW: number,
   tileH: number,
   scale: number,
-  t: number
+  t: number,
+  moodProfile?: ClubMoodLightingProfile
 ) {
   const halfW = tileW / 2;
   const halfH = tileH / 2;
   const tx = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * halfW;
   const ty = originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * halfH;
   const th = 48 * scale;
+  const fixtureAccent = moodProfile?.primaryHex || cat.accentColor;
 
   // Truss column with thick dark outline
   fillStrokeRoundedRect(
@@ -5292,13 +6363,13 @@ function drawLightingFixture(
     INK,
     1.8 * scale
   );
-  ctx.strokeStyle = cat.accentColor;
+  ctx.strokeStyle = fixtureAccent;
   ctx.lineWidth = 1.4 * scale;
   ctx.strokeRect(tx - 3 * scale, ty - th + 2 * scale, 6 * scale, th - 4 * scale);
 
   // Glowing top spotlight orb
   const orbY = ty - th - 4 * scale;
-  ctx.fillStyle = cat.accentColor;
+  ctx.fillStyle = moodProfile?.secondaryHex || cat.accentColor;
   ctx.beginPath();
   ctx.arc(tx, orbY, (6.5 + Math.sin(t * 4) * 1.2) * scale, 0, Math.PI * 2);
   ctx.fill();
@@ -5336,95 +6407,348 @@ function drawLightingBeams(
 }
 
 /**
- * Draws the Chibi DJ with spiky magenta hair, cyan hoodie, and big DJ headphones behind the turntables
- * (matching the DJ in IMG_1506_5bdf15ca.jpeg).
+ * Draws the Resident DJ positioned directly at the Dual Vinyl Turntables on the DJ Stage Riser:
+ * - Pass 'BODY': Drawn BEFORE the DJ Console Table so the DJ's lower torso sits naturally behind the console
+ *   while the DJ's upper torso, neon cyan hoodie, arms reaching to the turntables, oversized chibi head,
+ *   spiky magenta hair, and glowing purple/cyan DJ headphones stand right behind the decks.
+ * - Pass 'HANDS_AND_BADGE': Drawn AFTER the spinning vinyl turntables & mixer so the DJ's left hand actively
+ *   scratches the left vinyl turntable disc and the right hand works the central mixer fader / pumps to the beat!
  */
-function drawIllustratedStaff(
+/**
+ * Draws the Resident DJ positioned directly at the Dual Vinyl Turntables on the DJ Stage Riser (clean lineless sprite & bubble):
+ */
+function drawResidentDjAtTurntable(
   ctx: CanvasRenderingContext2D,
-  gx: number,
-  gy: number,
+  deckCenterX: number,
+  deckCenterY: number,
+  scale: number,
+  t: number,
+  pass: 'BODY' | 'HANDS_AND_BADGE'
+) {
+  const grooveSwayX = Math.sin(t * 2.4) * 1.8 * scale;
+  const beatBobY = Math.abs(Math.sin(t * 5.2)) * 2.2 * scale;
+  const px = deckCenterX + 3.5 * scale + grooveSwayX;
+  const torsoBaseY = deckCenterY + 3.5 * scale;
+
+  const leftDeckX = deckCenterX - 12 * scale;
+  const leftDeckY = deckCenterY - 4.5 * scale;
+  const mixerX = deckCenterX;
+  const mixerY = deckCenterY;
+
+  if (pass === 'BODY') {
+    ctx.save();
+
+    // 1. DJ Streetwear Hoodie Torso (Clean lineless fill)
+    const torsoTopY = torsoBaseY - 21 * scale + beatBobY * 0.6;
+    fillStrokeRoundedRect(
+      ctx,
+      px - 8.5 * scale,
+      torsoTopY,
+      17 * scale,
+      19 * scale,
+      5 * scale,
+      '#22d3ee'
+    );
+
+    // Neon Magenta Front Hoodie Graphic / Equalizer Stripe
+    fillStrokeRoundedRect(
+      ctx,
+      px - 3.2 * scale,
+      torsoTopY + 3 * scale,
+      6.4 * scale,
+      11 * scale,
+      2 * scale,
+      '#ec4899'
+    );
+
+    // 2. DJ Arms Reaching Forward from Shoulders onto the Left Vinyl Turntable & Central Mixer
+    const leftShoulderX = px - 7.5 * scale;
+    const leftShoulderY = torsoTopY + 4.5 * scale;
+    const rightShoulderX = px + 7.5 * scale;
+    const rightShoulderY = torsoTopY + 4.5 * scale;
+
+    const scratchOffset = Math.sin(t * 9.5) * 2.2 * scale;
+    const leftHandX = leftDeckX + 2.5 * scale + scratchOffset;
+    const leftHandY = leftDeckY - 0.5 * scale;
+
+    const hypeRaise = Math.sin(t * 2.6) > 0.45;
+    const rightHandX = hypeRaise
+      ? rightShoulderX + 7.5 * scale
+      : mixerX + 1.5 * scale + Math.cos(t * 5.5) * 1.5 * scale;
+    const rightHandY = hypeRaise
+      ? torsoTopY - 12 * scale - beatBobY
+      : mixerY - 1.0 * scale;
+
+    // Cyan sleeve fill (no dark outline line)
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 3.8 * scale;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(leftShoulderX, leftShoulderY);
+    ctx.lineTo(leftHandX, leftHandY);
+    ctx.moveTo(rightShoulderX, rightShoulderY);
+    ctx.lineTo(rightHandX, rightHandY);
+    ctx.stroke();
+
+    if (hypeRaise) {
+      ctx.fillStyle = '#f5cba7';
+      ctx.beginPath();
+      ctx.arc(rightHandX, rightHandY, 3.0 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Oversized Chibi DJ Head (1:1 head-to-body ratio) nodding to the beat
+    const headY = torsoTopY - 8.5 * scale + beatBobY * 0.4;
+    const headR = 9.2 * scale;
+
+    // Back headphone band
+    ctx.strokeStyle = '#a855f7';
+    ctx.lineWidth = 2.6 * scale;
+    ctx.beginPath();
+    ctx.arc(px, headY, 10.2 * scale, Math.PI * 1.05, -0.05);
+    ctx.stroke();
+
+    // Head circle (clean lineless fill)
+    ctx.fillStyle = '#f5cba7';
+    ctx.beginPath();
+    ctx.arc(px, headY, headR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Spiky Magenta Punk DJ Hair (clean lineless fill, no forehead line!)
+    ctx.fillStyle = '#ec4899';
+    ctx.beginPath();
+    ctx.moveTo(px - 8.8 * scale, headY - 2.2 * scale);
+    ctx.lineTo(px - 10.5 * scale, headY - 10.5 * scale);
+    ctx.lineTo(px - 4.2 * scale, headY - 7.8 * scale);
+    ctx.lineTo(px - 0.5 * scale, headY - 14.5 * scale);
+    ctx.lineTo(px + 3.8 * scale, headY - 8.0 * scale);
+    ctx.lineTo(px + 10.2 * scale, headY - 11.0 * scale);
+    ctx.lineTo(px + 8.8 * scale, headY - 2.2 * scale);
+    ctx.closePath();
+    ctx.fill();
+
+    // 5. Cool Neon Cyan DJ Shades / Visor
+    fillStrokeRoundedRect(
+      ctx,
+      px - 6.8 * scale,
+      headY - 1.5 * scale,
+      13.6 * scale,
+      4.2 * scale,
+      1.8 * scale,
+      '#0284c7'
+    );
+    ctx.fillStyle = '#22d3ee';
+    ctx.fillRect(px - 5.8 * scale, headY - 1.0 * scale, 11.6 * scale, 3.0 * scale);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(px - 4.5 * scale, headY - 0.8 * scale, 3.2 * scale, 1.3 * scale);
+
+    // 6. Oversized Glowing Purple & Cyan DJ Headphones Ear Cups (clean lineless fill)
+    for (const side of [-1, 1]) {
+      const earX = px + side * 9.4 * scale;
+      const earY = headY + 0.6 * scale;
+      ctx.fillStyle = '#a855f7';
+      ctx.beginPath();
+      ctx.arc(earX, earY, 3.6 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#22d3ee';
+      ctx.beginPath();
+      ctx.arc(earX, earY, 1.6 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  } else {
+    // PASS 2: HANDS ON TURNTABLE & MIXER + FLOATING DJ BADGE (Clean lineless fill)
+    ctx.save();
+    const scratchOffset = Math.sin(t * 9.5) * 2.2 * scale;
+    const leftHandX = leftDeckX + 2.5 * scale + scratchOffset;
+    const leftHandY = leftDeckY - 0.5 * scale;
+
+    ctx.fillStyle = '#f5cba7';
+    ctx.beginPath();
+    ctx.arc(leftHandX, leftHandY, 2.9 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    const hypeRaise = Math.sin(t * 2.6) > 0.45;
+    if (!hypeRaise) {
+      const rightHandX = mixerX + 1.5 * scale + Math.cos(t * 5.5) * 1.5 * scale;
+      const rightHandY = mixerY - 1.0 * scale;
+      ctx.fillStyle = '#f5cba7';
+      ctx.beginPath();
+      ctx.arc(rightHandX, rightHandY, 2.8 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Floating DJ Name Tag without border lines
+    const tagY = torsoBaseY - 46 * scale + beatBobY * 0.3;
+    fillStrokeRoundedRect(
+      ctx,
+      px - 17 * scale,
+      tagY - 7 * scale,
+      34 * scale,
+      12 * scale,
+      6 * scale,
+      'rgba(19, 13, 36, 0.92)'
+    );
+    ctx.fillStyle = '#22d3ee';
+    ctx.font = `900 ${Math.round(7.5 * scale)}px "Plus Jakarta Sans", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎧 DJ NOVA', px, tagY - 1 * scale);
+
+    ctx.restore();
+  }
+}
+
+/**
+ * Draws the stationed Bartender Staff Member(s) directly inside the Bar Counter service lane (clean lineless sprite & bubble):
+ */
+function drawBartenderBehindCounter(
+  ctx: CanvasRenderingContext2D,
+  item: PlacedItem,
+  fp: { width: number; depth: number },
+  alongY: boolean,
   originX: number,
   originY: number,
   tileW: number,
   tileH: number,
   scale: number,
   t: number,
-  role: 'BARTENDER' | 'DJ'
+  activeDrink: DrinkMix
 ) {
-  const px = originX + (gx - gy) * (tileW / 2);
-  const py = originY + (gx + gy) * (tileH / 2) - 16 * scale;
-  // Calm, smooth DJ head-bob to the beat
-  const bounce = Math.sin(t * 2.8) * 1.4 * scale;
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  const lengthTiles = Math.max(fp.width, fp.depth);
+  const bartenderCount = lengthTiles >= 3 ? 2 : 1;
 
-  // Chibi Hoodie Torso
-  fillStrokeRoundedRect(
-    ctx,
-    px - 7.5 * scale,
-    py - 19 * scale + bounce,
-    15 * scale,
-    15.5 * scale,
-    4.5 * scale,
-    role === 'DJ' ? '#22d3ee' : '#3b82f6',
-    INK,
-    2.0 * scale
-  );
+  const BARTENDER_LOOKS = [
+    { name: 'ROXY', hair: '#4ade80', vest: '#3b82f6', shirt: '#f8fafc' },
+    { name: 'JETT', hair: '#38bdf8', vest: '#8b5cf6', shirt: '#f8fafc' },
+    { name: 'VESPER', hair: '#f43f5e', vest: '#ec4899', shirt: '#f8fafc' },
+  ];
 
-  // Oversized Chibi Head (1:1 head-to-body ratio)
-  const headY = py - 27.5 * scale + bounce;
-  const headR = 8.4 * scale;
-  ctx.fillStyle = '#f5cba7';
-  ctx.beginPath();
-  ctx.arc(px, headY, headR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.1 * scale;
-  ctx.stroke();
+  for (let bIdx = 0; bIdx < bartenderCount; bIdx++) {
+    const seed = Math.abs(item.gridX * 7 + item.gridY * 13 + bIdx * 5);
+    const look = BARTENDER_LOOKS[seed % BARTENDER_LOOKS.length];
 
-  // Spiky Magenta Punk DJ Hair (Matching DJ in IMG_1506_5bdf15ca.jpeg)
-  ctx.fillStyle = role === 'DJ' ? '#ec4899' : '#111116';
-  ctx.beginPath();
-  ctx.moveTo(px - 8 * scale, headY - 2 * scale);
-  ctx.lineTo(px - 9 * scale, headY - 10 * scale);
-  ctx.lineTo(px - 3 * scale, headY - 7 * scale);
-  ctx.lineTo(px, headY - 13 * scale);
-  ctx.lineTo(px + 4 * scale, headY - 7 * scale);
-  ctx.lineTo(px + 9 * scale, headY - 10 * scale);
-  ctx.lineTo(px + 8 * scale, headY - 2 * scale);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.8 * scale;
-  ctx.stroke();
+    const baseU = bartenderCount === 1 ? 0.5 : 0.28 + bIdx * 0.44;
+    const patrolSlide = Math.sin(t * 1.35 + seed) * (bartenderCount === 1 ? 0.18 : 0.09);
+    const u = Math.max(0.18, Math.min(0.82, baseU + patrolSlide));
 
-  // Crisp Dot Eyes
-  ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.arc(px - 2.6 * scale, headY + 0.5 * scale, 1.4 * scale, 0, Math.PI * 2);
-  ctx.arc(px + 2.6 * scale, headY + 0.5 * scale, 1.4 * scale, 0, Math.PI * 2);
-  ctx.fill();
+    const gx = item.gridX + (alongY ? 0.24 : u * fp.width);
+    const gy = item.gridY + (alongY ? u * fp.depth : 0.24);
 
-  if (role === 'DJ') {
-    // Oversized DJ Headphones with #111116 outline
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 3.2 * scale;
+    const px = originX + (gx - gy) * halfW;
+    const py = originY + (gx + gy) * halfH;
+    const mixBounce = Math.abs(Math.sin(t * 4.8 + seed)) * 1.8 * scale;
+
+    ctx.save();
+
+    // 1. Bartender Vest & Crisp White Mixologist Shirt Torso (Clean lineless fill)
+    const torsoTopY = py - 27.5 * scale - mixBounce * 0.5;
+    fillStrokeRoundedRect(
+      ctx,
+      px - 7.5 * scale,
+      torsoTopY,
+      15 * scale,
+      16 * scale,
+      4.5 * scale,
+      look.vest
+    );
+
+    // White dress shirt V-collar
+    ctx.fillStyle = look.shirt;
     ctx.beginPath();
-    ctx.arc(px, headY, 9.2 * scale, Math.PI, 0);
-    ctx.stroke();
-    ctx.fillStyle = '#a855f7';
-    ctx.beginPath();
-    ctx.arc(px - 8.6 * scale, headY + 0.5 * scale, 3.2 * scale, 0, Math.PI * 2);
-    ctx.arc(px + 8.6 * scale, headY + 0.5 * scale, 3.2 * scale, 0, Math.PI * 2);
+    ctx.moveTo(px - 3.2 * scale, torsoTopY + 1 * scale);
+    ctx.lineTo(px + 3.2 * scale, torsoTopY + 1 * scale);
+    ctx.lineTo(px, torsoTopY + 7.5 * scale);
+    ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.5 * scale;
+
+    // 2. Animated Mixologist Arms Shaking a Silver Cocktail Shaker above the Countertop (Clean lineless fill)
+    const shakePhase = Math.sin(t * 10 + seed);
+    const shakerX = px + (alongY ? 7.5 : -6.5) * scale;
+    const shakerY = torsoTopY + (3.5 + shakePhase * 2.4) * scale;
+
+    ctx.strokeStyle = look.vest;
+    ctx.lineWidth = 3.4 * scale;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px + (alongY ? 5.5 : -5.5) * scale, torsoTopY + 4.5 * scale);
+    ctx.lineTo(shakerX, shakerY);
     ctx.stroke();
+
+    // Silver Cocktail Shaker in Bartender's Hand
+    fillStrokeRoundedRect(
+      ctx,
+      shakerX - 2.6 * scale,
+      shakerY - 5.5 * scale,
+      5.2 * scale,
+      8.2 * scale,
+      2.0 * scale,
+      '#e2e8f0'
+    );
+
+    // 3. Oversized Chibi Bartender Head (Clean lineless fill)
+    const headY = torsoTopY - 8.2 * scale - mixBounce * 0.3;
+    const headR = 8.4 * scale;
+    ctx.fillStyle = '#f5cba7';
+    ctx.beginPath();
+    ctx.arc(px, headY, headR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Stylish Spiky / Swept Mixologist Hair (Clean lineless fill, no forehead line!)
+    ctx.fillStyle = look.hair;
+    ctx.beginPath();
+    ctx.arc(px, headY - 1.5 * scale, headR + 0.6 * scale, Math.PI * 1.05, -0.05);
+    ctx.lineTo(px + 9.2 * scale, headY - 4.5 * scale);
+    ctx.lineTo(px + 4.5 * scale, headY - 11.5 * scale);
+    ctx.lineTo(px - 0.5 * scale, headY - 9.2 * scale);
+    ctx.lineTo(px - 5.2 * scale, headY - 11.8 * scale);
+    ctx.lineTo(px - 9.2 * scale, headY - 4.5 * scale);
+    ctx.closePath();
+    ctx.fill();
+
+    // Crisp Dot Eyes facing the bar patrons
+    const eyeOffsetX = alongY ? 1.8 * scale : -1.2 * scale;
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(px - 2.6 * scale + eyeOffsetX, headY + 0.8 * scale, 1.4 * scale, 0, Math.PI * 2);
+    ctx.arc(px + 2.6 * scale + eyeOffsetX, headY + 0.8 * scale, 1.4 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 5. Floating Purple Cocktail Mix Bubble above Bartender (Clean lineless circle & icon)
+    const badgeY = headY - 16.5 * scale;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.arc(px, badgeY + 1.2 * scale, 6.8 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#9333ea';
+    ctx.beginPath();
+    ctx.arc(px, badgeY, 6.8 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cocktail glass silhouette inside purple bubble (filled shapes, no stroke lines)
+    ctx.fillStyle = activeDrink.color || '#22d3ee';
+    ctx.beginPath();
+    ctx.moveTo(px - 3.2 * scale, badgeY - 2.6 * scale);
+    ctx.lineTo(px + 3.2 * scale, badgeY - 2.6 * scale);
+    ctx.lineTo(px, badgeY + 0.8 * scale);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(px - 0.55 * scale, badgeY + 0.6 * scale, 1.1 * scale, 3.0 * scale);
+    ctx.fillRect(px - 2.0 * scale, badgeY + 3.1 * scale, 4.0 * scale, 1.0 * scale);
+
+    ctx.restore();
   }
 }
 
 /**
- * Draws an interactive hired Staff Member (Bartender, Bouncer, or Waiter) on the isometric grid
- * with a natural-speed 60fps multi-limb Chibi walking stride animation, glowing dashed waypoint path trail,
- * target station beacon ring, and role-specific props (cocktail shaker, sunglasses, drink tray).
+ * Draws an interactive hired Staff Member (Bartender, Bouncer, or Waiter) on the isometric grid (clean lineless sprite & bubble):
  */
 function drawHiredStaffAgent(
   ctx: CanvasRenderingContext2D,
@@ -5435,14 +6759,13 @@ function drawHiredStaffAgent(
   tileH: number,
   scale: number,
   t: number,
-  isRelocating: boolean
+  _isRelocating: boolean
 ) {
   const px = originX + (staff.gridX - staff.gridY) * (tileW / 2);
   const py = originY + (staff.gridX + staff.gridY) * (tileH / 2);
   const isWalking = staff.path.length > 0;
   const walkPhase = staff.walkCycle ?? t * 6.5 + (staff.gridX + staff.gridY) * 2.5;
 
-  // Natural, unhurried stride cycle & gentle vertical bounce
   const strideSin = isWalking ? Math.sin(walkPhase) : 0;
   const strideCos = isWalking ? Math.cos(walkPhase) : 0;
   const bounce =
@@ -5455,69 +6778,15 @@ function drawHiredStaffAgent(
   const isoDirX = fx - fy;
   const leanX = isWalking ? Math.max(-1.8, Math.min(1.8, isoDirX * 1.2)) * scale : 0;
 
-  const roleAccent =
-    staff.role === 'BARTENDER'
-      ? '#38bdf8'
-      : staff.role === 'BOUNCER'
-      ? '#facc15'
-      : '#f472b6';
-
   ctx.save();
 
-  // 0. Glowing Dashed Waypoint Trail & Destination Station Beacon while Walking
-  if (isWalking && staff.path.length > 0) {
-    ctx.save();
-    ctx.strokeStyle = roleAccent;
-    ctx.lineWidth = 2 * scale;
-    ctx.setLineDash([4 * scale, 4 * scale]);
-    ctx.lineDashOffset = -t * 16 * scale;
-    ctx.globalAlpha = 0.65;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    for (let i = 0; i < staff.path.length; i++) {
-      const wp = staff.path[i];
-      const wx = originX + (wp.x - wp.y) * (tileW / 2);
-      const wy = originY + (wp.x + wp.y) * (tileH / 2);
-      ctx.lineTo(wx, wy);
-    }
-    ctx.stroke();
-
-    const destWp = staff.path[staff.path.length - 1];
-    const destX = originX + (destWp.x - destWp.y) * (tileW / 2);
-    const destY = originY + (destWp.x + destWp.y) * (tileH / 2);
-    const pulseRadius = (8.5 + Math.sin(t * 4) * 1.8) * scale;
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 0.8;
-    ctx.strokeStyle = roleAccent;
-    ctx.lineWidth = 1.8 * scale;
-    ctx.beginPath();
-    ctx.ellipse(destX, destY, pulseRadius, pulseRadius * 0.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 1. Glowing Role Station Halo & Dynamic Ground Shadow under Staff Member
-  const ringColor =
-    isRelocating
-      ? '#22d3ee'
-      : staff.role === 'BARTENDER'
-      ? 'rgba(56, 189, 248, 0.55)'
-      : staff.role === 'BOUNCER'
-      ? 'rgba(250, 204, 21, 0.55)'
-      : 'rgba(244, 114, 182, 0.55)';
-
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
+  // 1. Soft Ground Shadow under Staff Member (no stroke ring lines)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
   ctx.beginPath();
-  ctx.ellipse(px, py, 10 * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(px, py, 9.5 * scale, 4.6 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = ringColor;
-  ctx.lineWidth = (isRelocating ? 2.4 : 1.6) * scale;
-  ctx.beginPath();
-  ctx.ellipse(px, py, 11 * scale, 5.5 * scale, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // 2. Animated Multi-Limb Walking Stride (Left & Right Legs + Sneakers)
+  // 2. Animated Multi-Limb Walking Stride (Clean lineless legs & sneakers)
   const leftStrideX = strideSin * 3.2 * scale;
   const rightStrideX = -strideSin * 3.2 * scale;
   const leftFootLift = isWalking ? Math.max(0, strideCos) * 2.2 * scale : 0;
@@ -5529,18 +6798,9 @@ function drawHiredStaffAgent(
   const rightFootX = px + 3.2 * scale + rightStrideX;
   const rightFootY = py - 1.2 * scale - rightFootLift;
 
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 4.6 * scale;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(px - 3.0 * scale + leanX * 0.4, hipY);
-  ctx.lineTo(leftFootX, leftFootY);
-  ctx.moveTo(px + 3.0 * scale + leanX * 0.4, hipY);
-  ctx.lineTo(rightFootX, rightFootY);
-  ctx.stroke();
-
   ctx.strokeStyle = '#1e293b';
-  ctx.lineWidth = 2.6 * scale;
+  ctx.lineWidth = 3.6 * scale;
+  ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(px - 3.0 * scale + leanX * 0.4, hipY);
   ctx.lineTo(leftFootX, leftFootY);
@@ -5559,13 +6819,11 @@ function drawHiredStaffAgent(
       5.2 * scale,
       3.2 * scale,
       1.3 * scale,
-      '#f8fafc',
-      INK,
-      1.4 * scale
+      '#f8fafc'
     );
   }
 
-  // 3. Role-Specific Chibi Torso / Uniform
+  // 3. Role-Specific Chibi Torso / Uniform (Clean lineless fill)
   const torsoW = (staff.role === 'BOUNCER' ? 16.5 : 14.5) * scale;
   const torsoX = px - torsoW / 2 + leanX;
   const torsoY = py - 26.5 * scale - bounce;
@@ -5576,9 +6834,7 @@ function drawHiredStaffAgent(
     torsoW,
     15 * scale,
     4.5 * scale,
-    staff.uniformColor,
-    INK,
-    2.1 * scale
+    staff.uniformColor
   );
 
   const armSwing = isWalking ? -strideSin * 2.8 * scale : 0;
@@ -5591,14 +6847,12 @@ function drawHiredStaffAgent(
       9 * scale,
       7.5 * scale,
       1.5 * scale,
-      '#1e293b',
-      INK,
-      1.3 * scale
+      '#1e293b'
     );
     const leftHandX = px - 9 * scale + leanX + armSwing;
     const leftHandY = py - 17 * scale - bounce;
     ctx.strokeStyle = staff.uniformColor;
-    ctx.lineWidth = 3 * scale;
+    ctx.lineWidth = 3.2 * scale;
     ctx.beginPath();
     ctx.moveTo(px - 6.5 * scale + leanX, py - 23 * scale - bounce);
     ctx.lineTo(leftHandX, leftHandY);
@@ -5610,12 +6864,9 @@ function drawHiredStaffAgent(
       4 * scale,
       4 * scale,
       1.2 * scale,
-      '#f5cba7',
-      INK,
-      1.4 * scale
+      '#f5cba7'
     );
 
-    // Smooth cocktail shaker motion
     const shakeOffset = (isWalking ? strideCos * 1.4 : Math.sin(t * 5.5) * 1.8) * scale;
     fillStrokeRoundedRect(
       ctx,
@@ -5624,9 +6875,7 @@ function drawHiredStaffAgent(
       4.5 * scale,
       8.5 * scale,
       2 * scale,
-      '#e2e8f0',
-      INK,
-      1.5 * scale
+      '#e2e8f0'
     );
   } else if (staff.role === 'BOUNCER') {
     ctx.fillStyle = '#facc15';
@@ -5634,35 +6883,24 @@ function drawHiredStaffAgent(
     ctx.arc(px + 3.8 * scale + leanX, py - 22.5 * scale - bounce, 2.2 * scale, 0, Math.PI * 2);
     ctx.fill();
 
-    if (isWalking) {
-      for (const side of [-1, 1]) {
-        const handX = px + side * 9.5 * scale + leanX + side * armSwing;
-        const handY = py - 16.5 * scale - bounce - side * armSwing * 0.25;
-        ctx.strokeStyle = '#1e1b4b';
-        ctx.lineWidth = 3.6 * scale;
-        ctx.beginPath();
-        ctx.moveTo(px + side * 7.2 * scale + leanX, py - 23 * scale - bounce);
-        ctx.lineTo(handX, handY);
-        ctx.stroke();
-        fillStrokeRoundedRect(
-          ctx,
-          handX - 2.2 * scale,
-          handY - 2.2 * scale,
-          4.4 * scale,
-          4.4 * scale,
-          1.3 * scale,
-          '#f5cba7',
-          INK,
-          1.4 * scale
-        );
-      }
-    } else {
+    for (const side of [-1, 1]) {
+      const handX = px + side * 8.8 * scale + leanX + (isWalking ? side * armSwing : 0);
+      const handY = py - 16.5 * scale - bounce - (isWalking ? side * armSwing * 0.25 : 0);
       ctx.strokeStyle = '#1e1b4b';
-      ctx.lineWidth = 3.8 * scale;
+      ctx.lineWidth = 3.6 * scale;
       ctx.beginPath();
-      ctx.moveTo(px - 7 * scale, py - 20.5 * scale - bounce);
-      ctx.lineTo(px + 7 * scale, py - 19.5 * scale - bounce);
+      ctx.moveTo(px + side * 7.2 * scale + leanX, py - 23 * scale - bounce);
+      ctx.lineTo(handX, handY);
       ctx.stroke();
+      fillStrokeRoundedRect(
+        ctx,
+        handX - 2.0 * scale,
+        handY - 2.0 * scale,
+        4.0 * scale,
+        4.0 * scale,
+        1.3 * scale,
+        '#f5cba7'
+      );
     }
   } else if (staff.role === 'WAITER') {
     fillStrokeRoundedRect(
@@ -5672,15 +6910,13 @@ function drawHiredStaffAgent(
       9 * scale,
       6.8 * scale,
       1.5 * scale,
-      '#f8fafc',
-      INK,
-      1.3 * scale
+      '#f8fafc'
     );
 
     const leftHandX = px - 8.5 * scale + leanX + armSwing;
     const leftHandY = py - 17 * scale - bounce;
     ctx.strokeStyle = staff.uniformColor;
-    ctx.lineWidth = 2.8 * scale;
+    ctx.lineWidth = 3.0 * scale;
     ctx.beginPath();
     ctx.moveTo(px - 6 * scale + leanX, py - 22.5 * scale - bounce);
     ctx.lineTo(leftHandX, leftHandY);
@@ -5692,15 +6928,13 @@ function drawHiredStaffAgent(
       3.8 * scale,
       3.8 * scale,
       1.2 * scale,
-      '#f5cba7',
-      INK,
-      1.3 * scale
+      '#f5cba7'
     );
 
     const trayX = px + 11.5 * scale + leanX - armSwing * 0.25;
     const trayY = py - 25 * scale - bounce * 0.75;
     ctx.strokeStyle = staff.uniformColor;
-    ctx.lineWidth = 2.8 * scale;
+    ctx.lineWidth = 3.0 * scale;
     ctx.beginPath();
     ctx.moveTo(px + 6 * scale + leanX, py - 21.5 * scale - bounce);
     ctx.lineTo(trayX, trayY + 2 * scale);
@@ -5710,9 +6944,6 @@ function drawHiredStaffAgent(
     ctx.beginPath();
     ctx.ellipse(trayX, trayY, 6.5 * scale, 3 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.4 * scale;
-    ctx.stroke();
 
     fillStrokeRoundedRect(
       ctx,
@@ -5721,13 +6952,11 @@ function drawHiredStaffAgent(
       4.4 * scale,
       6 * scale,
       1.2 * scale,
-      staff.carryingDrinkColor || '#22d3ee',
-      INK,
-      1.2 * scale
+      staff.carryingDrinkColor || '#22d3ee'
     );
   }
 
-  // 4. Oversized Chibi Head & Expressive Face (1:1 Chibi head-to-body ratio)
+  // 4. Oversized Chibi Head & Expressive Face (Clean lineless fill)
   const headX = px + leanX * 1.1;
   const headY = py - 35 * scale - bounce;
   const headR = 8.8 * scale;
@@ -5736,9 +6965,6 @@ function drawHiredStaffAgent(
   ctx.beginPath();
   ctx.arc(headX, headY, headR, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.2 * scale;
-  ctx.stroke();
 
   const gazeShift = Math.max(-1.4, Math.min(1.4, isoDirX * 0.9)) * scale;
   if (staff.role === 'BOUNCER') {
@@ -5749,9 +6975,7 @@ function drawHiredStaffAgent(
       12.4 * scale,
       4.2 * scale,
       1.2 * scale,
-      '#090518',
-      '#38bdf8',
-      1.3 * scale
+      '#090518'
     );
   } else {
     ctx.fillStyle = INK;
@@ -5761,26 +6985,25 @@ function drawHiredStaffAgent(
     ctx.fill();
   }
 
-  // Stylish Hair with #111116 outline
+  // Stylish Hair (Clean lineless fill — no stroke line across forehead)
   ctx.fillStyle = staff.hairColor;
   ctx.beginPath();
   ctx.arc(headX, headY - 2 * scale, headR + 0.5 * scale, Math.PI * 0.94, Math.PI * 0.06);
   ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.0 * scale;
-  ctx.stroke();
 
-  // Circular Cocktail / Status Bubble above Bartender or Waiter (matching circular purple cocktail icons in IMG_1506_5bdf15ca.jpeg)
+  // Circular Cocktail / Status Bubble above Staff Member (Clean lineless circle)
   const bubbleY = headY - 17 * scale;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.beginPath();
+  ctx.arc(headX, bubbleY + 1.2 * scale, 6.2 * scale, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.fillStyle = staff.role === 'BOUNCER' ? '#facc15' : '#9333ea';
   ctx.beginPath();
   ctx.arc(headX, bubbleY, 6.2 * scale, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.6 * scale;
-  ctx.stroke();
 
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = staff.role === 'BOUNCER' ? '#090518' : '#ffffff';
   ctx.font = `900 ${Math.max(7, Math.round(7.5 * scale))}px "Outfit", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -6027,17 +7250,7 @@ function drawCharacter(
     }
   }
 
-  // 0. Subtle Circular Floor Selection / Vibe Ring & Shadow
-  ctx.save();
-  ctx.strokeStyle = guest.isCelebrity ? '#facc15' : moveRingColor;
-  ctx.lineWidth = 1.4 * scale;
-  ctx.globalAlpha = isDancing ? 0.52 : 0.26;
-  ctx.beginPath();
-  ctx.ellipse(px + swayX * 0.4, py, 10.2 * scale, 5.0 * scale, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-
-  // Contact shadow: on the seat cushion when seated, or on the floor when standing/walking/dancing
+  // 0. Soft Contact Shadow (no stroke ring lines around sprite)
   const shadowY = isSittingOnBarStool
     ? py - 12.2 * scale
     : isSittingInChair
@@ -6059,12 +7272,10 @@ function drawCharacter(
   const torsoW = 14.0 * scale * bodyScaleX;
   const cx = px + swayX;
 
-  // 1. Legs & Trendy Streetwear Sneakers with Thick #111116 Outlines
+  // 1. Legs & Trendy Streetwear Sneakers (Clean lineless fill — no internal seam lines at knees or ankles)
   const legW = 4.1 * scale * Math.max(0.75, bodyScaleX);
 
   if (isSittingOnBarStool) {
-    // High Bar Stool Seated Posture: thighs resting on the elevated bar stool cushion (-13.0 * scale),
-    // knees bent toward the bar counter, and sneakers perched on the chrome footrest ring (-6.4 * scale)
     const thighY = py - 13.2 * scale;
     const leftKneeX = cx - 3.0 * scale + seatDir * 3.8 * scale;
     const rightKneeX = cx + 1.2 * scale + seatDir * 3.8 * scale;
@@ -6077,9 +7288,7 @@ function drawCharacter(
       6.0 * scale,
       3.6 * scale,
       1.5 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6088,9 +7297,7 @@ function drawCharacter(
       6.0 * scale,
       3.6 * scale,
       1.5 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
 
     // Lower legs angled down to the bar stool footrest ring
@@ -6101,9 +7308,7 @@ function drawCharacter(
       3.6 * scale,
       5.6 * scale,
       1.4 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6112,9 +7317,7 @@ function drawCharacter(
       3.6 * scale,
       5.6 * scale,
       1.4 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
 
     // Sneakers resting on the bar stool's chrome footrest ring
@@ -6125,9 +7328,7 @@ function drawCharacter(
       4.6 * scale,
       2.6 * scale,
       1.1 * scale,
-      '#f8fafc',
-      INK,
-      1.5 * scale
+      '#f8fafc'
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6136,12 +7337,9 @@ function drawCharacter(
       4.6 * scale,
       2.6 * scale,
       1.1 * scale,
-      '#f8fafc',
-      INK,
-      1.5 * scale
+      '#f8fafc'
     );
   } else if (isSittingInChair) {
-    // True 2.5D Seated Posture on Club Chair or VIP Sofa: horizontal thighs resting directly on the chair/sofa cushion + bent lower calves hanging down
     const thighY = py - 9.8 * scale;
     const leftKneeX = cx - 3.2 * scale + seatDir * 4.2 * scale;
     const rightKneeX = cx + 1.4 * scale + seatDir * 4.2 * scale;
@@ -6154,9 +7352,7 @@ function drawCharacter(
       6.4 * scale,
       3.8 * scale,
       1.6 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6165,9 +7361,7 @@ function drawCharacter(
       6.4 * scale,
       3.8 * scale,
       1.6 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
 
     // Bent lower calves hanging down from the cushion front edge
@@ -6178,9 +7372,7 @@ function drawCharacter(
       3.8 * scale,
       5.8 * scale,
       1.5 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6189,9 +7381,7 @@ function drawCharacter(
       3.8 * scale,
       5.8 * scale,
       1.5 * scale,
-      guest.pantsColor,
-      INK,
-      1.8 * scale
+      guest.pantsColor
     );
 
     // Seated sneakers resting near the base of the chair/sofa
@@ -6202,9 +7392,7 @@ function drawCharacter(
       4.8 * scale,
       2.7 * scale,
       1.1 * scale,
-      '#f8fafc',
-      INK,
-      1.5 * scale
+      '#f8fafc'
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6213,9 +7401,7 @@ function drawCharacter(
       4.8 * scale,
       2.7 * scale,
       1.1 * scale,
-      '#f8fafc',
-      INK,
-      1.5 * scale
+      '#f8fafc'
     );
   } else {
     // Standing / Walking / Dancing Upright Legs
@@ -6231,9 +7417,7 @@ function drawCharacter(
       legW,
       9.5 * scale,
       1.8 * scale,
-      guest.pantsColor,
-      INK,
-      1.9 * scale
+      guest.pantsColor
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6242,9 +7426,7 @@ function drawCharacter(
       legW,
       9.5 * scale,
       1.8 * scale,
-      guest.pantsColor,
-      INK,
-      1.9 * scale
+      guest.pantsColor
     );
 
     // White/Neon Streetwear Sneakers
@@ -6255,9 +7437,7 @@ function drawCharacter(
       legW + 1.2 * scale,
       3.0 * scale,
       1.2 * scale,
-      '#f8fafc',
-      INK,
-      1.5 * scale
+      '#f8fafc'
     );
     fillStrokeRoundedRect(
       ctx,
@@ -6266,30 +7446,19 @@ function drawCharacter(
       legW + 1.2 * scale,
       3.0 * scale,
       1.2 * scale,
-      '#f8fafc',
-      INK,
-      1.5 * scale
+      '#f8fafc'
     );
   }
 
-  // 2. Arms & Stylized Chibi Hands
+  // 2. Arms & Stylized Chibi Hands (Clean lineless fill)
   const leftHandX = cx + leftHandOffsetX;
   const leftHandY = py + leftHandOffsetY - bounce;
   const rightHandX = cx + rightHandOffsetX;
   const rightHandY = py + rightHandOffsetY - bounce;
 
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 5.2 * scale;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(cx - 5.8 * scale * bodyScaleX, py - 21 * scale - bounce);
-  ctx.lineTo(leftHandX + 1.6 * scale, leftHandY + 1.6 * scale);
-  ctx.moveTo(cx + 5.8 * scale * bodyScaleX, py - 21 * scale - bounce);
-  ctx.lineTo(rightHandX + 1.6 * scale, rightHandY + 1.6 * scale);
-  ctx.stroke();
-
   ctx.strokeStyle = guest.shirtColor;
-  ctx.lineWidth = 3.0 * scale;
+  ctx.lineWidth = 3.8 * scale;
+  ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(cx - 5.8 * scale * bodyScaleX, py - 21 * scale - bounce);
   ctx.lineTo(leftHandX + 1.6 * scale, leftHandY + 1.6 * scale);
@@ -6304,9 +7473,7 @@ function drawCharacter(
     3.6 * scale,
     3.6 * scale,
     1.2 * scale,
-    skinTone,
-    INK,
-    1.6 * scale
+    skinTone
   );
   fillStrokeRoundedRect(
     ctx,
@@ -6315,9 +7482,7 @@ function drawCharacter(
     3.6 * scale,
     3.6 * scale,
     1.2 * scale,
-    skinTone,
-    INK,
-    1.6 * scale
+    skinTone
   );
 
   // When Seated on a Bar Stool, Standing at a High-Top Table / Bar Counter, or Seated with a Drink, draw a glowing cocktail glass in hand
@@ -6332,15 +7497,13 @@ function drawCharacter(
       4.4 * scale,
       5.2 * scale,
       1.2 * scale,
-      drinkColor,
-      INK,
-      1.3 * scale
+      drinkColor
     );
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(gxGlass - 1.2 * scale, gyGlass - 3.0 * scale, 2.4 * scale, 1.1 * scale);
   }
 
-  // 3. Chibi Streetwear Torso (Hoodie, Vest, or Stylish Club Dress — 14px height to match 1:1 Chibi head!)
+  // 3. Chibi Streetwear Torso (Clean lineless fill)
   fillStrokeRoundedRect(
     ctx,
     cx - torsoW * 0.5,
@@ -6348,14 +7511,11 @@ function drawCharacter(
     torsoW,
     (isDressOutfit && !isSittingAny ? 16.0 : 14.0) * scale,
     4.5 * scale,
-    guest.shirtColor,
-    INK,
-    2.2 * scale
+    guest.shirtColor
   );
 
   // Streetwear Vest / Graphic Hoodie Accents
   if (seed % 3 === 1) {
-    // Contrasting center tee / open jacket placket
     fillStrokeRoundedRect(
       ctx,
       cx - 2.4 * scale * bodyScaleX,
@@ -6363,12 +7523,9 @@ function drawCharacter(
       4.8 * scale * bodyScaleX,
       13.0 * scale,
       1.4 * scale,
-      '#f8fafc',
-      INK,
-      1.3 * scale
+      '#f8fafc'
     );
   } else if (seed % 3 === 2) {
-    // Neon chest stripe
     ctx.fillStyle = '#fde047';
     ctx.fillRect(
       cx - 4.5 * scale * bodyScaleX,
@@ -6378,7 +7535,7 @@ function drawCharacter(
     );
   }
 
-  // 4. Oversized Rounded Chibi Head (1:1 head-to-body ratio, radius 9.0 * scale, thick #111116 outline)
+  // 4. Oversized Rounded Chibi Head (Clean lineless fill)
   const headX = cx + headTiltX;
   const headY = py - 34.2 * scale - bounce;
   const headR = 9.0 * scale;
@@ -6389,9 +7546,6 @@ function drawCharacter(
     ctx.beginPath();
     ctx.arc(headX, headY - 2.2 * scale, headR + 3.6 * scale, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.3 * scale;
-    ctx.stroke();
   }
 
   // Rounded Chibi Face
@@ -6399,11 +7553,8 @@ function drawCharacter(
   ctx.beginPath();
   ctx.arc(headX, headY, headR, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.3 * scale;
-  ctx.stroke();
 
-  // 5. Distinct Stylish Hairstyles & Headgear (Afros, Double Buns, Spiky Hair, Caps, Beanies)
+  // 5. Distinct Stylish Hairstyles & Headgear (Clean lineless fill — no stroke lines across forehead!)
   if (hairVariant === 0) {
     // Trendy Streetwear Baseball Cap with Visor
     ctx.fillStyle = '#22d3ee';
@@ -6411,9 +7562,6 @@ function drawCharacter(
     ctx.arc(headX, headY - 2 * scale, headR + 0.4 * scale, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.0 * scale;
-    ctx.stroke();
 
     fillStrokeRoundedRect(
       ctx,
@@ -6422,9 +7570,7 @@ function drawCharacter(
       9.8 * scale,
       3.2 * scale,
       1.5 * scale,
-      '#0284c7',
-      INK,
-      1.7 * scale
+      '#0284c7'
     );
   } else if (hairVariant === 1) {
     // Voluminous Afro Front Hairline Bangs
@@ -6445,19 +7591,13 @@ function drawCharacter(
     ctx.lineTo(headX + 8.5 * scale, headY - 2 * scale);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.0 * scale;
-    ctx.stroke();
   } else if (hairVariant === 3) {
-    // Ribbed Knit Street Beanie with Top Pom
+    // Ribbed Knit Street Beanie
     ctx.fillStyle = '#ec4899';
     ctx.beginPath();
     ctx.arc(headX, headY - 2.5 * scale, headR + 0.5 * scale, Math.PI, 0);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.0 * scale;
-    ctx.stroke();
 
     fillStrokeRoundedRect(
       ctx,
@@ -6466,9 +7606,7 @@ function drawCharacter(
       18.4 * scale,
       4.0 * scale,
       2 * scale,
-      '#f472b6',
-      INK,
-      1.8 * scale
+      '#f472b6'
     );
   } else if (hairVariant === 4) {
     // Stylish Double Space Buns + Bangs
@@ -6477,23 +7615,16 @@ function drawCharacter(
       ctx.beginPath();
       ctx.arc(headX + side * 7.2 * scale, headY - 7.8 * scale, 3.8 * scale, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.9 * scale;
-      ctx.stroke();
     }
     ctx.beginPath();
     ctx.arc(headX, headY - 2.2 * scale, headR + 0.3 * scale, Math.PI * 0.95, Math.PI * 0.05);
     ctx.fill();
-    ctx.stroke();
   } else {
     // Sleek Side-Swept Club Hair
     ctx.fillStyle = guest.hairColor;
     ctx.beginPath();
     ctx.arc(headX, headY - 2.0 * scale, headR + 0.5 * scale, Math.PI * 0.92, Math.PI * 0.08);
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.0 * scale;
-    ctx.stroke();
   }
 
   // 6. Crisp Dot Eyes or Glowing Cyber Visor Sunglasses
@@ -6506,12 +7637,9 @@ function drawCharacter(
       12.4 * scale,
       3.8 * scale,
       1.5 * scale,
-      guest.isCelebrity ? '#facc15' : '#22d3ee',
-      INK,
-      1.6 * scale
+      guest.isCelebrity ? '#facc15' : '#22d3ee'
     );
   } else {
-    // Signature Chibi Black Dot Eyes with tiny white specular catchlight
     ctx.fillStyle = INK;
     ctx.beginPath();
     ctx.arc(headX - 3.0 * scale + eyeShift, headY + 0.6 * scale, 1.55 * scale, 0, Math.PI * 2);
@@ -6525,7 +7653,7 @@ function drawCharacter(
     ctx.fill();
   }
 
-  // 7. Crisp Circular Speech / Thought Bubbles & Floating Dark Patron Quote Tooltips (Matching IMG_1510_4d373b62.png)
+  // 7. Clean Lineless Circular Speech / Thought Bubbles & Floating Dark Patron Quote Tooltips
   if (guest.name === 'Kira R.' || guest.id === 'g_seat_bistro_1') {
     drawPatronQuoteTooltip(
       ctx,
@@ -6579,7 +7707,7 @@ const drawIllustratedCharacter = drawCharacter;
 
 /**
  * Draws the dark translucent rounded patron quote card ("MIA H. / I think I'm in love.")
- * with floating pink heart icons matching the bottom-center of IMG_1506_5bdf15ca.jpeg.
+ * without border or outline lines.
  */
 function drawPatronQuoteTooltip(
   ctx: CanvasRenderingContext2D,
@@ -6602,9 +7730,7 @@ function drawPatronQuoteTooltip(
     boxW,
     boxH,
     6 * s,
-    'rgba(13, 13, 20, 0.94)',
-    '#38bdf8',
-    1.8 * s
+    'rgba(13, 13, 20, 0.92)'
   );
 
   ctx.fillStyle = '#38bdf8';
@@ -6627,18 +7753,13 @@ function drawPatronQuoteTooltip(
       ctx.beginPath();
       ctx.arc(x + h.dx * s, y + h.dy * s, h.r * s, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.2 * s;
-      ctx.stroke();
     }
   }
   ctx.restore();
 }
 
 /**
- * Draws the crisp circular white/gold/purple speech & thought bubbles with thick #111116 black outlines
- * (music notes ♫, cocktail drink glasses, golden $ coins, golden crowns ♛, purple ★ badges, and exclamation marks)
- * matching IMG_1506_5bdf15ca.jpeg.
+ * Draws the circular white/gold/purple speech & thought bubbles WITHOUT any outline/stroke lines or internal tail seam lines.
  */
 function drawIllustratedSpeechBubble(
   ctx: CanvasRenderingContext2D,
@@ -6650,52 +7771,41 @@ function drawIllustratedSpeechBubble(
   ctx.save();
   const s = Math.max(0.82, scale);
 
-  // Determine circular bubble background style matching IMG_1506_5bdf15ca.jpeg:
-  // - White circles with thick #111116 outlines for Music Notes (♫), Crowns (♛), Drinks, and Alerts (!)
-  // - Golden coin circles for Cash ($)
-  // - Deep purple circles for Star (★) vibe badges
   const isCashCoin = bubble === 'CASH';
   const isPurpleStar = bubble === 'SPARKLE';
   const r = (isCashCoin || isPurpleStar ? 8.5 : 11.5) * s;
 
-  // Drop shadow
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  // Soft drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.30)';
   ctx.beginPath();
   ctx.arc(x, y + 1.5 * s, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Main Circular Bubble with Thick #111116 Black Outline
+  // Main Circular Bubble (clean lineless fill — no stroke lines!)
   ctx.fillStyle = isCashCoin ? '#eab308' : isPurpleStar ? '#581c87' : '#ffffff';
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2.1 * s;
-  ctx.stroke();
 
-  // Small bottom pointer tail for large white thought/speech bubbles
+  // Seamless bottom pointer tail for large white thought/speech bubbles (filled only, no internal or border stroke lines!)
   if (!isCashCoin && !isPurpleStar) {
     ctx.beginPath();
-    ctx.moveTo(x - 3.2 * s, y + r - 1 * s);
-    ctx.lineTo(x, y + r + 4.5 * s);
-    ctx.lineTo(x + 3.2 * s, y + r - 1 * s);
+    ctx.moveTo(x - 3.4 * s, y + r - 1.5 * s);
+    ctx.lineTo(x, y + r + 4.2 * s);
+    ctx.lineTo(x + 3.4 * s, y + r - 1.5 * s);
     ctx.closePath();
     ctx.fillStyle = '#ffffff';
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.8 * s;
-    ctx.stroke();
   }
 
   if (bubble === 'MUSIC') {
-    // Crisp Black Beamed Music Note (♫) inside White Circle (matching dancers in IMG_1506_5bdf15ca.jpeg)
     ctx.fillStyle = INK;
     ctx.font = `900 ${Math.round(13.5 * s)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('♫', x, y + 0.5 * s);
   } else if (bubble === 'VIP_CROWN') {
-    // Golden Crown inside White Circle (matching crown bubbles on the dance floor in IMG_1506_5bdf15ca.jpeg)
+    // Golden Crown inside White Circle (clean lineless fill)
     ctx.beginPath();
     ctx.moveTo(x - 5.5 * s, y + 3.5 * s);
     ctx.lineTo(x - 6.5 * s, y - 3.5 * s);
@@ -6705,46 +7815,34 @@ function drawIllustratedSpeechBubble(
     ctx.lineTo(x + 6.5 * s, y - 3.5 * s);
     ctx.lineTo(x + 5.5 * s, y + 3.5 * s);
     ctx.closePath();
-    ctx.fillStyle = '#facc15';
+    ctx.fillStyle = '#f59e0b';
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.5 * s;
-    ctx.stroke();
   } else if (bubble === 'CASH') {
-    // Golden Dollar Coin ($)
     ctx.fillStyle = '#fef08a';
     ctx.font = `900 ${Math.round(11 * s)}px "JetBrains Mono", monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('$', x, y + 0.5 * s);
   } else if (bubble === 'SPARKLE') {
-    // Gold Star (★) inside Purple Circle
     ctx.fillStyle = '#facc15';
     ctx.font = `900 ${Math.round(10.5 * s)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('★', x, y + 0.5 * s);
   } else if (bubble === 'COCKTAIL' || bubble === 'BEER') {
-    // Neon Cocktail Martini Glass with #111116 outline
-    ctx.fillStyle = bubble === 'COCKTAIL' ? '#ec4899' : '#38bdf8';
+    // Neon Cocktail Martini Glass (clean filled silhouette without stroke lines)
+    const glassCol = bubble === 'COCKTAIL' ? '#ec4899' : '#0284c7';
+    ctx.fillStyle = glassCol;
     ctx.beginPath();
     ctx.moveTo(x - 5.5 * s, y - 4.5 * s);
     ctx.lineTo(x + 5.5 * s, y - 4.5 * s);
     ctx.lineTo(x, y + 1 * s);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.4 * s;
-    ctx.stroke();
 
-    ctx.beginPath();
-    ctx.moveTo(x, y + 1 * s);
-    ctx.lineTo(x, y + 5.5 * s);
-    ctx.moveTo(x - 3.5 * s, y + 5.5 * s);
-    ctx.lineTo(x + 3.5 * s, y + 5.5 * s);
-    ctx.stroke();
+    ctx.fillRect(x - 0.7 * s, y + 0.6 * s, 1.4 * s, 4.8 * s);
+    ctx.fillRect(x - 3.5 * s, y + 4.8 * s, 7.0 * s, 1.3 * s);
   } else {
-    // Bold Exclamation Mark (!) inside White Circle
     ctx.fillStyle = '#ef4444';
     ctx.font = `900 ${Math.round(14 * s)}px "Outfit", sans-serif`;
     ctx.textAlign = 'center';
@@ -7897,5 +8995,425 @@ function applyGuestPersonalSpaceSeparation(guests: GuestAgent[], dt: number) {
   }
 }
 
+const FAVORITE_GENRES = ['Pop', 'Dance', 'Hip Hop', 'Latin', 'Electro', 'Rock'];
 
+function hashIdToIndex(id: string, mod: number): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return h % mod;
+}
+
+function computeGuestMoodInfo(
+  guest: GuestAgent,
+  activeGenre: string | undefined,
+  isClubFull: boolean,
+  queueIndex: number = 0
+): SpriteMoodInfo {
+  const nameIdx = hashIdToIndex(guest.id, GUEST_NAMES.length);
+  const favIdx = hashIdToIndex(guest.id + '_genre', FAVORITE_GENRES.length);
+  const favGenre = FAVORITE_GENRES[favIdx];
+  const genreMatch =
+    activeGenre && activeGenre.toLowerCase() === favGenre.toLowerCase();
+
+  let moodLabel: SpriteMoodInfo['moodLabel'] = 'VIBING';
+  let moodEmoji = '🎶';
+  let moodColor = '#22d3ee';
+  let moodScore = 78;
+  let activity = 'Grooving on the Dance Floor';
+  let thought = guest.chatText || `Loving this ${activeGenre || 'club'} vibe!`;
+
+  if (guest.state === 'QUEUEING') {
+    moodLabel = 'WAITING IN LINE';
+    moodEmoji = isClubFull ? '⏳' : '🎟️';
+    moodColor = isClubFull ? '#fb923c' : '#facc15';
+    moodScore = isClubFull ? Math.max(48, 72 - queueIndex * 4) : 80;
+    activity = isClubFull
+      ? `Waiting in Red Carpet Line (#${queueIndex + 1} · Club Full)`
+      : `Stepping to Red Carpet Entrance (#${queueIndex + 1})`;
+    thought = isClubFull
+      ? 'Club is at max capacity! Falling in line on the red carpet...'
+      : 'Almost at the red carpet door! Ready to party!';
+  } else if (guest.state === 'WALKING_TO_BAR') {
+    moodLabel = 'THIRSTY';
+    moodEmoji = '🍹';
+    moodColor = '#f472b6';
+    moodScore = 74;
+    activity = 'Heading to the Neon Bar';
+    thought = 'Time to grab a glowing signature cocktail!';
+  } else if (guest.state === 'ORDERING_DRINK') {
+    moodLabel = 'CHILLING';
+    moodEmoji = '🍸';
+    moodColor = '#a855f7';
+    moodScore = 88;
+    activity = 'Sipping Cocktails at the Bar Stool';
+    thought = guest.chatText || 'Bartender, another round of neon mix!';
+  } else if (guest.state === 'RESTING_AT_SEAT' || guest.state === 'WALKING_TO_SEAT') {
+    moodLabel = genreMatch ? 'HYPED' : 'CHILLING';
+    moodEmoji = genreMatch ? '⚡' : '🥂';
+    moodColor = genreMatch ? '#38bdf8' : '#c084fc';
+    moodScore = genreMatch ? 92 : 85;
+    activity =
+      guest.seatPosture === 'SITTING_SOFA'
+        ? 'Relaxing in the VIP Lounge Booth'
+        : 'Chilling at a High-Top Cocktail Table';
+    thought =
+      guest.chatText ||
+      (genreMatch
+        ? `They're playing ${favGenre}! Best VIP table in the city!`
+        : 'Great view of the LED floor from this table.');
+  } else if (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES') {
+    if (genreMatch || guest.isCelebrity) {
+      moodLabel = 'ECSTATIC';
+      moodEmoji = '🔥';
+      moodColor = '#4ade80';
+      moodScore = 98;
+      activity = `Going Wild on the ${activeGenre || 'Neon'} Dance Floor`;
+      thought =
+        guest.chatText ||
+        `THIS ${favGenre.toUpperCase()} BEAT IS UNREAL! Hands in the air!`;
+    } else {
+      moodLabel = 'HYPED';
+      moodEmoji = '⚡';
+      moodColor = '#22d3ee';
+      moodScore = 90;
+      activity = 'Dancing Under the Disco Lasers';
+      thought = guest.chatText || 'The lighting mood on this dance floor is fire!';
+    }
+  } else {
+    moodLabel = 'VIBING';
+    moodEmoji = '✨';
+    moodColor = '#38bdf8';
+    moodScore = 82;
+    activity = 'Exploring the Club Floor';
+    thought = guest.chatText || 'Checking out the neon decorations!';
+  }
+
+  return {
+    id: guest.id,
+    name: `${guest.name || GUEST_NAMES[nameIdx]}${guest.isCelebrity ? ' ★ VIP' : ''}`,
+    role: guest.isCelebrity ? 'VIP_GUEST' : 'GUEST',
+    moodLabel,
+    moodEmoji,
+    moodColor,
+    moodScore,
+    activity,
+    thought,
+    favoriteGenre: favGenre,
+    shirtColor: guest.shirtColor,
+  };
+}
+
+function computePedestrianMoodInfo(
+  ped: PedestrianAgent,
+  activeGenre: string | undefined
+): SpriteMoodInfo {
+  const genreMatch =
+    activeGenre && activeGenre.toLowerCase() === ped.favoriteGenre.toLowerCase();
+  const moodLabel: SpriteMoodInfo['moodLabel'] = genreMatch
+    ? 'HYPED'
+    : ped.hype >= 85
+    ? 'VIBING'
+    : 'STROLLING';
+  const moodEmoji = genreMatch ? '⚡' : ped.hype >= 85 ? '🎶' : '🚶';
+  return {
+    id: ped.id,
+    name: ped.name,
+    role: 'PEDESTRIAN',
+    moodLabel,
+    moodEmoji,
+    moodColor: genreMatch ? '#38bdf8' : ped.hype >= 85 ? '#f472b6' : '#a855f7',
+    moodScore: ped.hype,
+    activity: 'Strolling the Neon Sidewalk Around the Club',
+    thought: `Hearing that ${activeGenre || 'bass'} booming from the red carpet entrance!`,
+    favoriteGenre: ped.favoriteGenre,
+    shirtColor: ped.shirtColor,
+  };
+}
+
+function computeStaffMoodInfo(
+  id: string,
+  role: 'BARTENDER' | 'DJ' | 'SECURITY' | 'WAITER',
+  activeGenre: string | undefined,
+  customName?: string
+): SpriteMoodInfo {
+  if (role === 'DJ') {
+    return {
+      id,
+      name: customName || 'DJ NOVA-X',
+      role: 'DJ',
+      moodLabel: 'ECSTATIC',
+      moodEmoji: '🎧',
+      moodColor: '#22d3ee',
+      moodScore: 99,
+      activity: `Spinning ${activeGenre || 'Club'} Set at the Turntables`,
+      thought: `Dropping the ${activeGenre || 'custom'} bassline & shifting the club mood lights!`,
+      favoriteGenre: activeGenre || 'Electro',
+      shirtColor: '#22d3ee',
+    };
+  }
+  if (role === 'BARTENDER') {
+    return {
+      id,
+      name: customName || 'Mixologist Kai',
+      role: 'BARTENDER',
+      moodLabel: 'HYPED',
+      moodEmoji: '🍸',
+      moodColor: '#e879f9',
+      moodScore: 93,
+      activity: 'Flair-Mixing Cocktails Behind the Neon Bar',
+      thought: 'Shaking up glowing drinks on the beat!',
+      favoriteGenre: 'Pop',
+      shirtColor: '#e879f9',
+    };
+  }
+  if (role === 'SECURITY') {
+    return {
+      id,
+      name: customName || 'Bouncer Rex',
+      role: 'SECURITY',
+      moodLabel: 'VIBING',
+      moodEmoji: '🕶️',
+      moodColor: '#38bdf8',
+      moodScore: 88,
+      activity: 'Guarding the Red Carpet Door & VIP Line',
+      thought: 'Keeping the red carpet line orderly and the VIP vibe smooth.',
+      favoriteGenre: 'Hip Hop',
+      shirtColor: '#1e293b',
+    };
+  }
+  return {
+    id,
+    name: customName || 'Server Aria',
+    role: 'WAITER',
+    moodLabel: 'HYPED',
+    moodEmoji: '🥂',
+    moodColor: '#4ade80',
+    moodScore: 90,
+    activity: 'Delivering Bottle Service to VIP Tables',
+    thought: 'Tips are flowing tonight with this crowd mood!',
+    favoriteGenre: 'Dance',
+    shirtColor: '#f43f5e',
+  };
+}
+
+function buildAllSpritesMoodSnapshot(
+  guests: GuestAgent[],
+  pedestrians: PedestrianAgent[],
+  staffMembers: StaffMemberAgent[],
+  activeFloor: FloorLevel,
+  activeGenre: string | undefined,
+  maxGuests: number
+): SpriteMoodInfo[] {
+  const insideCount = guests.filter((g) => g.state !== 'QUEUEING').length;
+  const isClubFull = insideCount >= maxGuests;
+
+  const list: SpriteMoodInfo[] = [];
+
+  // Resident DJ & active floor staff at top so staff moods are always accessible too
+  list.push(computeStaffMoodInfo('staff_dj_resident', 'DJ', activeGenre));
+  staffMembers
+    .filter((s) => s.floor === activeFloor)
+    .forEach((sm) => {
+      const mappedRole =
+        sm.role === 'BOUNCER'
+          ? 'SECURITY'
+          : sm.role === 'WAITER'
+          ? 'WAITER'
+          : 'BARTENDER';
+      list.push(computeStaffMoodInfo(sm.uid, mappedRole, activeGenre, sm.name));
+    });
+
+  // Queued customers on the Red Carpet
+  const queued = guests.filter((g) => g.state === 'QUEUEING');
+  queued.forEach((g, idx) => {
+    list.push(computeGuestMoodInfo(g, activeGenre, isClubFull, idx));
+  });
+
+  // Inside club patrons on active floor
+  const inside = guests.filter(
+    (g) => g.state !== 'QUEUEING' && g.floor === activeFloor
+  );
+  inside.forEach((g) => {
+    list.push(computeGuestMoodInfo(g, activeGenre, isClubFull, 0));
+  });
+
+  // Exterior pedestrians walking around the building
+  pedestrians.forEach((p) => {
+    list.push(computePedestrianMoodInfo(p, activeGenre));
+  });
+
+  return list;
+}
+
+/**
+ * Draws a clean lineless glowing selection ring under the selected sprite and a floating live Mood pill above their head.
+ */
+function drawSelectedSpriteMoodOverlay(
+  ctx: CanvasRenderingContext2D,
+  gx: number,
+  gy: number,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number,
+  mood: SpriteMoodInfo
+) {
+  const px = originX + (gx - gy) * (tileW / 2);
+  const py = originY + (gx + gy) * (tileH / 2);
+  const pulse = 1 + Math.sin(t * 6) * 0.08;
+
+  ctx.save();
+  // Glowing selection ring around feet
+  ctx.strokeStyle = mood.moodColor;
+  ctx.lineWidth = 2.4 * scale;
+  ctx.beginPath();
+  ctx.ellipse(px, py + 1 * scale, 13 * scale * pulse, 6.5 * scale * pulse, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = mood.moodColor;
+  ctx.globalAlpha = 0.22;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Floating lineless mood pill badge above head
+  const badgeY = py - 52 * scale - Math.abs(Math.sin(t * 4)) * 2.5 * scale;
+  const labelText = `${mood.moodEmoji} ${mood.name.toUpperCase()} · ${mood.moodLabel}`;
+  ctx.font = `800 ${Math.max(8, Math.round(7.8 * scale))}px "Outfit", sans-serif`;
+  const textW = ctx.measureText(labelText).width;
+  const pillW = textW + 14 * scale;
+  const pillH = 15 * scale;
+
+  fillStrokeRoundedRect(
+    ctx,
+    px - pillW * 0.5,
+    badgeY - pillH * 0.5,
+    pillW,
+    pillH,
+    6 * scale,
+    'rgba(12, 8, 28, 0.92)'
+  );
+  // Subtle colored bottom accent bar inside pill (lineless)
+  fillStrokeRoundedRect(
+    ctx,
+    px - pillW * 0.5 + 4 * scale,
+    badgeY + pillH * 0.5 - 2.4 * scale,
+    pillW - 8 * scale,
+    1.8 * scale,
+    1 * scale,
+    mood.moodColor
+  );
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(labelText, px, badgeY - 0.5 * scale);
+  ctx.restore();
+}
+
+/**
+ * Hit-tests all active sprites (interior patrons, red carpet queue customers, sidewalk pedestrians, DJ, and Bartenders)
+ * at a given canvas screen coordinate `(screenX, screenY)` so tapping any sprite opens their live Mood inspection card.
+ */
+function findTappedSpriteMoodAtScreenPoint(
+  screenX: number,
+  screenY: number,
+  originX: number,
+  originY: number,
+  streetOriginY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  guests: GuestAgent[],
+  pedestrians: PedestrianAgent[],
+  items: PlacedItem[],
+  staffMembers: StaffMemberAgent[],
+  activeFloor: FloorLevel,
+  activeGenre: string | undefined,
+  maxGuests: number
+): SpriteMoodInfo | null {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  const hitRadius = 24 * scale;
+  const insideCount = guests.filter((g) => g.state !== 'QUEUEING').length;
+  const isClubFull = insideCount >= maxGuests;
+
+  let bestMatch: { dist: number; info: SpriteMoodInfo } | null = null;
+
+  const checkCandidate = (
+    gx: number,
+    gy: number,
+    refOriginY: number,
+    yCenterOffset: number,
+    info: SpriteMoodInfo
+  ) => {
+    const sx = originX + (gx - gy) * halfW;
+    const sy = refOriginY + (gx + gy) * halfH - yCenterOffset;
+    const dist = Math.hypot(screenX - sx, screenY - sy);
+    if (dist <= hitRadius && (!bestMatch || dist < bestMatch.dist)) {
+      bestMatch = { dist, info };
+    }
+  };
+
+  // 1. Check interior guests on active floor + red carpet queued guests
+  const queuedList = guests.filter((g) => g.state === 'QUEUEING');
+  for (const g of guests) {
+    if (g.state !== 'QUEUEING' && g.floor !== activeFloor) continue;
+    const refOriginY = g.state === 'QUEUEING' ? streetOriginY : originY;
+    const qIdx = g.state === 'QUEUEING' ? Math.max(0, queuedList.indexOf(g)) : 0;
+    const info = computeGuestMoodInfo(g, activeGenre, isClubFull, qIdx);
+    checkCandidate(g.gridX, g.gridY, refOriginY, 18 * scale, info);
+  }
+
+  // 2. Check exterior sidewalk pedestrians
+  for (const ped of pedestrians) {
+    const info = computePedestrianMoodInfo(ped, activeGenre);
+    checkCandidate(ped.gridX, ped.gridY, streetOriginY, 18 * scale, info);
+  }
+
+  // 3. Check hired staff members on active floor
+  for (const sm of staffMembers) {
+    if (sm.floor !== activeFloor) continue;
+    const mappedRole =
+      sm.role === 'BOUNCER'
+        ? 'SECURITY'
+        : sm.role === 'WAITER'
+        ? 'WAITER'
+        : 'BARTENDER';
+    const info = computeStaffMoodInfo(sm.uid, mappedRole, activeGenre, sm.name);
+    checkCandidate(sm.gridX, sm.gridY, originY, 20 * scale, info);
+  }
+
+  // 4. Check Resident DJ at DJ Booth & Bartenders behind Bar Units on active floor
+  for (const item of items) {
+    if (item.floor !== activeFloor) continue;
+    const cat = getCatalogItem(item.catalogId);
+    if (!cat) continue;
+    const fp = getRotatedFootprint(cat, item.rotation);
+    if (cat.category === 'DJ_BOOTH' && cat.id !== 'dj_speaker_stack') {
+      const info = computeStaffMoodInfo('staff_dj_resident', 'DJ', activeGenre);
+      checkCandidate(
+        item.gridX + fp.width * 0.5,
+        item.gridY + 0.45,
+        originY,
+        32 * scale,
+        info
+      );
+    } else if (cat.category === 'BAR_UNIT') {
+      const info = computeStaffMoodInfo('staff_bartender_main', 'BARTENDER', activeGenre);
+      checkCandidate(
+        item.gridX + fp.width * 0.5,
+        item.gridY + fp.depth * 0.5,
+        originY,
+        24 * scale,
+        info
+      );
+    }
+  }
+
+  return bestMatch ? (bestMatch as { dist: number; info: SpriteMoodInfo }).info : null;
+}
 

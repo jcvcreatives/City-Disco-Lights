@@ -80,6 +80,7 @@ export type BubbleType =
   | 'SPARKLE'
   | 'CHAT'
   | 'CASH'
+  | 'EXCLAMATION'
   | 'ANGRY_LIGHT'
   | 'ANGRY_QUEUE'
   | 'ANGRY_SEAT'
@@ -117,6 +118,8 @@ export interface GuestAgent {
   seatPosture?: GuestSeatPosture;
   facingDir?: 'NE' | 'NW' | 'SE' | 'SW';
   assignedSlotId?: string;
+  chatText?: string;
+  chatTimer?: number;
 }
 
 export interface FloatingText {
@@ -801,27 +804,71 @@ export const STAFF_CATALOG: StaffCatalogItem[] = [
 ];
 
 export const INITIAL_STAFF_MEMBERS: StaffMemberAgent[] = [
-  // Starter Bartender stationed behind the top-left wooden bar counter
+  // Starter Bartender #1 stationed behind the main right-side Neon Bar Counter (init_bar_1 at 7,2)
   {
     uid: 'staff_init_bartender_1',
     catalogId: 'staff_bartender',
     role: 'BARTENDER',
     name: 'Roxy (Mixologist)',
     floor: 1,
-    postGridX: 1,
-    postGridY: 1,
-    gridX: 1.1,
-    gridY: 0.55,
+    postGridX: 7,
+    postGridY: 3,
+    gridX: 7.32,
+    gridY: 3.1,
     path: [],
     taskState: 'MIXING_DRINK',
     taskTimer: 2.5,
-    carryingDrinkColor: '#fbbf24',
-    drinksServed: 14,
+    carryingDrinkColor: '#e879f9',
+    drinksServed: 18,
     guestsCheckedIn: 0,
     uniformColor: '#3b82f6',
-    hairColor: '#1e1b4b',
+    hairColor: '#4ade80',
     actionBubble: '🍸',
-    bubbleTimer: 3,
+    bubbleTimer: 3.5,
+  },
+  // Starter Bartender #2 stationed behind the lower right-side Bar Counter (init_bar_2 at 7,5)
+  {
+    uid: 'staff_init_bartender_2',
+    catalogId: 'staff_bartender',
+    role: 'BARTENDER',
+    name: 'Jett (Mixologist)',
+    floor: 1,
+    postGridX: 7,
+    postGridY: 6,
+    gridX: 7.32,
+    gridY: 6.1,
+    path: [],
+    taskState: 'MIXING_DRINK',
+    taskTimer: 2.1,
+    carryingDrinkColor: '#22d3ee',
+    drinksServed: 15,
+    guestsCheckedIn: 0,
+    uniformColor: '#8b5cf6',
+    hairColor: '#38bdf8',
+    actionBubble: '🍸',
+    bubbleTimer: 3.2,
+  },
+  // Starter Bartender #3 stationed behind the top-left Bar Counter (init_bar_3 at 1,0)
+  {
+    uid: 'staff_init_bartender_3',
+    catalogId: 'staff_bartender',
+    role: 'BARTENDER',
+    name: 'Vesper (Mixologist)',
+    floor: 1,
+    postGridX: 2,
+    postGridY: 0,
+    gridX: 2.0,
+    gridY: 0.34,
+    path: [],
+    taskState: 'MIXING_DRINK',
+    taskTimer: 2.8,
+    carryingDrinkColor: '#fbbf24',
+    drinksServed: 12,
+    guestsCheckedIn: 0,
+    uniformColor: '#ec4899',
+    hairColor: '#facc15',
+    actionBubble: '🍸',
+    bubbleTimer: 3.0,
   },
   // Starter Bouncer stationed near the front entrance door (2, 9)
   {

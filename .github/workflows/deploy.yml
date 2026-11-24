@@ -1,4 +1,4 @@
-name: Build & Auto-Update GitHub Pages
+name: Build & Deploy GitHub Pages
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -15,13 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_and_update:
+  build_and_deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -31,43 +29,12 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build production bundle (updates assets/, docs/, and dist/)
+      - name: Build production bundle
         env:
           GITHUB_ACTIONS: "true"
         run: |
-          node -e '
-            const fs = require("fs");
-            let html = fs.readFileSync("index.html", "utf8");
-            if (!/<script[^>]+src=["\x27]\.?\/src\/main\.tsx["\x27]/i.test(html)) {
-              html = html.replace("<div id=\"root\"></div>", "<div id=\"root\"></div>\n    <script type=\"module\" src=\"/src/main.tsx\"></script>");
-              fs.writeFileSync("index.html", html, "utf8");
-            }
-          '
           npm run build
-          test -f dist/assets/app.bundle.js
-          ls -lh dist/assets/
-          mkdir -p assets docs/assets
-          cp -Rf dist/assets/* assets/
-          cp -Rf dist/assets/* docs/assets/
-          cp -f dist/index.html docs/index.html
-          git checkout -- index.html || true
-
-      - name: Add .nojekyll markers
-        run: |
-          touch ./.nojekyll
           touch ./dist/.nojekyll
-          touch ./docs/.nojekyll
-
-      - name: Commit updated prebuilt bundles back to branch (for Branch Deploy mode)
-        continue-on-error: true
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f assets/ docs/ dist/ .nojekyll
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: auto-update compiled game bundle [skip ci]"
-            git push
-          fi
 
       - name: Configure GitHub Pages
         continue-on-error: true
@@ -79,7 +46,8 @@ jobs:
         with:
           path: './dist'
 
-      - name: Deploy to GitHub Pages (for Actions Deploy mode)
+      - name: Deploy to GitHub Pages
         id: deployment
         continue-on-error: true
         uses: actions/deploy-pages@v4
+
