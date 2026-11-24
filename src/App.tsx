@@ -38,6 +38,7 @@ import {
   ActiveBoothBottleService,
   CATALOG_ITEMS,
   CatalogItem,
+  createNextTierQuest,
   DRINK_MIXES,
   FloatingText,
   FloorLevel,
@@ -50,7 +51,9 @@ import {
   LEVEL_1_DIVE_BAR_ITEMS,
   ParkingUpgradeState,
   PlacedItem,
+  QuestCategoryTag,
   QuestTask,
+  QuestTrackType,
   STAFF_CATALOG,
   StaffCatalogItem,
   StaffMemberAgent,
@@ -816,10 +819,16 @@ export default function App() {
   const [cameraZoom, setCameraZoom] = useState<number>(1.0);
   const [cameraResetTick, setCameraResetTick] = useState<number>(0);
 
-  // Quests & Trophies
+  // Quests, Streak Multiplier & VIP Jackpot Chest
   const [quests, setQuests] = useState<QuestTask[]>(INITIAL_QUESTS);
+  const [questStreak, setQuestStreak] = useState<number>(2);
+  const [jackpotProgress, setJackpotProgress] = useState<number>(2);
+  const [questsCompletedTotal, setQuestsCompletedTotal] = useState<number>(2);
+  const [questCategoryFilter, setQuestCategoryFilter] = useState<'ALL' | QuestCategoryTag>('ALL');
+  const [isQuestTrackerMinimized, setIsQuestTrackerMinimized] = useState<boolean>(false);
   const [queueCount, setQueueCount] = useState<number>(2);
   const [hypeBlastEvent, setHypeBlastEvent] = useState<HypeBlastEvent | null>(null);
+  const staffRevenueTickRef = useRef<number>(0);
 
   // Staff Management System
   const [staffMembers, setStaffMembers] = useState<StaffMemberAgent[]>(
@@ -1035,27 +1044,24 @@ export default function App() {
     [cameraZoom]
   );
 
-  // Sync Quests Progress
-  useEffect(() => {
+  // Dynamic Quest Progress Engine: every action advances the matching quest track in real time
+  const advanceQuestProgress = useCallback((track: QuestTrackType, delta: number) => {
+    if (delta <= 0) return;
     setQuests((prev) =>
       prev.map((q) => {
-        if (q.id === 'quest_lighting') {
-          return { ...q, currentValue: Math.min(q.targetValue, clubMetrics.lightingCount + 1) };
-        }
-        if (q.id === 'quest_dancefloor') {
-          return { ...q, currentValue: Math.min(q.targetValue, clubMetrics.danceTileCount) };
-        }
-        if (q.id === 'quest_drinks') {
-          const upgraded = activeDrinkId !== 'drink_draft_beer' || clubMetrics.maxBarTier > 1 ? 1 : 0;
-          return { ...q, currentValue: upgraded };
-        }
-        if (q.id === 'quest_floor2') {
-          return { ...q, currentValue: unlockedFloors >= 2 ? 1 : 0 };
-        }
-        return q;
+        if (q.track !== track || q.claimed) return q;
+        const nextVal = Math.min(q.targetValue, q.currentValue + delta);
+        if (nextVal === q.currentValue) return q;
+        return { ...q, currentValue: nextVal };
       })
     );
-  }, [clubMetrics, activeDrinkId, unlockedFloors]);
+  }, []);
+
+  const questStreakMultiplier = useMemo(() => {
+    const mults = [1.0, 1.25, 1.5, 2.0, 2.5];
+    const idx = Math.max(0, Math.min(mults.length - 1, questStreak - 1));
+    return mults[idx];
+  }, [questStreak]);
 
   const addXp = useCallback(
     (amount: number) => {
@@ -1077,10 +1083,17 @@ export default function App() {
 
   const handleEarnRevenue = useCallback(
     (cashDelta: number, xpDelta: number) => {
-      if (cashDelta > 0) setCash((c) => c + cashDelta);
+      if (cashDelta > 0) {
+        setCash((c) => c + cashDelta);
+        advanceQuestProgress('CLUB_REVENUE', cashDelta);
+        staffRevenueTickRef.current += 1;
+        if (staffRevenueTickRef.current % 3 === 0) {
+          advanceQuestProgress('STAFF_TEAM', 1);
+        }
+      }
       if (xpDelta > 0) addXp(xpDelta);
     },
-    [addXp]
+    [addXp, advanceQuestProgress]
   );
 
   // Sync soundEngine pause/mute state & subscribe to AudioContext unlock status
@@ -1127,6 +1140,7 @@ export default function App() {
         soundEngine.setActivePattern(pat);
       }
       addXp(20);
+      advanceQuestProgress('DJ_HYPE_DROP', 1);
       floatingTextsRef.current.push({
         id: `song_${performance.now()}`,
         text: `♫ DJ SPINNING: ${song.title.toUpperCase()} (${song.bpm} BPM)`,
@@ -1137,7 +1151,7 @@ export default function App() {
         age: 0,
       });
     },
-    [clubSongs, customPatterns, activePattern, addXp, activeFloor]
+    [clubSongs, customPatterns, activePattern, addXp, activeFloor, advanceQuestProgress]
   );
 
   const handleTriggerBassDrop = useCallback(() => {
@@ -1145,6 +1159,8 @@ export default function App() {
     setEnergy((e) => (e >= 2 ? e - 2 : maxEnergy));
     setCash((c) => c + 320);
     addXp(55);
+    advanceQuestProgress('DJ_HYPE_DROP', 1);
+    advanceQuestProgress('CLUB_REVENUE', 320);
     triggerHypeBlast(48, clubMetrics.totalHype + 48, clubMetrics.tipBonus + 0.15);
     floatingTextsRef.current.push({
       id: `bass_${performance.now()}`,
@@ -1155,7 +1171,7 @@ export default function App() {
       color: '#a855f7',
       age: 0,
     });
-  }, [addXp, triggerHypeBlast, clubMetrics.totalHype, clubMetrics.tipBonus, activeFloor]);
+  }, [addXp, advanceQuestProgress, triggerHypeBlast, clubMetrics.totalHype, clubMetrics.tipBonus, activeFloor]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1182,6 +1198,8 @@ export default function App() {
     setPartyCount((p) => p + 1);
     setCash((c) => c + 550);
     addXp(110);
+    advanceQuestProgress('PARTY_FEVER', 1);
+    advanceQuestProgress('CLUB_REVENUE', 550);
     setEnergy((e) => (e > 1 ? e - 1 : maxEnergy));
     triggerHypeBlast(65, clubMetrics.totalHype + 65, clubMetrics.tipBonus + 0.25);
     floatingTextsRef.current.push({
@@ -1263,6 +1281,7 @@ export default function App() {
       setParkingState((p) => ({ ...p, bouncerCount: Math.min(4, p.bouncerCount + 1) }));
     }
     addXp(55);
+    advanceQuestProgress('STAFF_TEAM', 1);
     soundEngine.playPlaceItem();
     floatingTextsRef.current.push({
       id: `hire_${performance.now()}`,
@@ -1416,6 +1435,7 @@ export default function App() {
       newItem,
     ]);
     addXp(35);
+    advanceQuestProgress('DANCE_FLOOR', 1);
     soundEngine.playPlaceItem();
     floatingTextsRef.current.push({
       id: `place_${performance.now()}`,
@@ -1457,6 +1477,7 @@ export default function App() {
           };
         })
       );
+      advanceQuestProgress('STAFF_TEAM', 1);
       soundEngine.playPlaceItem();
       floatingTextsRef.current.push({
         id: `reloc_${performance.now()}`,
@@ -1538,6 +1559,7 @@ export default function App() {
                   : p
               )
             );
+            advanceQuestProgress('DANCE_FLOOR', 1);
             soundEngine.playPlaceItem();
             floatingTextsRef.current.push({
               id: `move_decor_${performance.now()}`,
@@ -1686,6 +1708,8 @@ export default function App() {
 
     setCash((c) => c + totalPayout);
     addXp(65);
+    advanceQuestProgress('BOTTLE_SERVICE', 1);
+    advanceQuestProgress('CLUB_REVENUE', totalPayout);
     setHypeSurgeBonus((h) => Math.min(240, h + Math.round(tray.hypeBoost * 0.45)));
     soundEngine.playCashRegister();
     soundEngine.playUpgradeFanfare();
@@ -1780,6 +1804,7 @@ export default function App() {
             : p
         )
       );
+      advanceQuestProgress('DANCE_FLOOR', 1);
       soundEngine.playPlaceItem();
     } else {
       soundEngine.playError();
@@ -1800,6 +1825,7 @@ export default function App() {
           { uid: `f2_seat_${Date.now()}`, catalogId: 'seat_velvet_booth', floor: 2, gridX: 8, gridY: 3, rotation: 0 },
         ]);
         addXp(250);
+        advanceQuestProgress('DANCE_FLOOR', 1);
         soundEngine.playUpgradeFanfare();
       } else {
         soundEngine.playError();
@@ -1825,6 +1851,7 @@ export default function App() {
         { uid: `f3_seat_${Date.now()}`, catalogId: 'seat_champagne_pod', floor: 3, gridX: 7, gridY: 6, rotation: 0 },
       ]);
       addXp(450);
+      advanceQuestProgress('DANCE_FLOOR', 1);
       soundEngine.playUpgradeFanfare();
     } else {
       setActiveFloor((f) => ((f % unlockedFloors) + 1) as FloorLevel);
@@ -1886,12 +1913,199 @@ export default function App() {
     }
   };
 
+  const handleClaimQuest = (questId: string) => {
+    const q = quests.find((item) => item.id === questId);
+    if (!q || q.currentValue < q.targetValue || q.claimed) return;
+
+    const finalCash = Math.round(q.rewardCash * questStreakMultiplier);
+    const finalGems = q.rewardGems + (questStreak >= 4 ? 1 : 0);
+    const finalXp = Math.round(q.rewardXp * questStreakMultiplier);
+
+    setCash((c) => c + finalCash);
+    setGems((g) => g + finalGems);
+    addXp(finalXp);
+    setQuestStreak((s) => Math.min(5, s + 1));
+    setQuestsCompletedTotal((t) => t + 1);
+    setJackpotProgress((p) => Math.min(3, p + 1));
+    setHypeSurgeBonus((h) => Math.min(250, h + 35));
+
+    soundEngine.playCashRegister();
+    soundEngine.playUpgradeFanfare();
+    triggerHypeBlast(42, clubMetrics.totalHype + 42, clubMetrics.tipBonus + 0.18);
+
+    // Replace claimed quest immediately with Tier + 1 so the player never runs out of goals
+    const nextTierQuest = createNextTierQuest(q);
+    setQuests((prev) => prev.map((item) => (item.id === questId ? nextTierQuest : item)));
+
+    floatingTextsRef.current.push({
+      id: `quest_claim_${performance.now()}_${Math.random()}`,
+      text: `🏆 ${q.title.toUpperCase()} COMPLETE! +$${finalCash} · +${finalGems}💎 (${questStreakMultiplier}x STREAK 🔥)`,
+      floor: activeFloor,
+      gridX: 4.2,
+      gridY: 4.0,
+      color: '#facc15',
+      age: 0,
+    });
+  };
+
+  const handleClaimJackpotChest = () => {
+    if (jackpotProgress < 3) {
+      soundEngine.playError();
+      return;
+    }
+    const jackpotCash = Math.round(2500 * questStreakMultiplier);
+    const jackpotGems = 8;
+    const jackpotXp = 350;
+
+    setJackpotProgress(0);
+    setCash((c) => c + jackpotCash);
+    setGems((g) => g + jackpotGems);
+    addXp(jackpotXp);
+    setHypeSurgeBonus(220);
+    soundEngine.playCashRegister();
+    soundEngine.playUpgradeFanfare();
+    triggerHypeBlast(110, clubMetrics.totalHype + 110, clubMetrics.tipBonus + 0.45);
+
+    // Automatically launch a free 24K Gold Supernova Sparkler Parade across all VIP booths on the active floor!
+    const goldTray = VIP_BOTTLE_SERVICE_TRAYS[2] || selectedBottleTray;
+    const floorVipBooths = placedItems.filter(
+      (p) => p.floor === activeFloor && isVipBoothCatalogId(p.catalogId)
+    );
+    floorVipBooths.forEach((b) =>
+      serveVipBoothBottleService(b.uid, goldTray, 'VIP Jackpot Chest')
+    );
+
+    floatingTextsRef.current.push({
+      id: `jackpot_${performance.now()}`,
+      text: `🎁 VIP NEON JACKPOT CHEST! +$${jackpotCash.toLocaleString()} · +${jackpotGems}💎 & SPARKLER PARADE!`,
+      floor: activeFloor,
+      gridX: 4.5,
+      gridY: 3.5,
+      color: '#f472b6',
+      age: 0,
+    });
+  };
+
+  const handleQuestQuickAction = (q: QuestTask) => {
+    soundEngine.playClick();
+    switch (q.track) {
+      case 'BOTTLE_SERVICE': {
+        const floorVipBooths = placedItems.filter(
+          (p) => p.floor === activeFloor && isVipBoothCatalogId(p.catalogId)
+        );
+        if (floorVipBooths.length > 0) {
+          const target =
+            floorVipBooths.find(
+              (b) => activeBottleServices[b.uid]?.status !== 'ACTIVE_SPARKLERS'
+            ) || floorVipBooths[0];
+          serveVipBoothBottleService(target.uid, selectedBottleTray);
+        } else {
+          setActiveDockTab('DECORATE');
+          setBuildCategory('SEATING');
+        }
+        break;
+      }
+      case 'DJ_HYPE_DROP': {
+        handleTriggerBassDrop();
+        break;
+      }
+      case 'MOOD_BOOST': {
+        setIsMoodPanelOpen(true);
+        const targetGuest =
+          guestsRef.current.find((g) => g.floor === activeFloor && g.state !== 'QUEUEING') ||
+          guestsRef.current[0];
+        if (targetGuest) {
+          targetGuest.hype = 100;
+          targetGuest.chatText = 'VIP Drink on the house?! Best club ever!! 🔥';
+          targetGuest.chatTimer = 6.5;
+          setCash((c) => c + 120);
+          addXp(25);
+          advanceQuestProgress('MOOD_BOOST', 1);
+          advanceQuestProgress('CLUB_REVENUE', 120);
+          soundEngine.playCashRegister();
+          floatingTextsRef.current.push({
+            id: `quick_mood_${performance.now()}`,
+            text: `🔥 ${targetGuest.name.toUpperCase()} MOOD ECSTATIC! +$120 TIP`,
+            floor: activeFloor,
+            gridX: targetGuest.gridX,
+            gridY: targetGuest.gridY,
+            color: '#4ade80',
+            age: 0,
+          });
+        }
+        break;
+      }
+      case 'MIXOLOGY_CRAFT': {
+        setActiveDockTab('TONIGHT');
+        setDrinkServingsRemaining((s) => s + 30);
+        const craftCash = activeDrink.sellPrice * 4;
+        setCash((c) => c + craftCash);
+        addXp(35);
+        advanceQuestProgress('MIXOLOGY_CRAFT', 1);
+        advanceQuestProgress('CLUB_REVENUE', craftCash);
+        soundEngine.playCashRegister();
+        floatingTextsRef.current.push({
+          id: `quick_craft_${performance.now()}`,
+          text: `🍸 CRAFTED +30 ${activeDrink.name.toUpperCase()}! +$${craftCash}`,
+          floor: activeFloor,
+          gridX: 2.5,
+          gridY: 1.5,
+          color: '#22d3ee',
+          age: 0,
+        });
+        break;
+      }
+      case 'DANCE_FLOOR': {
+        setActiveDockTab('DECORATE');
+        break;
+      }
+      case 'PARTY_FEVER': {
+        handleThrowParty();
+        break;
+      }
+      case 'STAFF_TEAM': {
+        setActiveDockTab('STAFF');
+        break;
+      }
+      case 'CLUB_REVENUE': {
+        handleTriggerBassDrop();
+        break;
+      }
+    }
+  };
+
   const filteredCatalog = useMemo(() => {
     if (buildCategory === 'ALL') return CATALOG_ITEMS;
     return CATALOG_ITEMS.filter((i) => i.category === buildCategory);
   }, [buildCategory]);
 
   const unclaimedQuestCount = quests.filter((q) => q.currentValue >= q.targetValue && !q.claimed).length;
+
+  const pinnedQuests = useMemo(() => {
+    return [...quests]
+      .sort((a, b) => {
+        const aDone = a.currentValue >= a.targetValue ? 1 : 0;
+        const bDone = b.currentValue >= b.targetValue ? 1 : 0;
+        if (aDone !== bDone) return bDone - aDone;
+        const aPct = a.currentValue / Math.max(1, a.targetValue);
+        const bPct = b.currentValue / Math.max(1, b.targetValue);
+        return bPct - aPct;
+      })
+      .slice(0, 3);
+  }, [quests]);
+
+  const filteredQuests = useMemo(() => {
+    const list =
+      questCategoryFilter === 'ALL'
+        ? quests
+        : quests.filter((q) => q.categoryTag === questCategoryFilter);
+    return [...list].sort((a, b) => {
+      const aDone = a.currentValue >= a.targetValue ? 1 : 0;
+      const bDone = b.currentValue >= b.targetValue ? 1 : 0;
+      if (aDone !== bDone) return bDone - aDone;
+      return b.currentValue / Math.max(1, b.targetValue) - a.currentValue / Math.max(1, a.targetValue);
+    });
+  }, [quests, questCategoryFilter]);
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#0b0816] select-none font-sans">
@@ -2423,6 +2637,8 @@ export default function App() {
                         setEnergy((e) => (e >= 2 ? e - 2 : maxEnergy));
                         setCash((c) => c + 280);
                         addXp(65);
+                        advanceQuestProgress('DJ_HYPE_DROP', 1);
+                        advanceQuestProgress('CLUB_REVENUE', 280);
                         soundEngine.playUpgradeFanfare();
                         floatingTextsRef.current.push({
                           id: `ded_${performance.now()}`,
@@ -2557,8 +2773,8 @@ export default function App() {
           </div>
 
           {/* ==================== TOP-RIGHT HUD CLUSTER ==================== */}
-          {/* Dark stat pills (Crowd, Gems, Stars), bright magenta THROW A PARTY button, Happy Hour Rush event tracker */}
-          <div className="flex flex-col items-end gap-2 pointer-events-auto">
+          {/* Dark stat pills (Crowd, Gems, Stars), bright magenta THROW A PARTY button, Happy Hour Rush & Pinned Quest Streak Tracker */}
+          <div className="flex flex-col items-end gap-1.5 pointer-events-auto">
             {/* Dark Stat Pills Row (Crowd, Cash on mobile, Gems, Stars) */}
             <div className="flex flex-wrap items-center justify-end gap-1.5">
               {/* Mobile Cash Pill */}
@@ -2618,35 +2834,173 @@ export default function App() {
               </div>
             </div>
 
-            {/* Bright Magenta THROW A PARTY Button */}
-            <button
-              onClick={handleThrowParty}
-              className="px-4 py-2 rounded-full bg-gradient-to-r from-[#ec4899] via-[#d946ef] to-[#a855f7] hover:from-[#f472b6] hover:to-[#c084fc] border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116,0_0_20px_rgba(236,72,153,0.6)] text-white font-black text-xs sm:text-sm tracking-wider uppercase flex items-center gap-2 cursor-pointer active:translate-y-0.5 transition-all"
-            >
-              <Sparkles className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-              <span>THROW A PARTY</span>
-            </button>
+            {/* Bright Magenta THROW A PARTY + Happy Hour Compact Row */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setActiveDockTab((t) => (t === 'PARTIES' ? null : 'PARTIES'));
+                }}
+                className="px-2.5 py-1.5 rounded-full bg-[#130d24]/92 border-2 border-[#111116] shadow-[0_3px_0_#111116] flex items-center gap-1.5 cursor-pointer hover:border-pink-400/60 transition-colors"
+              >
+                <span className="text-xs">🍹</span>
+                <span className="text-[10px] font-mono font-bold text-cyan-300">
+                  2x Tips · {formattedHappyHour}
+                </span>
+              </button>
 
-            {/* Happy Hour Rush Event Tracker */}
-            <button
-              onClick={() => {
-                soundEngine.playClick();
-                setActiveDockTab((t) => (t === 'PARTIES' ? null : 'PARTIES'));
-              }}
-              className="px-3 py-1.5 rounded-2xl bg-[#130d24]/92 border-2 border-[#111116] shadow-[0_3px_0_#111116] flex items-center gap-2.5 cursor-pointer hover:border-pink-400/60 transition-colors"
-            >
-              <div className="w-7 h-7 rounded-xl bg-gradient-to-b from-amber-400 to-orange-600 border border-[#111116] flex items-center justify-center text-sm">
-                🍹
-              </div>
-              <div className="text-left">
-                <div className="text-[10px] font-black uppercase tracking-wider text-pink-300 leading-none">
-                  Happy Hour Rush
+              <button
+                onClick={handleThrowParty}
+                className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#ec4899] via-[#d946ef] to-[#a855f7] hover:from-[#f472b6] hover:to-[#c084fc] border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116,0_0_20px_rgba(236,72,153,0.6)] text-white font-black text-xs tracking-wider uppercase flex items-center gap-1.5 cursor-pointer active:translate-y-0.5 transition-all"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300" />
+                <span>THROW A PARTY</span>
+              </button>
+            </div>
+
+            {/* ==================== LIVE PINNED QUEST & JACKPOT STREAK TRACKER ==================== */}
+            {isQuestTrackerMinimized ? (
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setIsQuestTrackerMinimized(false);
+                }}
+                className="px-3 py-1.5 rounded-2xl bg-[#130d24]/95 border-2 border-amber-400/80 shadow-[0_4px_0_#111116,0_0_16px_rgba(250,204,21,0.3)] flex items-center gap-2 cursor-pointer hover:border-cyan-300"
+              >
+                <span className="text-sm">🏆</span>
+                <div className="text-left">
+                  <div className="text-[9px] font-black uppercase text-amber-300 leading-none">
+                    VIP Quests · 🔥 {questStreakMultiplier}x Streak
+                  </div>
+                  <div className="text-[10px] font-mono font-bold text-white mt-0.5">
+                    {unclaimedQuestCount > 0 ? (
+                      <span className="text-emerald-300">{unclaimedQuestCount} READY TO CLAIM!</span>
+                    ) : (
+                      <span>Jackpot Chest {jackpotProgress}/3 🎁</span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-[11px] font-mono font-bold text-white mt-0.5">
-                  2x Bar Tips · <span className="text-cyan-300">{formattedHappyHour}</span>
+              </button>
+            ) : (
+              <div className="w-[245px] sm:w-[275px] rounded-2xl bg-[#130d24]/95 backdrop-blur-md border-[2.5px] border-[#111116] shadow-[0_5px_0_#111116,0_0_20px_rgba(250,204,21,0.22)] p-2 text-white space-y-1.5">
+                {/* Header: Quest Streak Multiplier + Jackpot Chest Bar + Minimize / Open All */}
+                <div className="flex items-center justify-between gap-1 border-b border-purple-500/30 pb-1">
+                  <button
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setActiveDockTab((t) => (t === 'TROPHIES' ? null : 'TROPHIES'));
+                    }}
+                    className="flex items-center gap-1.5 text-left cursor-pointer"
+                  >
+                    <span className="text-xs">🏆</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                      LIVE QUESTS
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded-full bg-gradient-to-r from-orange-500 to-amber-400 text-slate-950 font-black text-[9px]">
+                      🔥 {questStreakMultiplier}x
+                    </span>
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {jackpotProgress >= 3 ? (
+                      <button
+                        onClick={handleClaimJackpotChest}
+                        className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-amber-300 via-yellow-400 to-pink-400 text-slate-950 font-black text-[9px] uppercase animate-pulse cursor-pointer border border-[#111116]"
+                      >
+                        🎁 OPEN JACKPOT!
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          soundEngine.playClick();
+                          setActiveDockTab('TROPHIES');
+                        }}
+                        title="Claim 3 quests to unlock the VIP Neon Jackpot Chest (+$2,500, +8💎 & Free Gold Sparkler Parade!)"
+                        className="px-1.5 py-0.5 rounded bg-purple-950 border border-amber-400/40 text-[9px] font-mono font-bold text-amber-200 cursor-pointer"
+                      >
+                        🎁 {jackpotProgress}/3 Chest
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setIsQuestTrackerMinimized(true);
+                      }}
+                      title="Minimize Quest Tracker"
+                      className="w-5 h-5 rounded bg-purple-900/70 hover:bg-purple-800 flex items-center justify-center text-purple-200 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Top 2 Active / Claimable Quests */}
+                <div className="space-y-1.5">
+                  {pinnedQuests.slice(0, 2).map((q) => {
+                    const isReady = q.currentValue >= q.targetValue;
+                    const pct = Math.min(100, Math.round((q.currentValue / Math.max(1, q.targetValue)) * 100));
+                    const boostedCash = Math.round(q.rewardCash * questStreakMultiplier);
+                    return (
+                      <div
+                        key={q.id}
+                        className={`p-1.5 rounded-xl border transition-all ${
+                          isReady
+                            ? 'bg-gradient-to-r from-amber-500/25 via-emerald-500/20 to-purple-900/50 border-amber-300'
+                            : 'bg-[#1b1233]/90 border-purple-500/30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span className="text-xs shrink-0">{q.badgeEmoji}</span>
+                            <span className="text-[11px] font-black text-white truncate">
+                              {q.title}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-mono font-bold text-cyan-300 shrink-0">
+                            {q.track === 'CLUB_REVENUE'
+                              ? `$${q.currentValue}/$${q.targetValue}`
+                              : `${q.currentValue}/${q.targetValue}`}
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-1.5 rounded-full bg-[#090514] overflow-hidden my-1">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isReady
+                                ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-emerald-400'
+                                : 'bg-gradient-to-r from-fuchsia-500 to-cyan-400'
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[9px] font-mono font-bold text-emerald-300">
+                            +${boostedCash} · +{q.rewardGems}💎
+                          </span>
+                          {isReady ? (
+                            <button
+                              onClick={() => handleClaimQuest(q.id)}
+                              className="px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-400 to-emerald-400 hover:from-amber-300 hover:to-emerald-300 text-slate-950 font-black text-[9px] uppercase cursor-pointer border border-[#111116] shadow"
+                            >
+                              🎁 CLAIM ({questStreakMultiplier}x)
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleQuestQuickAction(q)}
+                              className="px-2 py-0.5 rounded-md bg-cyan-400/20 hover:bg-cyan-400/35 border border-cyan-400/60 text-cyan-200 font-black text-[9px] uppercase cursor-pointer"
+                            >
+                              ⚡ {q.actionLabel}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            </button>
+            )}
           </div>
         </div>
 
@@ -2755,6 +3109,8 @@ export default function App() {
                           soundEngine.playCashRegister();
                           setCash((c) => c + 120);
                           addXp(25);
+                          advanceQuestProgress('MOOD_BOOST', 1);
+                          advanceQuestProgress('CLUB_REVENUE', 120);
                           const g = guestsRef.current.find((x) => x.id === selectedSpriteMood.id);
                           if (g) {
                             g.hype = 100;
@@ -3229,6 +3585,7 @@ export default function App() {
                           lotTier: Math.min(3, p.lotTier + 1) as 1 | 2 | 3,
                         }));
                         addXp(80);
+                        advanceQuestProgress('DANCE_FLOOR', 1);
                         soundEngine.playUpgradeFanfare();
                       }}
                       className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-amber-400 text-left flex items-center justify-between cursor-pointer"
@@ -3259,6 +3616,7 @@ export default function App() {
                           ropeTier: Math.min(3, p.ropeTier + 1) as 1 | 2 | 3,
                         }));
                         addXp(75);
+                        advanceQuestProgress('DANCE_FLOOR', 1);
                         soundEngine.playUpgradeFanfare();
                       }}
                       className="p-2 rounded-xl bg-[#1d1436] border-2 border-[#0D0D14] hover:border-pink-400 text-left flex items-center justify-between cursor-pointer"
@@ -3410,8 +3768,11 @@ export default function App() {
                     <button
                       onClick={() => {
                         setDrinkServingsRemaining((s) => s + 30);
-                        setCash((c) => c + activeDrink.sellPrice * 4);
+                        const craftCash = activeDrink.sellPrice * 4;
+                        setCash((c) => c + craftCash);
                         addXp(35);
+                        advanceQuestProgress('MIXOLOGY_CRAFT', 1);
+                        advanceQuestProgress('CLUB_REVENUE', craftCash);
                         soundEngine.playCashRegister();
                       }}
                       className="px-3 py-1 rounded-lg bg-emerald-400 hover:bg-emerald-300 border border-[#0D0D14] text-slate-950 font-black text-xs cursor-pointer"
@@ -3430,6 +3791,7 @@ export default function App() {
                             setActiveDrinkId(drink.id);
                             setDrinkPrepRemainingSec(Math.max(1, Math.round(drink.prepTimeSec)));
                             setDrinkServingsRemaining(36 + drink.tier * 16);
+                            advanceQuestProgress('MIXOLOGY_CRAFT', 1);
                             soundEngine.playCashRegister();
                           }}
                           className={`p-2.5 rounded-xl border-2 text-left cursor-pointer ${
@@ -3618,6 +3980,8 @@ export default function App() {
                             setGems((g) => g - 2);
                             setCash((c) => c + 650);
                             addXp(90);
+                            advanceQuestProgress('PARTY_FEVER', 1);
+                            advanceQuestProgress('CLUB_REVENUE', 650);
                             soundEngine.playUpgradeFanfare();
                             guestsRef.current.push({
                               id: `celeb_${Date.now()}_${idx}`,
@@ -3675,57 +4039,189 @@ export default function App() {
                 </div>
               )}
 
-              {/* 7. TROPHIES TAB */}
+              {/* 7. TROPHIES TAB (ESCALATING QUESTS, HOT-STREAK MULTIPLIER & VIP JACKPOT CHEST) */}
               {activeDockTab === 'TROPHIES' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                  {quests.map((q) => {
-                    const isDone = q.currentValue >= q.targetValue;
-                    return (
-                      <div
-                        key={q.id}
-                        className="p-2.5 rounded-xl bg-[#1d1436] border-2 border-[#111116] flex flex-col justify-between gap-1.5"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs font-black text-amber-300">🏆 {q.title}</span>
-                          <span className="text-[10px] font-mono font-bold text-cyan-300">
-                            {q.currentValue}/{q.targetValue}
+                <div className="space-y-2.5">
+                  {/* Top Banner: Hot-Streak Combo Multiplier & 3-Quest VIP Neon Jackpot Chest */}
+                  <div className="p-2.5 rounded-xl bg-gradient-to-r from-[#1e1238] via-[#2a1548] to-[#1a1033] border-2 border-amber-400/60 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-amber-400 to-orange-600 border-2 border-[#111116] flex items-center justify-center text-lg shadow">
+                        🎁
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-amber-300 uppercase">
+                            VIP Neon Jackpot Chest ({jackpotProgress}/3 Quests)
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-400 text-slate-950 font-black text-[10px]">
+                            🔥 {questStreakMultiplier}x STREAK BONUS
                           </span>
                         </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-[10px] font-mono text-emerald-300">
-                            +${q.rewardCash} · +{q.rewardGems}💎
+                        <div className="text-[11px] text-purple-200 mt-0.5">
+                          Complete 3 quests to unlock{' '}
+                          <span className="font-bold text-emerald-300">
+                            +${Math.round(2500 * questStreakMultiplier).toLocaleString()} Cash
                           </span>
-                          {q.claimed ? (
-                            <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5">
-                              <Check className="w-3 h-3" /> Claimed
-                            </span>
-                          ) : (
-                            <button
-                              disabled={!isDone}
-                              onClick={() => {
-                                setCash((c) => c + q.rewardCash);
-                                setGems((g) => g + q.rewardGems);
-                                addXp(q.rewardXp);
-                                setQuests((prev) =>
-                                  prev.map((item) =>
-                                    item.id === q.id ? { ...item, claimed: true } : item
-                                  )
-                                );
-                                soundEngine.playUpgradeFanfare();
-                              }}
-                              className={`px-2 py-0.5 rounded border border-[#111116] text-[10px] font-black cursor-pointer ${
-                                isDone
-                                  ? 'bg-amber-400 text-slate-950'
-                                  : 'bg-purple-950 text-purple-400 cursor-not-allowed'
+                          , <span className="font-bold text-fuchsia-300">+8💎 Gems</span> &amp; a{' '}
+                          <span className="font-bold text-amber-300">
+                            Free 24K Gold Sparkler Parade
+                          </span>
+                          ! ({questsCompletedTotal} Quests Mastered)
+                        </div>
+                        {/* 3-Segment Jackpot Progress Bar */}
+                        <div className="flex items-center gap-1.5 mt-1.5 max-w-xs">
+                          {[1, 2, 3].map((step) => (
+                            <div
+                              key={step}
+                              className={`h-2 flex-1 rounded-full border border-[#111116] transition-all ${
+                                jackpotProgress >= step
+                                  ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-pink-400 shadow-[0_0_8px_#facc15]'
+                                  : 'bg-[#0c0718]'
                               }`}
-                            >
-                              {isDone ? 'Claim Trophy' : 'Locked'}
-                            </button>
-                          )}
+                            />
+                          ))}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+
+                    <button
+                      disabled={jackpotProgress < 3}
+                      onClick={handleClaimJackpotChest}
+                      className={`px-3.5 py-2 rounded-xl border-2 border-[#111116] font-black text-xs uppercase cursor-pointer transition-all ${
+                        jackpotProgress >= 3
+                          ? 'bg-gradient-to-r from-amber-300 via-yellow-400 to-pink-400 text-slate-950 shadow-[0_0_16px_rgba(250,204,21,0.75)] animate-pulse'
+                          : 'bg-purple-950/70 text-purple-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {jackpotProgress >= 3
+                        ? `🎁 OPEN JACKPOT (+$${Math.round(2500 * questStreakMultiplier).toLocaleString()})`
+                        : `${3 - jackpotProgress} More Quest${3 - jackpotProgress === 1 ? '' : 's'} to Unlock`}
+                    </button>
+                  </div>
+
+                  {/* Category Filter Pills */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                      {(
+                        [
+                          { id: 'ALL', label: '★ All Tracks (8)' },
+                          { id: 'VIP RUSH', label: '🍾 VIP Rush' },
+                          { id: 'CROWD HYPE', label: '🔥 Crowd Hype' },
+                          { id: 'DJ STUDIO', label: '🔊 DJ Studio' },
+                          { id: 'TYCOON EMPIRE', label: '🪩 Tycoon Empire' },
+                        ] as const
+                      ).map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => {
+                            soundEngine.playClick();
+                            setQuestCategoryFilter(tab.id);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase whitespace-nowrap cursor-pointer border ${
+                            questCategoryFilter === tab.id
+                              ? 'bg-amber-400 text-slate-950 border-[#111116]'
+                              : 'bg-[#1b1233] text-purple-200 border-purple-700/40 hover:border-amber-400/60'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {unclaimedQuestCount > 0 && (
+                      <span className="text-[10px] font-black text-emerald-300 uppercase">
+                        ✨ {unclaimedQuestCount} Quest{unclaimedQuestCount > 1 ? 's' : ''} Ready to Claim!
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Escalating Quest Cards Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+                    {filteredQuests.map((q) => {
+                      const isDone = q.currentValue >= q.targetValue;
+                      const pct = Math.min(
+                        100,
+                        Math.round((q.currentValue / Math.max(1, q.targetValue)) * 100)
+                      );
+                      const boostedCash = Math.round(q.rewardCash * questStreakMultiplier);
+                      const boostedXp = Math.round(q.rewardXp * questStreakMultiplier);
+                      return (
+                        <div
+                          key={q.id}
+                          className={`p-2.5 rounded-xl border-2 flex flex-col justify-between gap-1.5 transition-all ${
+                            isDone
+                              ? 'bg-gradient-to-br from-[#2b1d4a] via-[#1f2e3d] to-[#1d1436] border-amber-300 shadow-[0_0_15px_rgba(250,204,21,0.25)]'
+                              : 'bg-[#1d1436] border-[#111116] hover:border-purple-500/60'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-base shrink-0">{q.badgeEmoji}</span>
+                                <span className="text-xs font-black text-amber-300 truncate">
+                                  {q.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-500/40 text-[9px] font-mono font-black text-fuchsia-300">
+                                  TIER {q.tier} ★
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-cyan-300">
+                                  {q.track === 'CLUB_REVENUE'
+                                    ? `$${q.currentValue.toLocaleString()}/$${q.targetValue.toLocaleString()}`
+                                    : `${q.currentValue}/${q.targetValue}`}
+                                </span>
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-purple-200 mt-1 leading-snug">
+                              {q.description}
+                            </p>
+
+                            {/* Animated Neon Progress Bar */}
+                            <div className="w-full h-2 rounded-full bg-[#0a0614] border border-[#111116] overflow-hidden mt-1.5">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  isDone
+                                    ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-emerald-400'
+                                    : 'bg-gradient-to-r from-fuchsia-500 via-purple-500 to-cyan-400'
+                                }`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-purple-500/25">
+                            <div className="text-[10px] font-mono font-bold text-emerald-300">
+                              +${boostedCash.toLocaleString()} · +{q.rewardGems}💎 · +{boostedXp} XP
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {!isDone && (
+                                <button
+                                  onClick={() => handleQuestQuickAction(q)}
+                                  className="px-2.5 py-1 rounded-lg bg-cyan-400/20 hover:bg-cyan-400/35 border border-cyan-400/60 text-cyan-200 text-[10px] font-black uppercase cursor-pointer"
+                                >
+                                  ⚡ {q.actionLabel}
+                                </button>
+                              )}
+                              <button
+                                disabled={!isDone}
+                                onClick={() => handleClaimQuest(q.id)}
+                                className={`px-2.5 py-1 rounded-lg border border-[#111116] text-[10px] font-black uppercase cursor-pointer ${
+                                  isDone
+                                    ? 'bg-gradient-to-r from-amber-400 to-emerald-400 hover:from-amber-300 hover:to-emerald-300 text-slate-950 shadow'
+                                    : 'bg-purple-950/80 text-purple-400 cursor-not-allowed'
+                                }`}
+                              >
+                                {isDone ? `🎁 Claim (${questStreakMultiplier}x)` : `${pct}%`}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -4154,6 +4650,7 @@ export default function App() {
           soundEngine.setCustomAudioUrl(null);
           soundEngine.setActivePattern(newPattern);
           addXp(45);
+          advanceQuestProgress('DJ_HYPE_DROP', 1);
           floatingTextsRef.current.push({
             id: `custom_beat_${performance.now()}`,
             text: `🎛️ NEW CUSTOM BEAT LIVE: ${newSong.title.toUpperCase()} (${newSong.bpm} BPM)!`,

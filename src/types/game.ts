@@ -173,8 +173,25 @@ export interface LiveAlert {
   actionTab?: 'BUILD' | 'DRINKS' | 'PARKING' | 'DJ';
 }
 
+export type QuestTrackType =
+  | 'BOTTLE_SERVICE'
+  | 'MOOD_BOOST'
+  | 'DJ_HYPE_DROP'
+  | 'MIXOLOGY_CRAFT'
+  | 'DANCE_FLOOR'
+  | 'STAFF_TEAM'
+  | 'PARTY_FEVER'
+  | 'CLUB_REVENUE';
+
+export type QuestCategoryTag = 'VIP RUSH' | 'CROWD HYPE' | 'DJ STUDIO' | 'TYCOON EMPIRE';
+
 export interface QuestTask {
   id: string;
+  track: QuestTrackType;
+  tier: number;
+  badgeEmoji: string;
+  categoryTag: QuestCategoryTag;
+  actionLabel: string;
   title: string;
   description: string;
   targetValue: number;
@@ -746,50 +763,182 @@ export const VIP_HOTSPOT_ITEMS: PlacedItem[] = [
 
 export const INITIAL_QUESTS: QuestTask[] = [
   {
-    id: 'quest_lighting',
-    title: 'Fix the Dive Lighting',
-    description: 'Guests are complaining it is too dark! Place 1 Laser Truss or String Light in Build/Decorate.',
-    targetValue: 2,
-    currentValue: 1,
-    rewardCash: 450,
-    rewardGems: 2,
-    rewardXp: 80,
-    claimed: false,
-  },
-  {
-    id: 'quest_dancefloor',
-    title: 'Expand the Dance Floor',
-    description: 'Grow your dance floor to at least 11 dance tiles so more clubbers can drop hype.',
-    targetValue: 11,
-    currentValue: 9,
-    rewardCash: 600,
+    id: 'quest_bottle_service_t1',
+    track: 'BOTTLE_SERVICE',
+    tier: 1,
+    badgeEmoji: '🍾',
+    categoryTag: 'VIP RUSH',
+    actionLabel: 'Serve VIP Tray',
+    title: 'Sparkler Bottle Service I',
+    description: 'Tap any VIP Booth or serve a premium Bottle Service tray with sparklers to ignite VIP spending.',
+    targetValue: 1,
+    currentValue: 0,
+    rewardCash: 750,
     rewardGems: 3,
     rewardXp: 120,
     claimed: false,
   },
   {
-    id: 'quest_drinks',
-    title: 'Upgrade Mixology Menu',
-    description: 'Switch your active house drink or upgrade your bar counter to serve faster cocktails.',
-    targetValue: 1,
-    currentValue: 0,
-    rewardCash: 500,
+    id: 'quest_dj_hype_t1',
+    track: 'DJ_HYPE_DROP',
+    tier: 1,
+    badgeEmoji: '🔊',
+    categoryTag: 'DJ STUDIO',
+    actionLabel: 'Drop Sub-Bass',
+    title: 'Sub-Bass Shockwave I',
+    description: 'Drop the Sub-Bass Cannon, switch DJ genres, or dedicate a track to electrify the dance floor.',
+    targetValue: 2,
+    currentValue: 1,
+    rewardCash: 600,
     rewardGems: 2,
     rewardXp: 100,
     claimed: false,
   },
   {
-    id: 'quest_floor2',
-    title: 'Vertical Expansion: Floor 2',
-    description: 'Unlock the 2nd Floor VIP Sky Lounge via the staircase or Top-Right expansion control.',
+    id: 'quest_mood_boost_t1',
+    track: 'MOOD_BOOST',
+    tier: 1,
+    badgeEmoji: '🔥',
+    categoryTag: 'CROWD HYPE',
+    actionLabel: 'Boost Mood',
+    title: 'Crowd Euphoria Rush I',
+    description: 'Tap clubbers or boost guest moods to ECSTATIC in the Sprite Moods inspector.',
+    targetValue: 2,
+    currentValue: 1,
+    rewardCash: 550,
+    rewardGems: 2,
+    rewardXp: 95,
+    claimed: false,
+  },
+  {
+    id: 'quest_mixology_t1',
+    track: 'MIXOLOGY_CRAFT',
+    tier: 1,
+    badgeEmoji: '🍸',
+    categoryTag: 'VIP RUSH',
+    actionLabel: 'Craft Cocktails',
+    title: 'Neon Mixology Surge I',
+    description: 'Craft +30 cocktail servings or switch your active drink mix in the Tonight menu.',
     targetValue: 1,
     currentValue: 0,
-    rewardCash: 1500,
-    rewardGems: 8,
-    rewardXp: 300,
+    rewardCash: 650,
+    rewardGems: 2,
+    rewardXp: 110,
+    claimed: false,
+  },
+  {
+    id: 'quest_dancefloor_t1',
+    track: 'DANCE_FLOOR',
+    tier: 1,
+    badgeEmoji: '🪩',
+    categoryTag: 'TYCOON EMPIRE',
+    actionLabel: 'Decorate Club',
+    title: 'Neon Architect I',
+    description: 'Buy, place, or reposition any club decoration, lighting rig, or dance floor tile.',
+    targetValue: 2,
+    currentValue: 1,
+    rewardCash: 700,
+    rewardGems: 3,
+    rewardXp: 130,
+    claimed: false,
+  },
+  {
+    id: 'quest_party_fever_t1',
+    track: 'PARTY_FEVER',
+    tier: 1,
+    badgeEmoji: '🎉',
+    categoryTag: 'CROWD HYPE',
+    actionLabel: 'Throw Party',
+    title: 'Mega Laser Party I',
+    description: 'Hit THROW A PARTY or invite a VIP Celebrity to pack the floor and max out the Vibe meter.',
+    targetValue: 1,
+    currentValue: 0,
+    rewardCash: 900,
+    rewardGems: 3,
+    rewardXp: 150,
+    claimed: false,
+  },
+  {
+    id: 'quest_staff_team_t1',
+    track: 'STAFF_TEAM',
+    tier: 1,
+    badgeEmoji: '🕴️',
+    categoryTag: 'TYCOON EMPIRE',
+    actionLabel: 'Manage Staff',
+    title: 'Nightlife Crew Ops I',
+    description: 'Have your Bartenders, Waiters, and Bouncers serve drinks, check in guests, or hire new staff.',
+    targetValue: 4,
+    currentValue: 2,
+    rewardCash: 680,
+    rewardGems: 2,
+    rewardXp: 115,
+    claimed: false,
+  },
+  {
+    id: 'quest_club_revenue_t1',
+    track: 'CLUB_REVENUE',
+    tier: 1,
+    badgeEmoji: '💸',
+    categoryTag: 'TYCOON EMPIRE',
+    actionLabel: 'Collect Cash',
+    title: 'High-Roller Cashflow I',
+    description: 'Earn $1,200 in live bar sales, door cover charges, DJ tips, and VIP bottle orders.',
+    targetValue: 1200,
+    currentValue: 650,
+    rewardCash: 1000,
+    rewardGems: 4,
+    rewardXp: 180,
     claimed: false,
   },
 ];
+
+const ROMAN_TIERS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+export function createNextTierQuest(completed: QuestTask): QuestTask {
+  const nextTier = completed.tier + 1;
+  const roman = ROMAN_TIERS[nextTier - 1] || `T${nextTier}`;
+  const baseTitle = completed.title.replace(/\s+(I|II|III|IV|V|VI|VII|VIII|IX|X|T\d+)$/, '');
+
+  let nextTarget = completed.targetValue;
+  if (completed.track === 'CLUB_REVENUE') {
+    nextTarget = Math.round((completed.targetValue * 1.65) / 100) * 100;
+  } else if (completed.track === 'STAFF_TEAM') {
+    nextTarget = completed.targetValue + 3;
+  } else if (completed.track === 'BOTTLE_SERVICE' || completed.track === 'PARTY_FEVER') {
+    nextTarget = completed.targetValue + 1;
+  } else {
+    nextTarget = completed.targetValue + 2;
+  }
+
+  const nextCash = Math.round((completed.rewardCash * 1.45) / 25) * 25;
+  const nextGems = completed.rewardGems + (nextTier % 2 === 0 ? 2 : 1);
+  const nextXp = Math.round(completed.rewardXp * 1.35);
+
+  const trackDescriptions: Record<QuestTrackType, string> = {
+    BOTTLE_SERVICE: `Deliver ${nextTarget} sparkling VIP Bottle Service trays to booths across your club.`,
+    DJ_HYPE_DROP: `Trigger ${nextTarget} DJ Bass Drops, track switches, or song dedications from the booth.`,
+    MOOD_BOOST: `Boost ${nextTarget} clubbers or VIP guests into an ECSTATIC mood frenzy.`,
+    MIXOLOGY_CRAFT: `Craft or mix ${nextTarget} fresh batches of signature neon cocktails in Tonight.`,
+    DANCE_FLOOR: `Buy, place, upgrade, or reposition ${nextTarget} club items or floor expansions.`,
+    PARTY_FEVER: `Launch ${nextTarget} Mega Laser Parties or invite VIP Celebrities to the club.`,
+    STAFF_TEAM: `Complete ${nextTarget} live staff service actions or hire/station additional crew.`,
+    CLUB_REVENUE: `Generate $${nextTarget.toLocaleString()} in live nightclub revenue & VIP tips.`,
+  };
+
+  return {
+    ...completed,
+    id: `quest_${completed.track.toLowerCase()}_t${nextTier}_${Date.now()}`,
+    tier: nextTier,
+    title: `${baseTitle} ${roman}`,
+    description: trackDescriptions[completed.track],
+    targetValue: nextTarget,
+    currentValue: 0,
+    rewardCash: nextCash,
+    rewardGems: nextGems,
+    rewardXp: nextXp,
+    claimed: false,
+  };
+}
 
 export type StaffRole = 'BARTENDER' | 'BOUNCER' | 'WAITER';
 
