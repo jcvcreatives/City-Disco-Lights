@@ -26,6 +26,7 @@ import {
   STAIRS_COORD,
 } from '../utils/pathfinding';
 import { assetManager } from '../utils/assetManager';
+import { soundEngine } from '../audio/soundEngine';
 
 export interface ClubSimulationMetrics {
   totalHype: number;
@@ -255,6 +256,8 @@ interface IsometricClubCanvasProps {
   ) => void;
   cameraZoom: number;
   cameraResetTick: number;
+  onZoomChange?: (nextZoom: number) => void;
+  isEcoMode?: boolean;
   dayNightOverrideHour?: number | null;
   onCycleTimeReport?: (report: DayNightCycleReport) => void;
   onEarnRevenue: (cashDelta: number, xpDelta: number) => void;
@@ -464,6 +467,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   onBottleServiceEvent,
   cameraZoom,
   cameraResetTick,
+  onZoomChange,
+  isEcoMode = false,
   dayNightOverrideHour = null,
   onCycleTimeReport,
   onEarnRevenue,
@@ -476,6 +481,24 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   const hoveredGridRef = useRef<{ x: number; y: number } | null>(null);
   const panOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const gameHourRef = useRef<number>(18.25); // Starts at 6:15 PM Golden Sunset -> progresses into Deep Midnight Neon Peak
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStateRef = useRef<{
+    isPinching: boolean;
+    initialDist: number;
+    initialZoom: number;
+    initialMidX: number;
+    initialMidY: number;
+    initialPanX: number;
+    initialPanY: number;
+  }>({
+    isPinching: false,
+    initialDist: 0,
+    initialZoom: 1,
+    initialMidX: 0,
+    initialMidY: 0,
+    initialPanX: 0,
+    initialPanY: 0,
+  });
   const dragStateRef = useRef<{
     isDown: boolean;
     pointerId: number | null;
@@ -552,10 +575,10 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     },
     {
       id: 'car_sedan_south_1',
-      lane: 'LEFT_SOUTH',
-      gridX: -3.15,
-      gridY: -4.5,
-      speed: 2.25,
+      lane: 'FRONT_EAST',
+      gridX: -1.85,
+      gridY: 13.55,
+      speed: 2.15,
       bodyColor: '#a855f7',
       shadeColor: '#6b21a8',
       isTaxi: false,
@@ -563,25 +586,25 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     },
   ]);
 
-  // Sidewalk Pedestrians Walking Around All 4 Sides of the Building Perimeter
+  // Sidewalk Pedestrians Strolling Strictly Along the Front-Left & Front-Right Exterior Sidewalks (NEVER behind upper club walls)
   const pedestriansRef = useRef<PedestrianAgent[]>([
     {
       id: 'ped_perimeter_1',
       name: 'Sora',
-      gridX: -1.18,
-      gridY: 3.2,
+      gridX: 0.4,
+      gridY: 11.12,
       waypoints: [
-        { x: -1.18, y: 11.12 },
+        { x: -0.95, y: 11.12 },
         { x: 10.75, y: 11.12 },
-        { x: 10.75, y: -0.95 },
-        { x: -1.18, y: -0.95 },
+        { x: 10.75, y: 1.35 },
+        { x: 10.75, y: 11.12 },
       ],
-      wpIndex: 0,
+      wpIndex: 1,
       speed: 0.92,
       shirtColor: '#38bdf8',
       hairColor: '#1e1b4b',
       pantsColor: '#0f172a',
-      facingDir: 'SW',
+      facingDir: 'SE',
       bubble: 'MUSIC',
       bubbleTimer: 4,
       favoriteGenre: 'Dance',
@@ -594,9 +617,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       gridY: 11.12,
       waypoints: [
         { x: 10.75, y: 11.12 },
-        { x: 10.75, y: -0.95 },
-        { x: -1.18, y: -0.95 },
-        { x: -1.18, y: 11.12 },
+        { x: 10.75, y: 1.65 },
+        { x: 10.75, y: 11.12 },
+        { x: -0.85, y: 11.12 },
       ],
       wpIndex: 0,
       speed: 0.86,
@@ -615,9 +638,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       gridX: 10.75,
       gridY: 6.5,
       waypoints: [
-        { x: 10.75, y: -0.95 },
-        { x: -1.18, y: -0.95 },
-        { x: -1.18, y: 11.12 },
+        { x: 10.75, y: 1.45 },
+        { x: 10.75, y: 11.12 },
+        { x: 0.2, y: 11.12 },
         { x: 10.75, y: 11.12 },
       ],
       wpIndex: 0,
@@ -634,20 +657,20 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     {
       id: 'ped_perimeter_4',
       name: 'Nadia',
-      gridX: 4.5,
-      gridY: -0.95,
+      gridX: 10.78,
+      gridY: 3.4,
       waypoints: [
-        { x: -1.18, y: -0.95 },
-        { x: -1.18, y: 11.12 },
-        { x: 10.75, y: 11.12 },
-        { x: 10.75, y: -0.95 },
+        { x: 10.78, y: 11.15 },
+        { x: -0.75, y: 11.15 },
+        { x: 10.78, y: 11.15 },
+        { x: 10.78, y: 1.85 },
       ],
       wpIndex: 0,
       speed: 0.88,
       shirtColor: '#facc15',
       hairColor: '#7c2d12',
       pantsColor: '#0f172a',
-      facingDir: 'NW',
+      facingDir: 'SW',
       bubble: 'MUSIC',
       bubbleTimer: 4.5,
       favoriteGenre: 'Hip Hop',
@@ -659,10 +682,10 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       gridX: 8.8,
       gridY: 11.18,
       waypoints: [
-        { x: -1.18, y: 11.18 },
-        { x: -1.18, y: -0.95 },
-        { x: 10.75, y: -0.95 },
-        { x: 10.75, y: 11.18 },
+        { x: -0.85, y: 11.18 },
+        { x: 10.78, y: 11.18 },
+        { x: 10.78, y: 2.2 },
+        { x: 10.78, y: 11.18 },
       ],
       wpIndex: 0,
       speed: 0.91,
@@ -678,20 +701,20 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     {
       id: 'ped_perimeter_6',
       name: 'Tessa',
-      gridX: -1.18,
-      gridY: 8.4,
+      gridX: 3.8,
+      gridY: 11.16,
       waypoints: [
-        { x: -1.18, y: -0.95 },
-        { x: 10.75, y: -0.95 },
-        { x: 10.75, y: 11.18 },
-        { x: -1.18, y: 11.18 },
+        { x: 10.75, y: 11.16 },
+        { x: 10.75, y: 1.5 },
+        { x: 10.75, y: 11.16 },
+        { x: -0.65, y: 11.16 },
       ],
       wpIndex: 0,
       speed: 0.84,
       shirtColor: '#fb923c',
       hairColor: '#111116',
       pantsColor: '#1e1b4b',
-      facingDir: 'NE',
+      facingDir: 'SE',
       bubble: 'COCKTAIL',
       bubbleTimer: 4,
       favoriteGenre: 'Rock',
@@ -735,6 +758,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     activeBottleServices,
     onBottleServiceEvent,
     cameraZoom,
+    onZoomChange,
+    isEcoMode,
     dayNightOverrideHour,
     onCycleTimeReport,
     onEarnRevenue,
@@ -769,6 +794,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     activeBottleServices,
     onBottleServiceEvent,
     cameraZoom,
+    onZoomChange,
+    isEcoMode,
     dayNightOverrideHour,
     onCycleTimeReport,
     onEarnRevenue,
@@ -779,13 +806,19 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   };
 
   const getViewportTransform = (width: number, height: number, userZoom: number) => {
-    const autoScale = Math.min(1.18, Math.max(0.54, Math.min(width / 780, height / 670)));
+    const isPortraitOrPhone = width < 768;
+    const isTablet = width >= 768 && width <= 1180;
+    const autoScale = isPortraitOrPhone
+      ? Math.min(0.95, Math.max(0.46, Math.min(width / 690, height / 620)))
+      : isTablet
+      ? Math.min(1.08, Math.max(0.55, Math.min(width / 760, height / 660)))
+      : Math.min(1.18, Math.max(0.54, Math.min(width / 780, height / 670)));
     const scale = autoScale * userZoom;
     const tileW = BASE_TILE_W * scale;
     const tileH = BASE_TILE_H * scale;
     const floorLift = latestPropsRef.current.activeFloor >= 2 ? -36 * scale : 0;
-    const originX = width * (width < 640 ? 0.525 : 0.505) + panOffsetRef.current.x;
-    const originY = height * (width < 640 ? 0.205 : 0.225) + panOffsetRef.current.y + floorLift;
+    const originX = width * (width < 640 ? 0.52 : 0.505) + panOffsetRef.current.x;
+    const originY = height * (width < 640 ? 0.25 : isTablet ? 0.24 : 0.235) + panOffsetRef.current.y + floorLift;
     return { scale, tileW, tileH, originX, originY };
   };
 
@@ -804,7 +837,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     return { x: gx, y: gy };
   };
 
-  // Dedicated 60fps Game Loop (Simulation + Canvas Paint in a single requestAnimationFrame loop)
+  // Dedicated Game Loop with Adaptive Thermal Pacing for iPad & Phone Browsers
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -813,20 +846,42 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
     let animId = 0;
     let lastTimeMs = performance.now();
+    let lastPaintTimeMs = 0;
     let spawnAccumulator = 0;
     let particleEmitAccumulator = 0;
     let moodReportAccumulator = 0;
+    let revenueReportAccumulator = 0;
+    let pendingCashDelta = 0;
+    let pendingXpDelta = 0;
     let lastReportedQueueCount = -1;
 
     let viewportWidth = canvas.clientWidth || window.innerWidth;
     let viewportHeight = canvas.clientHeight || window.innerHeight;
+    let activeDpr = 1.25;
+
+    const isCoarsePointerDevice =
+      typeof window !== 'undefined' &&
+      (window.matchMedia?.('(pointer: coarse)').matches ||
+        /iPad|iPhone|iPod|Android/i.test(navigator.userAgent));
+
+    const computeOptimalDpr = () => {
+      const rawDpr = window.devicePixelRatio || 1;
+      if (latestPropsRef.current.isEcoMode) {
+        return Math.min(rawDpr, 1.15);
+      }
+      // On iPad & mobile browsers, cap retina backing store at 1.35x to prevent GPU thermal throttling/heating
+      if (isCoarsePointerDevice || (window.innerWidth <= 1180 && rawDpr > 1.35)) {
+        return Math.min(rawDpr, 1.35);
+      }
+      return Math.min(rawDpr, 1.65);
+    };
 
     const updateCanvasSize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      activeDpr = computeOptimalDpr();
       viewportWidth = canvas.clientWidth || window.innerWidth;
       viewportHeight = canvas.clientHeight || window.innerHeight;
-      const targetW = Math.floor(viewportWidth * dpr);
-      const targetH = Math.floor(viewportHeight * dpr);
+      const targetW = Math.floor(viewportWidth * activeDpr);
+      const targetH = Math.floor(viewportHeight * activeDpr);
       if (canvas.width !== targetW || canvas.height !== targetH) {
         canvas.width = targetW;
         canvas.height = targetH;
@@ -839,8 +894,10 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
     const spawnParticlesAboveDancer = (dancer: GuestAgent, count: number) => {
       const particles = dancerParticlesRef.current;
+      const maxParticles =
+        latestPropsRef.current.isEcoMode || isCoarsePointerDevice ? 48 : 85;
       for (let k = 0; k < count; k++) {
-        if (particles.length >= 160) {
+        if (particles.length >= maxParticles) {
           particles.shift();
         }
         const isBubble = Math.random() < 0.46;
@@ -1079,22 +1136,96 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           }
         }
 
-        // BPM-driven DANCER_MOVES AI randomization while guest is on the dance floor
+        // BPM-driven DANCER_MOVES & Dynamic 10-15s Synchronized Group Dancing AI
         if (guest.state === 'DANCER_MOVES' || guest.state === 'DANCING') {
           if (!guest.danceMove) {
             guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
             guest.dancePhaseOffset = Math.random() * Math.PI * 2;
           }
-          if (guest.state === 'DANCING' && guest.stateTimer < 6.5) {
+
+          // Active Synchronized Group Dance Session (10-15 seconds)
+          if (guest.groupDanceId && (guest.groupDanceTimer ?? 0) > 0) {
+            guest.groupDanceTimer = (guest.groupDanceTimer ?? 0) - dt;
             guest.state = 'DANCER_MOVES';
-            guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-            guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 4));
-          }
-          if (guest.state === 'DANCER_MOVES') {
-            guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 8) - dt;
-            if (guest.danceMoveTimer <= 0) {
+            // Keep stateTimer alive while group dance is active so members finish the routine together
+            guest.stateTimer = Math.max(guest.stateTimer, guest.groupDanceTimer + 1.0);
+
+            if (guest.groupDanceTimer <= 0) {
+              guest.groupDanceId = undefined;
+              guest.groupDanceTimer = undefined;
+              guest.groupDanceCenter = undefined;
+              guest.groupDanceSlotIndex = undefined;
+              guest.groupDanceSize = undefined;
+              guest.groupDancePattern = undefined;
+              guest.dancePhaseOffset = Math.random() * Math.PI * 2;
+            }
+          } else {
+            // Check for nearby dancing guests within 2.5 tiles on the same floor to initiate a 10-15s Synchronized Group Dance!
+            if (guest.path.length === 0 && Math.random() < dt * 0.42) {
+              const nearbyDancers = guests.filter(
+                (other) =>
+                  other.floor === guest.floor &&
+                  other.path.length === 0 &&
+                  (other.state === 'DANCING' || other.state === 'DANCER_MOVES') &&
+                  !other.groupDanceId &&
+                  Math.hypot(other.gridX - guest.gridX, other.gridY - guest.gridY) <= 2.65
+              );
+
+              if (nearbyDancers.length >= 2) {
+                const crew = nearbyDancers.slice(0, 5);
+                const groupId = `grp_${Date.now()}_${Math.floor(Math.random() * 999)}`;
+                const syncDuration = 10.0 + Math.random() * 5.0; // 10-15 seconds
+                const sharedMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
+                const patterns: Array<'CIRCLE_GROOVE' | 'LINE_SHUFFLE' | 'BOUNCE_WAVE'> = [
+                  'CIRCLE_GROOVE',
+                  'LINE_SHUFFLE',
+                  'BOUNCE_WAVE',
+                ];
+                const chosenPattern = patterns[Math.floor(Math.random() * patterns.length)];
+
+                let sumX = 0;
+                let sumY = 0;
+                for (const m of crew) {
+                  sumX += m.gridX;
+                  sumY += m.gridY;
+                }
+                const centerX = sumX / crew.length;
+                const centerY = sumY / crew.length;
+
+                crew.forEach((member, slotIdx) => {
+                  member.state = 'DANCER_MOVES';
+                  member.groupDanceId = groupId;
+                  member.groupDanceTimer = syncDuration;
+                  member.groupDanceCenter = { x: centerX, y: centerY };
+                  member.groupDanceSlotIndex = slotIdx;
+                  member.groupDanceSize = crew.length;
+                  member.groupDancePattern = chosenPattern;
+                  member.danceMove = sharedMove;
+                  member.danceMoveTimer = syncDuration;
+                  // Locked phase (or tight wave ripple for BOUNCE_WAVE) so animations synchronize
+                  member.dancePhaseOffset =
+                    chosenPattern === 'BOUNCE_WAVE' ? slotIdx * 0.28 : 0;
+                  member.stateTimer = Math.max(member.stateTimer, syncDuration + 1.5);
+                  member.hype = Math.min(100, member.hype + 12);
+                  member.bubble = slotIdx % 2 === 0 ? 'MUSIC' : 'SPARKLE';
+                  member.bubbleTimer = 5.5;
+                  member.chatText = `Synced ${chosenPattern.replace('_', ' ')} crew dance! 🕺💃🔥`;
+                  member.chatTimer = 6.0;
+                });
+              }
+            }
+
+            if (guest.state === 'DANCING' && guest.stateTimer < 6.5) {
+              guest.state = 'DANCER_MOVES';
               guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-              guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
+              guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 4));
+            }
+            if (guest.state === 'DANCER_MOVES' && !guest.groupDanceId) {
+              guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 8) - dt;
+              if (guest.danceMoveTimer <= 0) {
+                guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
+                guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
+              }
             }
           }
         }
@@ -1797,8 +1928,17 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
-      if (earnedCashThisFrame > 0 || earnedXpThisFrame > 0) {
-        props.onEarnRevenue(earnedCashThisFrame, earnedXpThisFrame);
+      // Batch revenue updates every 0.6s so React doesn't re-render on every frame (prevents iPad/phone heating & click drops)
+      pendingCashDelta += earnedCashThisFrame;
+      pendingXpDelta += earnedXpThisFrame;
+      revenueReportAccumulator += dt;
+      if (revenueReportAccumulator >= 0.6 && (pendingCashDelta > 0 || pendingXpDelta > 0)) {
+        const cashToSend = pendingCashDelta;
+        const xpToSend = pendingXpDelta;
+        pendingCashDelta = 0;
+        pendingXpDelta = 0;
+        revenueReportAccumulator = 0;
+        props.onEarnRevenue(cashToSend, xpToSend);
       }
 
       // 2C. Spawn Arriving Customers onto the Red Carpet (Even when the club is full, up to 7 customers fall in line!)
@@ -1855,9 +1995,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
-      // 2D. Periodically report all Sprite Moods (Guests, Red Carpet Queue, Pedestrians, DJ, Staff) to the HUD Side Mood Panel
+      // 2D. Periodically report all Sprite Moods (throttled to 1.6s so touch clicks inside the Mood Panel never get interrupted by DOM rebuilds)
       moodReportAccumulator += dt;
-      if (moodReportAccumulator >= 0.7 && props.onSpriteMoodListReport) {
+      if (moodReportAccumulator >= 1.6 && props.onSpriteMoodListReport) {
         moodReportAccumulator = 0;
         const moodList = buildAllSpritesMoodSnapshot(
           guests,
@@ -1876,13 +2016,30 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     let cycleReportTimer = 0;
 
     const renderFrame = (timeMs: number) => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        lastTimeMs = timeMs;
+        animId = requestAnimationFrame(renderFrame);
+        return;
+      }
+
+      const props = latestPropsRef.current;
+      // Adaptive Thermal Frame Pacing: ~42fps in Eco Mode, ~48fps on iPad/phone touch browser, 60fps on desktop
+      const minFrameIntervalMs = props.isEcoMode
+        ? 23.5
+        : isCoarsePointerDevice
+        ? 19.5
+        : 0;
+      if (minFrameIntervalMs > 0 && timeMs - lastPaintTimeMs < minFrameIntervalMs) {
+        animId = requestAnimationFrame(renderFrame);
+        return;
+      }
+      lastPaintTimeMs = timeMs;
+
       const rawDt = (timeMs - lastTimeMs) * 0.001;
-      const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+      const dt = Math.min(Math.max(rawDt, 0.001), 0.055);
       lastTimeMs = timeMs;
 
       stepSimulation60fps(dt);
-
-      const props = latestPropsRef.current;
 
       if (props.isPlaying && typeof props.dayNightOverrideHour !== 'number') {
         gameHourRef.current = (gameHourRef.current + dt * 0.32) % 24;
@@ -1892,7 +2049,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       const moodProfile = getClubMoodLightingProfile(props.activeGenre);
 
       cycleReportTimer += dt;
-      if (cycleReportTimer >= 0.65 && props.onCycleTimeReport) {
+      if (cycleReportTimer >= 1.8 && props.onCycleTimeReport) {
         cycleReportTimer = 0;
         props.onCycleTimeReport({
           hour: cycle.hour,
@@ -1903,7 +2060,11 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         });
       }
 
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetDpr = computeOptimalDpr();
+      if (Math.abs(targetDpr - activeDpr) > 0.05) {
+        updateCanvasSize();
+      }
+      const dpr = activeDpr;
       const width = viewportWidth;
       const height = viewportHeight;
       const { scale, tileW, tileH, originX, originY } = getViewportTransform(
@@ -1978,7 +2139,19 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       }
 
       const activeBpm = props.clubBpm || 124;
-      const sequencer = computeRhythmicLightingSequencer(t, activeBpm);
+      const vibeThermometerRatio = Math.min(
+        1,
+        Math.max(
+          0.24,
+          ((props.clubMetrics?.totalHype || 120) + (props.clubMetrics?.totalVibe || 80)) / 360
+        )
+      );
+      const sequencer = computeRhythmicLightingSequencer(
+        t,
+        activeBpm,
+        vibeThermometerRatio,
+        soundEngine.getCurrentStep()
+      );
 
       // 3. CLUB CUTAWAY WALLS, NEON STRIPS, SIGNS, TRUSSES & DISCO BALL (Shifted by Genre Mood Lighting Profile!)
       drawIllustratedClubShell(
@@ -2680,7 +2853,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     };
   }, [guestsRef, floatingTextsRef]);
 
-  // Unified Cross-Browser & Mobile Touch Pointer Handlers
+  // Unified Cross-Browser, iPad & Mobile Touch Pointer Handlers (with 2-Finger Pinch-to-Zoom & Wheel Zoom!)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -2693,6 +2866,24 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
+
+    activePointersRef.current.set(e.pointerId, { x: sx, y: sy });
+
+    if (activePointersRef.current.size === 2) {
+      const pts = Array.from(activePointersRef.current.values());
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      pinchStateRef.current = {
+        isPinching: true,
+        initialDist: Math.max(20, dist),
+        initialZoom: latestPropsRef.current.cameraZoom,
+        initialMidX: (pts[0].x + pts[1].x) * 0.5,
+        initialMidY: (pts[0].y + pts[1].y) * 0.5,
+        initialPanX: panOffsetRef.current.x,
+        initialPanY: panOffsetRef.current.y,
+      };
+      dragStateRef.current.hasDragged = true;
+      return;
+    }
 
     dragStateRef.current = {
       isDown: true,
@@ -2724,6 +2915,31 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     const sy = e.clientY - rect.top;
     const props = latestPropsRef.current;
 
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: sx, y: sy });
+    }
+
+    // Two-finger Pinch-to-Zoom + Two-finger Pan for iPad & Phone browsers
+    if (pinchStateRef.current.isPinching && activePointersRef.current.size >= 2) {
+      const pts = Array.from(activePointersRef.current.values());
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const ratio = dist / Math.max(20, pinchStateRef.current.initialDist);
+      const nextZoom = Math.max(
+        0.45,
+        Math.min(2.25, +(pinchStateRef.current.initialZoom * ratio).toFixed(2))
+      );
+      if (props.onZoomChange && Math.abs(nextZoom - props.cameraZoom) >= 0.01) {
+        props.onZoomChange(nextZoom);
+      }
+      const midX = (pts[0].x + pts[1].x) * 0.5;
+      const midY = (pts[0].y + pts[1].y) * 0.5;
+      panOffsetRef.current = {
+        x: Math.max(-460, Math.min(460, pinchStateRef.current.initialPanX + (midX - pinchStateRef.current.initialMidX))),
+        y: Math.max(-340, Math.min(340, pinchStateRef.current.initialPanY + (midY - pinchStateRef.current.initialMidY))),
+      };
+      return;
+    }
+
     if (dragStateRef.current.isDown && dragStateRef.current.pointerId === e.pointerId) {
       const dx = sx - dragStateRef.current.startX;
       const dy = sy - dragStateRef.current.startY;
@@ -2732,8 +2948,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       }
       if (dragStateRef.current.hasDragged) {
         panOffsetRef.current = {
-          x: Math.max(-360, Math.min(360, dragStateRef.current.initialPanX + dx)),
-          y: Math.max(-260, Math.min(260, dragStateRef.current.initialPanY + dy)),
+          x: Math.max(-460, Math.min(460, dragStateRef.current.initialPanX + dx)),
+          y: Math.max(-340, Math.min(340, dragStateRef.current.initialPanY + dy)),
         };
       }
     }
@@ -2762,6 +2978,14 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       // Ignore
     }
 
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2 && pinchStateRef.current.isPinching) {
+      pinchStateRef.current.isPinching = false;
+      dragStateRef.current.isDown = false;
+      dragStateRef.current.pointerId = null;
+      return;
+    }
+
     const wasDragged = dragStateRef.current.hasDragged;
     dragStateRef.current.isDown = false;
     dragStateRef.current.pointerId = null;
@@ -2785,8 +3009,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       props.cameraZoom
     );
 
-    // When NOT in active furniture placement/removal/edit-decor or staff placement mode,
-    // check if the user tapped on ANY sprite (Guest, Queued Customer, Sidewalk Pedestrian, DJ, or Staff) to inspect their Mood!
     const isEditingGridMode =
       Boolean(props.buildModeItem) ||
       props.isRemoveMode ||
@@ -2796,7 +3018,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       Boolean(props.relocatingStaffUid);
 
     if (!isEditingGridMode) {
-      // 1. First check if the user tapped on a VIP Booth's floating "🍾 TAP TO SERVE" Bottle Service callout badge
       const tappedBoothBadge = findTappedVipBoothBottleBadgeAtScreenPoint(
         sx,
         sy,
@@ -2814,7 +3035,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         return;
       }
 
-      // 2. Next check if the user tapped on any sprite (Guest, Queued Customer, Sidewalk Pedestrian, DJ, or Staff) to inspect their Mood
       if (props.onSelectSprite) {
         const streetZOffset = props.activeFloor >= 2 ? -(props.activeFloor - 1) * 92 * scale : 0;
         const streetOriginY = originY - streetZOffset;
@@ -2862,13 +3082,28 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     }
   };
 
+  const handleWheelZoom = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    const props = latestPropsRef.current;
+    if (!props.onZoomChange) return;
+    const zoomStep = e.ctrlKey ? -e.deltaY * 0.01 : e.deltaY < 0 ? 0.1 : -0.1;
+    const nextZoom = Math.max(0.45, Math.min(2.25, +(props.cameraZoom + zoomStep).toFixed(2)));
+    if (nextZoom !== props.cameraZoom) {
+      props.onZoomChange(nextZoom);
+    }
+  };
+
   return (
     <canvas
       ref={canvasRef}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={() => {
+      onWheel={handleWheelZoom}
+      onPointerCancel={(e) => {
+        activePointersRef.current.delete(e.pointerId);
+        if (activePointersRef.current.size < 2) {
+          pinchStateRef.current.isPinching = false;
+        }
         dragStateRef.current.isDown = false;
         dragStateRef.current.pointerId = null;
       }}
@@ -2988,8 +3223,11 @@ function drawIsoPrism(
 }
 
 /**
- * Draws the exact cyberpunk city skyline behind the nightclub with glowing cyan/magenta billboards,
- * dancing silhouette sign, smiley icon, and singer billboard on the right (matching IMG_1503.jpeg).
+ * Draws realistic 3D metropolitan downtown architecture surrounding the nightclub:
+ * - Distant atmospheric skyscraper layer with FAA red aviation warning beacons
+ * - Midground 3D perspective buildings with distinct front/left facades, shaded right side walls,
+ *   3D rooftop slabs, parapet walls, HVAC cooling units, wooden water towers, exterior iron fire escapes,
+ *   reflective glass curtain-wall mullions, brick/stone cornice ledges, and realistic warm/cool interior window lighting.
  */
 function drawIllustratedCitySkyline(
   ctx: CanvasRenderingContext2D,
@@ -2998,169 +3236,562 @@ function drawIllustratedCitySkyline(
   scale: number,
   t: number
 ) {
-  const buildings = [
-    // Far left cyan-striped skyscraper
-    { dx: -440, dy: -210, w: 72, h: 310, color: '#1b1638', roofSpire: true, stripeColor: '#22d3ee' },
-    // Left building with large magenta/cyan dancing girl neon billboard
-    { dx: -355, dy: -195, w: 82, h: 290, color: '#221842', billboard: 'DANCER' },
-    // Mid-left building with green smiley & vertical pink neon script
-    { dx: -265, dy: -225, w: 68, h: 270, color: '#2a1d4e', billboard: 'SMILEY_VERTICAL' },
-    // Inner-left building with cyan "PARTY" sign & pink rooftop sign
-    { dx: -188, dy: -210, w: 78, h: 240, color: '#231742', billboard: 'PARTY' },
-    // Right skyscraper with blue grid windows
-    { dx: 185, dy: -230, w: 88, h: 290, color: '#211940', windowGrid: true },
-    // Far-right building with huge Singer Billboard & Equalizer Heartbeat billboard
-    { dx: 280, dy: -195, w: 135, h: 310, color: '#2a1c4d', billboard: 'SINGER_AND_WAVE' },
+  ctx.save();
+
+  // 1. DISTANT BACKGROUND SKYLINE SILHOUETTES (Deep atmospheric haze & FAA red beacons)
+  const distantTowers = [
+    { dx: -520, dy: -285, w: 66, h: 320, sideW: 18, color: '#0d1021', sideColor: '#070914' },
+    { dx: -405, dy: -315, w: 74, h: 350, sideW: 20, color: '#0f1326', sideColor: '#080a17' },
+    { dx: -215, dy: -295, w: 68, h: 310, sideW: 16, color: '#0d1124', sideColor: '#070914' },
+    { dx: 130, dy: -305, w: 72, h: 325, sideW: 18, color: '#0e1225', sideColor: '#070914' },
+    { dx: 245, dy: -320, w: 84, h: 355, sideW: 22, color: '#10152a', sideColor: '#080b18' },
+    { dx: 410, dy: -275, w: 70, h: 315, sideW: 18, color: '#0c1020', sideColor: '#060812' },
   ];
 
-  for (let i = 0; i < buildings.length; i++) {
-    const b = buildings[i];
-    const bx = originX + b.dx * scale;
-    const by = originY + b.dy * scale;
-    const bw = b.w * scale;
-    const bh = b.h * scale;
+  for (let i = 0; i < distantTowers.length; i++) {
+    const dt = distantTowers[i];
+    const x = originX + dt.dx * scale;
+    const y = originY + dt.dy * scale;
+    const w = dt.w * scale;
+    const h = dt.h * scale;
+    const sw = dt.sideW * scale;
+    const syOff = -7 * scale;
 
-    // Building body with ink outline
-    ctx.fillStyle = b.color;
+    // Front face
+    ctx.fillStyle = dt.color;
+    ctx.fillRect(x, y, w, h);
+
+    // 3D right side wall
+    ctx.fillStyle = dt.sideColor;
+    ctx.beginPath();
+    ctx.moveTo(x + w, y);
+    ctx.lineTo(x + w + sw, y + syOff);
+    ctx.lineTo(x + w + sw, y + h + syOff);
+    ctx.lineTo(x + w, y + h);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle distant office window bands
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.12)';
+    for (let wy = y + 16 * scale; wy < y + h - 40 * scale; wy += 14 * scale) {
+      ctx.fillRect(x + 6 * scale, wy, w - 12 * scale, 3.5 * scale);
+    }
+
+    // Rooftop antenna spire & blinking red FAA aviation beacon
+    const spireX = x + w * 0.5;
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.4 * scale;
+    ctx.beginPath();
+    ctx.moveTo(spireX, y);
+    ctx.lineTo(spireX, y - 24 * scale);
+    ctx.stroke();
+
+    const beaconAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.6 + i * 1.4));
+    ctx.fillStyle = `rgba(2ef, 68, 68, ${beaconAlpha})`.replace('2ef', '239');
+    ctx.beginPath();
+    ctx.arc(spireX, y - 24 * scale, 2.2 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Helper to draw a realistic 3D architectural building block with front face, perspective side wall,
+  // recessed roof deck, concrete parapet coping, and rooftop HVAC unit
+  const drawRealistic3DBuildingBlock = (opts: {
+    dx: number;
+    dy: number;
+    w: number;
+    h: number;
+    depthX: number;
+    depthY: number;
+    frontTopColor: string;
+    frontBottomColor: string;
+    sideColor: string;
+    roofColor: string;
+    parapetColor: string;
+    corniceIntervals?: number[];
+  }) => {
+    const bx = originX + opts.dx * scale;
+    const by = originY + opts.dy * scale;
+    const bw = opts.w * scale;
+    const bh = opts.h * scale;
+    const dx = opts.depthX * scale;
+    const dy = opts.depthY * scale;
+
+    // 1. 3D Rooftop Deck Slab (Perspective parallelogram)
+    ctx.fillStyle = opts.roofColor;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx + dx, by + dy);
+    ctx.lineTo(bx + bw + dx, by + dy);
+    ctx.lineTo(bx + bw, by);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.stroke();
+
+    // 2. Main Front Facade with vertical architectural lighting gradient
+    const frontGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
+    frontGrad.addColorStop(0, opts.frontTopColor);
+    frontGrad.addColorStop(1, opts.frontBottomColor);
+    ctx.fillStyle = frontGrad;
     ctx.fillRect(bx, by, bw, bh);
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2 * scale;
-    ctx.strokeRect(bx, by, bw, bh);
 
-    if (b.roofSpire) {
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2 * scale;
-      for (let s = 1; s <= 3; s++) {
-        ctx.beginPath();
-        ctx.moveTo(bx + s * 18 * scale, by + 20 * scale);
-        ctx.lineTo(bx + s * 18 * scale, by + bh - 40 * scale);
-        ctx.stroke();
+    // 3. Shaded 3D Right Side Wall
+    ctx.fillStyle = opts.sideColor;
+    ctx.beginPath();
+    ctx.moveTo(bx + bw, by);
+    ctx.lineTo(bx + bw + dx, by + dy);
+    ctx.lineTo(bx + bw + dx, by + bh + dy);
+    ctx.lineTo(bx + bw, by + bh);
+    ctx.closePath();
+    ctx.fill();
+
+    // Crisp structural outlines
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.8 * scale;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.beginPath();
+    ctx.moveTo(bx + bw, by);
+    ctx.lineTo(bx + bw + dx, by + dy);
+    ctx.lineTo(bx + bw + dx, by + bh + dy);
+    ctx.lineTo(bx + bw, by + bh);
+    ctx.stroke();
+
+    // 4. Rooftop Parapet Ledge & Stone Coping
+    ctx.fillStyle = opts.parapetColor;
+    ctx.fillRect(bx - 1.5 * scale, by - 4 * scale, bw + 3 * scale, 5 * scale);
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.2 * scale;
+    ctx.strokeRect(bx - 1.5 * scale, by - 4 * scale, bw + 3 * scale, 5 * scale);
+
+    // Horizontal stone cornice ledges if specified
+    if (opts.corniceIntervals) {
+      for (const cyRatio of opts.corniceIntervals) {
+        const cy = by + bh * cyRatio;
+        ctx.fillStyle = opts.parapetColor;
+        ctx.fillRect(bx - 1 * scale, cy, bw + 2 * scale, 3.5 * scale);
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(bx, cy + 3.5 * scale, bw, 2.5 * scale);
       }
     }
 
-    if (b.windowGrid) {
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
-      for (let wy = by + 18 * scale; wy < by + bh - 40 * scale; wy += 16 * scale) {
-        for (let wx = bx + 10 * scale; wx < bx + bw - 14 * scale; wx += 15 * scale) {
-          ctx.fillRect(wx, wy, 9 * scale, 10 * scale);
+    return { bx, by, bw, bh, dx, dy };
+  };
+
+  // ===========================================================================
+  // BUILDING 1 (FAR-LEFT): GLASS CURTAIN-WALL CORPORATE SKYSCRAPER ("APEX TOWER")
+  // ===========================================================================
+  {
+    const b1 = drawRealistic3DBuildingBlock({
+      dx: -458,
+      dy: -225,
+      w: 84,
+      h: 325,
+      depthX: 22,
+      depthY: -11,
+      frontTopColor: '#1e293b',
+      frontBottomColor: '#0f172a',
+      sideColor: '#090f1d',
+      roofColor: '#1e293b',
+      parapetColor: '#475569',
+    });
+
+    // Rooftop Mechanical Penthouse Box & Twin HVAC Fans
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(b1.bx + 18 * scale, b1.by - 18 * scale, 44 * scale, 14 * scale);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.4 * scale;
+    ctx.strokeRect(b1.bx + 18 * scale, b1.by - 18 * scale, 44 * scale, 14 * scale);
+    // Louver vents on penthouse
+    ctx.fillStyle = '#0f172a';
+    for (let lv = 0; lv < 3; lv++) {
+      ctx.fillRect(
+        b1.bx + (23 + lv * 12) * scale,
+        b1.by - 14 * scale,
+        8 * scale,
+        6 * scale
+      );
+    }
+
+    // Realistic Reflective Glass Curtain-Wall Grid with Interior Lit Offices
+    const cols = 5;
+    const rows = 15;
+    const padX = 7 * scale;
+    const padY = 14 * scale;
+    const cellW = (b1.bw - padX * 2) / cols;
+    const cellH = (b1.bh - 50 * scale) / rows;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const wx = b1.bx + padX + c * cellW + 1.2 * scale;
+        const wy = b1.by + padY + r * cellH + 1.2 * scale;
+        const ww = cellW - 2.4 * scale;
+        const wh = cellH - 2.8 * scale;
+
+        // Deterministic realistic office lighting (warm tungsten, cool daylight, or dark glass reflection)
+        const hash = (r * 13 + c * 7) % 11;
+        if (hash === 0 || hash === 3 || hash === 8) {
+          // Warm executive office light
+          ctx.fillStyle = 'rgba(253, 230, 138, 0.72)';
+        } else if (hash === 1 || hash === 5 || hash === 9) {
+          // Cool LED office ceiling light
+          ctx.fillStyle = 'rgba(186, 230, 253, 0.58)';
+        } else {
+          // Dark reflective architectural glass
+          ctx.fillStyle = 'rgba(30, 58, 138, 0.38)';
+        }
+        ctx.fillRect(wx, wy, ww, wh);
+
+        // Subtle interior ceiling fixture / desk silhouette in lit rooms
+        if (hash === 0 || hash === 3 || hash === 1) {
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+          ctx.fillRect(wx, wy + wh * 0.62, ww, wh * 0.38);
         }
       }
     }
 
-    if (b.billboard === 'DANCER') {
-      // Glowing cyan/magenta vertical billboard with neon silhouette
-      const sx = bx + 10 * scale;
-      const sy = by + 55 * scale;
-      const sw = bw - 20 * scale;
-      const sh = 115 * scale;
-      fillStrokeRoundedRect(ctx, sx, sy, sw, sh, 6 * scale, '#190e38', '#22d3ee', 2.5 * scale);
-      // Neon magenta dancer silhouette wave
-      ctx.strokeStyle = '#f472b6';
-      ctx.lineWidth = 2.5 * scale;
+    // Vertical Brushed-Steel Curtain Wall Mullions
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.2 * scale;
+    for (let c = 0; c <= cols; c++) {
+      const mx = b1.bx + padX + c * cellW;
       ctx.beginPath();
-      ctx.arc(sx + sw * 0.5, sy + sh * 0.32, 9 * scale, 0, Math.PI * 2);
-      ctx.moveTo(sx + sw * 0.35, sy + sh * 0.75);
-      ctx.quadraticCurveTo(sx + sw * 0.5, sy + sh * 0.45, sx + sw * 0.68, sy + sh * 0.75);
+      ctx.moveTo(mx, b1.by + padY);
+      ctx.lineTo(mx, b1.by + padY + rows * cellH);
       ctx.stroke();
     }
 
-    if (b.billboard === 'SMILEY_VERTICAL') {
-      // Green neon smiley top + magenta vertical neon pill
-      ctx.strokeStyle = '#4ade80';
-      ctx.lineWidth = 2 * scale;
-      ctx.beginPath();
-      ctx.arc(bx + bw / 2, by + 28 * scale, 11 * scale, 0, Math.PI * 2);
-      ctx.stroke();
+    // Architectural Crown Warm-White LED Strip
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(b1.bx + 4 * scale, b1.by + 4 * scale, b1.bw - 8 * scale, 2.5 * scale);
+  }
 
-      fillStrokeRoundedRect(
-        ctx,
-        bx + 16 * scale,
-        by + 50 * scale,
-        bw - 32 * scale,
-        92 * scale,
-        10 * scale,
-        '#3b0764',
-        '#f472b6',
-        2.5 * scale
-      );
-      ctx.fillStyle = '#fbcfe8';
-      for (let k = 0; k < 4; k++) {
+  // ===========================================================================
+  // BUILDING 2 (MID-LEFT): HISTORIC RED-BRICK WAREHOUSE LOFT WITH FIRE ESCAPE & WATER TOWER
+  // ===========================================================================
+  {
+    const b2 = drawRealistic3DBuildingBlock({
+      dx: -356,
+      dy: -192,
+      w: 86,
+      h: 290,
+      depthX: 20,
+      depthY: -10,
+      frontTopColor: '#5c2d24',
+      frontBottomColor: '#381914',
+      sideColor: '#240f0c',
+      roofColor: '#27272a',
+      parapetColor: '#a8a29e',
+      corniceIntervals: [0.22, 0.78],
+    });
+
+    // Rooftop Wooden Water Tower on Steel Trestle Legs
+    const wtX = b2.bx + 50 * scale;
+    const wtY = b2.by - 32 * scale;
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.beginPath();
+    ctx.moveTo(wtX + 3 * scale, wtY + 18 * scale);
+    ctx.lineTo(wtX, b2.by - 2 * scale);
+    ctx.moveTo(wtX + 19 * scale, wtY + 18 * scale);
+    ctx.lineTo(wtX + 22 * scale, b2.by - 2 * scale);
+    ctx.moveTo(wtX + 2 * scale, wtY + 24 * scale);
+    ctx.lineTo(wtX + 20 * scale, b2.by - 4 * scale);
+    ctx.stroke();
+
+    // Wooden barrel tank + iron bands + conical roof
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(wtX + 2 * scale, wtY + 6 * scale, 18 * scale, 14 * scale);
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.2 * scale;
+    ctx.strokeRect(wtX + 2 * scale, wtY + 6 * scale, 18 * scale, 14 * scale);
+    // Conical tin roof
+    ctx.fillStyle = '#475569';
+    ctx.beginPath();
+    ctx.moveTo(wtX, wtY + 6 * scale);
+    ctx.lineTo(wtX + 11 * scale, wtY - 2 * scale);
+    ctx.lineTo(wtX + 22 * scale, wtY + 6 * scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Recessed Arch-Topped Industrial Loft Windows with Limestone Sills
+    for (let row = 0; row < 7; row++) {
+      for (let col = 0; col < 3; col++) {
+        const wx = b2.bx + (11 + col * 24) * scale;
+        const wy = b2.by + (16 + row * 34) * scale;
+        const ww = 16 * scale;
+        const wh = 22 * scale;
+
+        // Deep brick window recess
+        ctx.fillStyle = '#1c0a07';
+        ctx.fillRect(wx - 1.5 * scale, wy - 1.5 * scale, ww + 3 * scale, wh + 3 * scale);
+
+        // Warm loft interior light or dimmed studio
+        const isWarmLit = (row + col) % 2 === 0 || row === 2;
+        ctx.fillStyle = isWarmLit ? 'rgba(254, 215, 170, 0.82)' : 'rgba(51, 65, 85, 0.55)';
+        ctx.fillRect(wx, wy, ww, wh);
+
+        // Window muntin crossbars (4-pane industrial sash)
+        ctx.strokeStyle = '#1c1917';
+        ctx.lineWidth = 1.2 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
         ctx.beginPath();
-        ctx.arc(bx + bw / 2, by + (66 + k * 18) * scale, 4 * scale, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(wx + ww / 2, wy);
+        ctx.lineTo(wx + ww / 2, wy + wh);
+        ctx.moveTo(wx, wy + wh * 0.48);
+        ctx.lineTo(wx + ww, wy + wh * 0.48);
+        ctx.stroke();
+
+        // Limestone window sill
+        ctx.fillStyle = '#d6d3d1';
+        ctx.fillRect(wx - 2 * scale, wy + wh, ww + 4 * scale, 2.5 * scale);
       }
     }
 
-    if (b.billboard === 'PARTY') {
-      // Pink rooftop billboard
-      fillStrokeRoundedRect(
-        ctx,
-        bx + 14 * scale,
-        by - 28 * scale,
-        52 * scale,
-        28 * scale,
-        4 * scale,
-        '#4a044e',
-        '#f472b6',
-        2 * scale
-      );
-      // Cyan "PARTY" banner
-      fillStrokeRoundedRect(
-        ctx,
-        bx + 8 * scale,
-        by + 88 * scale,
-        bw - 16 * scale,
-        32 * scale,
-        5 * scale,
-        '#083344',
-        '#22d3ee',
-        2.2 * scale
-      );
-      ctx.fillStyle = '#67e8f9';
-      ctx.font = `800 ${Math.max(8, Math.round(11 * scale))}px "Outfit", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText('PARTY', bx + bw / 2, by + 108 * scale);
-    }
-
-    if (b.billboard === 'SINGER_AND_WAVE') {
-      // Top Singer Neon Billboard (matching top-right of IMG_1503.jpeg)
-      const sx = bx + 12 * scale;
-      const sy = by + 35 * scale;
-      const sw = bw - 24 * scale;
-      const sh = 72 * scale;
-      fillStrokeRoundedRect(ctx, sx, sy, sw, sh, 6 * scale, '#2e1065', '#e879f9', 2.5 * scale);
-      // Singer portrait silhouette
-      ctx.fillStyle = '#f472b6';
+    // Realistic Black Wrought-Iron Exterior Fire Escape Balconies & Diagonal Ladders
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.5 * scale;
+    for (let f = 1; f <= 5; f++) {
+      const fy = b2.by + (f * 34 + 34) * scale;
+      const fx = b2.bx + 32 * scale;
+      const fw = 44 * scale;
+      // Iron balcony grating & railing
+      ctx.strokeRect(fx, fy - 7 * scale, fw, 7 * scale);
       ctx.beginPath();
-      ctx.arc(sx + 28 * scale, sy + 28 * scale, 11 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(sx + 16 * scale, sy + 42 * scale, 24 * scale, 22 * scale);
-      // Neon text lines on billboard
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(sx + 52 * scale, sy + 22 * scale, 44 * scale, 6 * scale);
-      ctx.fillStyle = '#22d3ee';
-      ctx.fillRect(sx + 52 * scale, sy + 36 * scale, 34 * scale, 5 * scale);
-
-      // Lower Heartbeat / Audio Waveform Neon Billboard
-      const wx = bx + 16 * scale;
-      const wy = by + 125 * scale;
-      const ww = bw - 32 * scale;
-      const wh = 54 * scale;
-      fillStrokeRoundedRect(ctx, wx, wy, ww, wh, 6 * scale, '#0f172a', '#22d3ee', 2.2 * scale);
-      ctx.strokeStyle = '#f472b6';
-      ctx.lineWidth = 2.2 * scale;
-      ctx.beginPath();
-      ctx.moveTo(wx + 8 * scale, wy + wh / 2);
-      for (let p = 1; p <= 7; p++) {
-        const px = wx + (p / 8) * ww;
-        const amp = (p % 2 === 0 ? -14 : 14) * Math.sin(t * 4 + p) * scale;
-        ctx.lineTo(px, wy + wh / 2 + amp);
+      for (let rail = 4; rail < 44; rail += 6) {
+        ctx.moveTo(fx + rail * scale, fy - 7 * scale);
+        ctx.lineTo(fx + rail * scale, fy);
       }
-      ctx.lineTo(wx + ww - 8 * scale, wy + wh / 2);
+      // Diagonal stair flight to next floor down
+      if (f < 5) {
+        ctx.moveTo(fx + 6 * scale, fy);
+        ctx.lineTo(fx + 34 * scale, fy + 27 * scale);
+      }
       ctx.stroke();
     }
   }
+
+  // ===========================================================================
+  // BUILDING 3 (INNER-LEFT): MID-CENTURY LIMESTONE & CONCRETE BOUTIQUE HOTEL
+  // ===========================================================================
+  {
+    const b3 = drawRealistic3DBuildingBlock({
+      dx: -252,
+      dy: -214,
+      w: 88,
+      h: 270,
+      depthX: 18,
+      depthY: -9,
+      frontTopColor: '#3f3f46',
+      frontBottomColor: '#27272a',
+      sideColor: '#18181b',
+      roofColor: '#27272a',
+      parapetColor: '#a1a1aa',
+      corniceIntervals: [0.16, 0.84],
+    });
+
+    // Recessed Hotel Suites with Glass Balconies & Warm Sconce Uplighting
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 3; c++) {
+        const bx0 = b3.bx + (10 + c * 25) * scale;
+        const by0 = b3.by + (24 + r * 34) * scale;
+        const bw0 = 19 * scale;
+        const bh0 = 21 * scale;
+
+        // Recessed suite loggia
+        ctx.fillStyle = '#09090b';
+        ctx.fillRect(bx0, by0, bw0, bh0);
+
+        // Warm hotel room ambient glow & curtains
+        const suiteLit = (r * 3 + c) % 4 !== 0;
+        ctx.fillStyle = suiteLit ? 'rgba(253, 224, 71, 0.65)' : 'rgba(39, 39, 42, 0.7)';
+        ctx.fillRect(bx0 + 2 * scale, by0 + 2 * scale, bw0 - 4 * scale, bh0 - 4 * scale);
+
+        // Frosted glass balcony railing across bottom half of suite window
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.42)';
+        ctx.fillRect(bx0 - 1 * scale, by0 + bh0 - 7 * scale, bw0 + 2 * scale, 7 * scale);
+        ctx.strokeStyle = '#e4e4e7';
+        ctx.lineWidth = 1 * scale;
+        ctx.strokeRect(bx0 - 1 * scale, by0 + bh0 - 7 * scale, bw0 + 2 * scale, 7 * scale);
+      }
+    }
+
+    // Vertical Architectural Blade Sign mounted on steel brackets ("HOTEL ASTOR")
+    const signX = b3.bx - 12 * scale;
+    const signY = b3.by + 36 * scale;
+    // Steel mounting brackets
+    ctx.strokeStyle = '#18181b';
+    ctx.lineWidth = 2 * scale;
+    ctx.beginPath();
+    ctx.moveTo(signX + 12 * scale, signY + 10 * scale);
+    ctx.lineTo(b3.bx, signY + 10 * scale);
+    ctx.moveTo(signX + 12 * scale, signY + 86 * scale);
+    ctx.lineTo(b3.bx, signY + 86 * scale);
+    ctx.stroke();
+
+    fillStrokeRoundedRect(
+      ctx,
+      signX,
+      signY,
+      14 * scale,
+      98 * scale,
+      3 * scale,
+      '#18181b',
+      '#fbbf24',
+      1.6 * scale
+    );
+    ctx.fillStyle = '#fef08a';
+    ctx.font = `800 ${Math.max(7, Math.round(7.5 * scale))}px "Outfit", sans-serif`;
+    ctx.textAlign = 'center';
+    const letters = ['H', 'O', 'T', 'E', 'L'];
+    for (let l = 0; l < letters.length; l++) {
+      ctx.fillText(letters[l], signX + 7 * scale, signY + (22 + l * 16) * scale);
+    }
+  }
+
+  // ===========================================================================
+  // BUILDING 4 (INNER-RIGHT): MODERN ARCHITECTURAL HIGH-RISE CONDOMINIUMS
+  // ===========================================================================
+  {
+    const b4 = drawRealistic3DBuildingBlock({
+      dx: 174,
+      dy: -232,
+      w: 92,
+      h: 292,
+      depthX: 22,
+      depthY: -11,
+      frontTopColor: '#1e293b',
+      frontBottomColor: '#0f172a',
+      sideColor: '#090d16',
+      roofColor: '#334155',
+      parapetColor: '#64748b',
+    });
+
+    // Rooftop HVAC Chiller Unit & Communication Mast
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(b4.bx + 22 * scale, b4.by - 15 * scale, 42 * scale, 12 * scale);
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.3 * scale;
+    ctx.strokeRect(b4.bx + 22 * scale, b4.by - 15 * scale, 42 * scale, 12 * scale);
+
+    // Panoramic Floor-to-Ceiling Apartment Windows with Structural Concrete Pillars
+    for (let r = 0; r < 10; r++) {
+      const wy = b4.by + (16 + r * 25) * scale;
+      const wh = 18 * scale;
+
+      for (let c = 0; c < 2; c++) {
+        const wx = b4.bx + (10 + c * 39) * scale;
+        const ww = 33 * scale;
+
+        const isLit = (r + c * 2) % 3 !== 1;
+        ctx.fillStyle = isLit
+          ? r % 2 === 0
+            ? 'rgba(254, 240, 138, 0.62)'
+            : 'rgba(186, 230, 253, 0.52)'
+          : 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(wx, wy, ww, wh);
+
+        // Glass mullion dividers
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1.2 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
+        ctx.beginPath();
+        ctx.moveTo(wx + ww / 3, wy);
+        ctx.lineTo(wx + ww / 3, wy + wh);
+        ctx.moveTo(wx + (ww * 2) / 3, wy);
+        ctx.lineTo(wx + (ww * 2) / 3, wy + wh);
+        ctx.stroke();
+
+        // Concrete floor slab band
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(b4.bx + 4 * scale, wy + wh, b4.bw - 8 * scale, 3 * scale);
+      }
+    }
+
+    // Side-wall recessed stairwell strip windows (giving true 3D depth)
+    ctx.fillStyle = 'rgba(253, 224, 71, 0.32)';
+    for (let r = 0; r < 10; r++) {
+      const sy = b4.by + (14 + r * 25) * scale;
+      ctx.fillRect(b4.bx + b4.bw + 7 * scale, sy, 6 * scale, 14 * scale);
+    }
+  }
+
+  // ===========================================================================
+  // BUILDING 5 (FAR-RIGHT): DOWNTOWN GRANITE & BRUSHED-STEEL MEDIA COMMERCIAL COMPLEX
+  // ===========================================================================
+  {
+    const b5 = drawRealistic3DBuildingBlock({
+      dx: 282,
+      dy: -198,
+      w: 138,
+      h: 312,
+      depthX: 26,
+      depthY: -13,
+      frontTopColor: '#27272a',
+      frontBottomColor: '#18181b',
+      sideColor: '#09090b',
+      roofColor: '#27272a',
+      parapetColor: '#71717a',
+      corniceIntervals: [0.42, 0.76],
+    });
+
+    // Structural Vertical Granite Pilasters across the Facade
+    ctx.fillStyle = '#3f3f46';
+    for (let p = 0; p < 5; p++) {
+      const px = b5.bx + (6 + p * 31) * scale;
+      ctx.fillRect(px, b5.by + 4 * scale, 6 * scale, b5.bh - 8 * scale);
+    }
+
+    // Realistic Commercial Office Windows between Pilasters
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 4; c++) {
+        const wx = b5.bx + (14 + c * 31) * scale;
+        const wy = b5.by + (18 + r * 30) * scale;
+        const ww = 21 * scale;
+        const wh = 18 * scale;
+
+        const lit = (r * 3 + c) % 3 === 0;
+        ctx.fillStyle = lit ? 'rgba(253, 230, 138, 0.55)' : 'rgba(24, 24, 27, 0.85)';
+        ctx.fillRect(wx, wy, ww, wh);
+        ctx.strokeStyle = '#52525b';
+        ctx.lineWidth = 1.1 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
+      }
+    }
+
+    // Architectural Widescreen LED Media Facade mounted on Brushed-Steel Frame
+    const sx = b5.bx + 14 * scale;
+    const sy = b5.by + 30 * scale;
+    const sw = b5.bw - 28 * scale;
+    const sh = 74 * scale;
+
+    // Steel mounting shadow & frame
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(sx - 2 * scale, sy + 3 * scale, sw + 4 * scale, sh + 3 * scale);
+    fillStrokeRoundedRect(ctx, sx, sy, sw, sh, 4 * scale, '#0f172a', '#94a3b8', 2.2 * scale);
+
+    // Subtle widescreen architectural equalizer / skyline graphic inside the LED screen
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = `800 ${Math.max(8, Math.round(9.5 * scale))}px "Outfit", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText('METROPOLITAN PLAZA · LIVE AUDIO', sx + 10 * scale, sy + 18 * scale);
+
+    // Live subtle LED equalizer bars
+    for (let b = 0; b < 14; b++) {
+      const barW = (sw - 24 * scale) / 14 - 2 * scale;
+      const barX = sx + 10 * scale + b * (barW + 2 * scale);
+      const pulseH =
+        (10 + 24 * Math.abs(Math.sin(t * 3.2 + b * 0.55))) * scale;
+      const barGrad = ctx.createLinearGradient(barX, sy + sh - 10 * scale - pulseH, barX, sy + sh - 10 * scale);
+      barGrad.addColorStop(0, '#38bdf8');
+      barGrad.addColorStop(1, '#818cf8');
+      ctx.fillStyle = barGrad;
+      ctx.fillRect(barX, sy + sh - 10 * scale - pulseH, barW, pulseH);
+    }
+  }
+
+  ctx.restore();
 }
 
 /**
@@ -3225,12 +3856,14 @@ function drawIllustratedParkingAndStreet(
     ctx.fill();
   }
 
-  // 2. Concrete Sidewalk Apron framing the 10x10 Club Platform (-1.4..11.4)
+  // 2. Concrete Sidewalk Apron framing the Front-Left & Front-Right 10x10 Club Platform (no sidewalk sticking out behind upper walls)
   const sidewalkOuter = [
-    { gx: -1.35, gy: -1.35 },
-    { gx: 11.35, gy: -1.35 },
+    { gx: 0.0, gy: 0.0 },
+    { gx: 11.35, gy: 0.0 },
     { gx: 11.35, gy: 11.35 },
-    { gx: -1.35, gy: 11.35 },
+    { gx: -1.15, gy: 11.35 },
+    { gx: -1.15, gy: 9.85 },
+    { gx: 0.0, gy: 9.85 },
   ];
   ctx.beginPath();
   sidewalkOuter.forEach((pt, idx) => {
@@ -3246,7 +3879,7 @@ function drawIllustratedParkingAndStreet(
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // 3. White Crosswalk Stripes at Top-Left, Top-Right, and Front Intersections
+  // 3. White Crosswalk Stripes at Front-Right and Front Entrance Intersections
   const drawCrosswalk = (
     baseGx: number,
     baseGy: number,
@@ -3281,10 +3914,9 @@ function drawIllustratedParkingAndStreet(
     }
   };
 
-  // Top-left crosswalk, top-right crosswalk, and front pedestrian crosswalk
-  drawCrosswalk(-3.8, -1.1, 0, 0.42, 1.1, 0.22, 5);
-  drawCrosswalk(11.6, -1.1, 0, 0.42, 1.1, 0.22, 5);
+  // Front entrance pedestrian crosswalk & front-right corner crosswalk
   drawCrosswalk(1.9, 11.55, 0, 0.38, 1.15, 0.2, 5);
+  drawCrosswalk(11.55, 8.8, 0.38, 0, 0.2, 1.15, 5);
 
   // 4. Diagonal White Parking Stall Lines across the Front Asphalt Road (gy = 11.45..13.5)
   ctx.strokeStyle = 'rgba(226, 232, 240, 0.36)';
@@ -3300,7 +3932,7 @@ function drawIllustratedParkingAndStreet(
     ctx.stroke();
   }
 
-  // 5. Red Carpet Runner leading to the Back-Left Entrance Doorway & Front VIP Entry
+  // 5. Red Carpet Runner leading to the Front VIP Entry
   const drawRedCarpet = (gx0: number, gy0: number, gx1: number, gy1: number) => {
     const carpetPts = [
       { gx: gx0, gy: gy0 },
@@ -3323,11 +3955,9 @@ function drawIllustratedParkingAndStreet(
     ctx.stroke();
   };
 
-  // Back-left wall entrance red carpet runner + extended front Red Carpet Door & Queue Runner
-  drawRedCarpet(-1.3, 6.1, 0.05, 7.35);
   drawRedCarpet(-1.85, 10.0, 3.15, 11.25);
 
-  // 5B. Dashed Yellow/White Road Lane Divider Lines for Moving Traffic Lanes (gy = 14.1 & gx = -2.65)
+  // 5B. Dashed Yellow/White Road Lane Divider Lines for Front Moving Traffic Lanes (gy = 14.1)
   ctx.save();
   ctx.strokeStyle = 'rgba(250, 204, 21, 0.52)';
   ctx.lineWidth = 2.0 * scale;
@@ -3336,16 +3966,6 @@ function drawIllustratedParkingAndStreet(
     const p1y = originY + (gx + 14.1) * halfH;
     const p2x = originX + (gx + 0.75 - 14.1) * halfW;
     const p2y = originY + (gx + 0.75 + 14.1) * halfH;
-    ctx.beginPath();
-    ctx.moveTo(p1x, p1y);
-    ctx.lineTo(p2x, p2y);
-    ctx.stroke();
-  }
-  for (let gy = -3.8; gy <= 11.8; gy += 1.4) {
-    const p1x = originX + (-2.65 - gy) * halfW;
-    const p1y = originY + (-2.65 + gy) * halfH;
-    const p2x = originX + (-2.65 - (gy + 0.75)) * halfW;
-    const p2y = originY + (-2.65 + (gy + 0.75)) * halfH;
     ctx.beginPath();
     ctx.moveTo(p1x, p1y);
     ctx.lineTo(p2x, p2y);
@@ -3428,16 +4048,15 @@ function drawIllustratedParkingAndStreet(
     1.8 * scale
   );
 
-  // 6D. Orange Traffic Cones on Street Corners
+  // 6D. Orange Traffic Cones on Front-Right Street Corners
   const cones = [
-    { gx: -1.7, gy: 8.6 },
+    { gx: -1.35, gy: 10.75 },
     { gx: 10.9, gy: 10.7 },
-    { gx: 11.4, gy: 1.5 },
+    { gx: 11.35, gy: 2.8 },
   ];
   for (const c of cones) {
     const cx = originX + (c.gx - c.gy) * halfW;
     const cy = originY + (c.gx + c.gy) * halfH;
-    // Square base
     ctx.fillStyle = '#ea580c';
     ctx.beginPath();
     ctx.ellipse(cx, cy, 5 * scale, 2.6 * scale, 0, 0, Math.PI * 2);
@@ -3445,7 +4064,6 @@ function drawIllustratedParkingAndStreet(
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.4 * scale;
     ctx.stroke();
-    // Cone body
     ctx.beginPath();
     ctx.moveTo(cx - 3.8 * scale, cy);
     ctx.lineTo(cx, cy - 11.5 * scale);
@@ -3454,14 +4072,13 @@ function drawIllustratedParkingAndStreet(
     ctx.fillStyle = '#f97316';
     ctx.fill();
     ctx.stroke();
-    // White reflective collar stripe
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(cx - 2 * scale, cy - 6.5 * scale, 4 * scale, 2.2 * scale);
   }
 
-  // 6E. Red Fire Hydrant & Street Trees on Upper-Right Sidewalk (Matching top-right of IMG_1506_5bdf15ca.jpeg)
-  const hydX = originX + (4.2 - -3.1) * halfW;
-  const hydY = originY + (4.2 + -3.1) * halfH;
+  // 6E. Red Fire Hydrant & Street Tree on Front-Right Sidewalk
+  const hydX = originX + (11.15 - 8.1) * halfW;
+  const hydY = originY + (11.15 + 8.1) * halfH;
   fillStrokeRoundedRect(
     ctx,
     hydX - 3 * scale,
@@ -3474,42 +4091,7 @@ function drawIllustratedParkingAndStreet(
     1.5 * scale
   );
 
-  const streetTrees = [
-    { gx: 2.5, gy: -3.8 },
-    { gx: 6.4, gy: -2.9 },
-  ];
-  for (const tr of streetTrees) {
-    const tx = originX + (tr.gx - tr.gy) * halfW;
-    const ty = originY + (tr.gx + tr.gy) * halfH;
-    // Tree trunk
-    fillStrokeRoundedRect(
-      ctx,
-      tx - 2.5 * scale,
-      ty - 22 * scale,
-      5 * scale,
-      22 * scale,
-      1.5 * scale,
-      '#5c3a21',
-      INK,
-      1.6 * scale
-    );
-    // Rounded cartoon canopy clusters
-    for (const leaf of [
-      { dx: -7, dy: -26, r: 9, c: '#166534' },
-      { dx: 7, dy: -26, r: 9, c: '#14532d' },
-      { dx: 0, dy: -33, r: 10.5, c: '#15803d' },
-    ]) {
-      ctx.fillStyle = leaf.c;
-      ctx.beginPath();
-      ctx.arc(tx + leaf.dx * scale, ty + leaf.dy * scale, leaf.r * scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.8 * scale;
-      ctx.stroke();
-    }
-  }
-
-  // 7. Draped Warm-White String Lights on Poles along Both Upper Sidewalks (Matching IMG_1506_5bdf15ca.jpeg)
+  // 7. Draped Warm-White String Lights on Poles along the Front-Right Sidewalk
   const drawPoleStringLights = (poles: Array<{ gx: number; gy: number }>) => {
     const poleTops: Array<{ x: number; y: number }> = [];
     for (const p of poles) {
@@ -3518,7 +4100,6 @@ function drawIllustratedParkingAndStreet(
       const topY = py - 46 * scale;
       poleTops.push({ x: px, y: topY });
 
-      // Ground warm light pool
       const pool = ctx.createRadialGradient(px, py, 2 * scale, px, py, 24 * scale);
       pool.addColorStop(0, 'rgba(254, 240, 138, 0.22)');
       pool.addColorStop(1, 'rgba(254, 240, 138, 0)');
@@ -3527,7 +4108,6 @@ function drawIllustratedParkingAndStreet(
       ctx.ellipse(px, py, 24 * scale, 12 * scale, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Dark metal pole
       ctx.strokeStyle = '#3f3f46';
       ctx.lineWidth = 2.6 * scale;
       ctx.beginPath();
@@ -3535,7 +4115,6 @@ function drawIllustratedParkingAndStreet(
       ctx.lineTo(px, topY);
       ctx.stroke();
 
-      // Glowing pole top bulb
       ctx.fillStyle = '#fef08a';
       ctx.beginPath();
       ctx.arc(px, topY, 3 * scale, 0, Math.PI * 2);
@@ -3555,17 +4134,10 @@ function drawIllustratedParkingAndStreet(
     }
   };
 
-  // Left-back sidewalk string light poles & Right-back sidewalk string light poles
   drawPoleStringLights([
-    { gx: -1.15, gy: 9.2 },
-    { gx: -1.15, gy: 4.6 },
-    { gx: -1.15, gy: 0.0 },
-  ]);
-  drawPoleStringLights([
-    { gx: 0.4, gy: -1.15 },
-    { gx: 3.6, gy: -1.15 },
-    { gx: 6.8, gy: -1.15 },
-    { gx: 10.0, gy: -1.15 },
+    { gx: 11.15, gy: 1.8 },
+    { gx: 11.15, gy: 5.8 },
+    { gx: 11.15, gy: 9.8 },
   ]);
 }
 
@@ -4406,8 +4978,10 @@ function drawIllustratedClubShell(
   const moodPrimary = moodProfile?.primaryHex || '#f472b6';
   const moodSecondary = moodProfile?.secondaryHex || '#22d3ee';
   const moodTertiary = moodProfile?.tertiaryHex || '#fde047';
-  // Low-to-medium open-air walls matching IMG_1506_5bdf15ca.jpeg (no tall enclosing walls blocking view!)
-  const wallH = 64 * scale;
+  // Full-height two-tier nightclub walls (114px tall with lower + upper architectural wall sections & roof parapet cap)
+  const lowerWallH = 64 * scale;
+  const wallH = 114 * scale;
+  const parapetCapH = 6 * scale;
   const slabThickness = 7 * scale;
 
   const nw = { x: originX, y: originY };
@@ -4425,7 +4999,6 @@ function drawIllustratedClubShell(
   };
 
   // 1. Open-Air Isometric Concrete/Marble Floor Slab sitting on the street corner
-  // Front-left & front-right slab lip thickness
   ctx.beginPath();
   ctx.moveTo(sw.x, sw.y);
   ctx.lineTo(s.x, s.y);
@@ -4466,7 +5039,6 @@ function drawIllustratedClubShell(
         1
       );
 
-      // Subtle cel-shaded marble vein lines on alternating tiles (matching dark veined floor in IMG_1506_5bdf15ca.jpeg)
       if ((gx * 3 + gy * 5) % 4 === 0) {
         const cx = originX + (gx + 0.5 - (gy + 0.5)) * halfW;
         const cy = originY + (gx + 0.5 + (gy + 0.5)) * halfH;
@@ -4493,7 +5065,7 @@ function drawIllustratedClubShell(
   ctx.stroke();
   ctx.restore();
 
-  // 2. LOW-TO-MEDIUM BACK-LEFT WALL (gy = 0..10 along gx = 0) with Neon Pink Trim & Vertical Light Strips
+  // 2. FULL-HEIGHT BACK-LEFT WALL (gy = 0..10 along gx = 0, Lower + Upper Wall Tiers up to wallH = 114 * scale)
   ctx.beginPath();
   ctx.moveTo(nw.x, nw.y);
   ctx.lineTo(sw.x, sw.y);
@@ -4501,8 +5073,8 @@ function drawIllustratedClubShell(
   ctx.lineTo(nw.x, nw.y - wallH);
   ctx.closePath();
   const leftWallGrad = ctx.createLinearGradient(nw.x, nw.y - wallH, sw.x, sw.y);
-  leftWallGrad.addColorStop(0, '#2a164d');
-  leftWallGrad.addColorStop(0.5, '#1e113a');
+  leftWallGrad.addColorStop(0, '#321a5c');
+  leftWallGrad.addColorStop(0.45, '#261447');
   leftWallGrad.addColorStop(1, '#150c2b');
   ctx.fillStyle = leftWallGrad;
   ctx.fill();
@@ -4510,7 +5082,7 @@ function drawIllustratedClubShell(
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // 3. LOW-TO-MEDIUM BACK-RIGHT WALL (gx = 0..10 along gy = 0) with Neon Pink Trim & Vertical Light Strips
+  // 3. FULL-HEIGHT BACK-RIGHT WALL (gx = 0..10 along gy = 0, Lower + Upper Wall Tiers up to wallH = 114 * scale)
   ctx.beginPath();
   ctx.moveTo(nw.x, nw.y);
   ctx.lineTo(se.x, se.y);
@@ -4518,8 +5090,8 @@ function drawIllustratedClubShell(
   ctx.lineTo(nw.x, nw.y - wallH);
   ctx.closePath();
   const rightWallGrad = ctx.createLinearGradient(nw.x, nw.y - wallH, se.x, se.y);
-  rightWallGrad.addColorStop(0, '#231342');
-  rightWallGrad.addColorStop(0.5, '#1a0e33');
+  rightWallGrad.addColorStop(0, '#2a164f');
+  rightWallGrad.addColorStop(0.45, '#1f103d');
   rightWallGrad.addColorStop(1, '#120924');
   ctx.fillStyle = rightWallGrad;
   ctx.fill();
@@ -4527,16 +5099,100 @@ function drawIllustratedClubShell(
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // Glowing Genre-Mood Neon Top & Base Trim Strips along both Back Walls
+  // 3B. 3D ARCHITECTURAL UPPER ROOF PARAPET CAP & UPPER ACOUSTIC MEZZANINE BAYS (Restoring the upper left & right walls!)
+  // Left wall upper parapet coping ledge
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.y - wallH);
+  ctx.lineTo(nw.x, nw.y - wallH);
+  ctx.lineTo(nw.x, nw.y - wallH - parapetCapH);
+  ctx.lineTo(sw.x, sw.y - wallH - parapetCapH);
+  ctx.closePath();
+  ctx.fillStyle = '#3b216b';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+
+  // Right wall upper parapet coping ledge
+  ctx.beginPath();
+  ctx.moveTo(nw.x, nw.y - wallH);
+  ctx.lineTo(se.x, se.y - wallH);
+  ctx.lineTo(se.x, se.y - wallH - parapetCapH);
+  ctx.lineTo(nw.x, nw.y - wallH - parapetCapH);
+  ctx.closePath();
+  ctx.fillStyle = '#311a5c';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2 * scale;
+  ctx.stroke();
+
+  // Recessed Upper-Wall Acoustic Velvet Bays & BPM-Synced Equalizer Panels (between lowerWallH and wallH)
+  const bayRanges = [
+    [0.06, 0.26],
+    [0.30, 0.50],
+    [0.54, 0.74],
+    [0.78, 0.94],
+  ];
+  for (let bIdx = 0; bIdx < bayRanges.length; bIdx++) {
+    const [u0, u1] = bayRanges[bIdx];
+    const baySeqL = sequencer.getDecorEmissiveState(0, bIdx * 2, bIdx);
+    // Upper-Left Wall Recessed Bay
+    const lx0 = nw.x + (sw.x - nw.x) * u0;
+    const ly0 = nw.y + (sw.y - nw.y) * u0;
+    const lx1 = nw.x + (sw.x - nw.x) * u1;
+    const ly1 = nw.y + (sw.y - nw.y) * u1;
+    ctx.beginPath();
+    ctx.moveTo(lx0, ly0 - lowerWallH - 6 * scale);
+    ctx.lineTo(lx1, ly1 - lowerWallH - 6 * scale);
+    ctx.lineTo(lx1, ly1 - wallH + 7 * scale);
+    ctx.lineTo(lx0, ly0 - wallH + 7 * scale);
+    ctx.closePath();
+    ctx.fillStyle = '#160b2e';
+    ctx.fill();
+    ctx.strokeStyle = baySeqL.toggledOn ? moodSecondary : 'rgba(168, 85, 247, 0.45)';
+    ctx.lineWidth = (baySeqL.toggledOn ? 1.8 : 1.1) * scale;
+    ctx.stroke();
+
+    // Upper-Right Wall Recessed Bay
+    const baySeqR = sequencer.getDecorEmissiveState(bIdx * 2, 0, bIdx + 4);
+    const rx0 = nw.x + (se.x - nw.x) * u0;
+    const ry0 = nw.y + (se.y - nw.y) * u0;
+    const rx1 = nw.x + (se.x - nw.x) * u1;
+    const ry1 = nw.y + (se.y - nw.y) * u1;
+    ctx.beginPath();
+    ctx.moveTo(rx0, ry0 - lowerWallH - 6 * scale);
+    ctx.lineTo(rx1, ry1 - lowerWallH - 6 * scale);
+    ctx.lineTo(rx1, ry1 - wallH + 7 * scale);
+    ctx.lineTo(rx0, ry0 - wallH + 7 * scale);
+    ctx.closePath();
+    ctx.fillStyle = '#130926';
+    ctx.fill();
+    ctx.strokeStyle = baySeqR.toggledOn ? moodPrimary : 'rgba(34, 211, 238, 0.42)';
+    ctx.lineWidth = (baySeqR.toggledOn ? 1.8 : 1.1) * scale;
+    ctx.stroke();
+  }
+
+  // Glowing Genre-Mood Neon Top Crown, Mid-Mezzanine Molding & Base Trim Strips along both Full-Height Back Walls
   ctx.save();
+  // Top Roofline Neon Tube
   ctx.strokeStyle = moodPrimary;
-  ctx.lineWidth = (2.4 + sequencer.kickEnvelope * 0.95) * scale;
+  ctx.lineWidth = (2.6 + sequencer.kickEnvelope * 0.95) * scale;
   ctx.beginPath();
   ctx.moveTo(sw.x, sw.y - wallH);
   ctx.lineTo(nw.x, nw.y - wallH);
   ctx.lineTo(se.x, se.y - wallH);
   ctx.stroke();
 
+  // Mid-Wall Mezzanine Neon Divider Strip at 64 * scale
+  ctx.strokeStyle = moodSecondary;
+  ctx.lineWidth = (2.0 + sequencer.kickEnvelope * 0.65) * scale;
+  ctx.beginPath();
+  ctx.moveTo(sw.x, sw.y - lowerWallH);
+  ctx.lineTo(nw.x, nw.y - lowerWallH);
+  ctx.lineTo(se.x, se.y - lowerWallH);
+  ctx.stroke();
+
+  // Base Floor Trim Neon Tube
   ctx.strokeStyle = moodSecondary;
   ctx.lineWidth = 2 * scale;
   ctx.beginPath();
@@ -4545,7 +5201,7 @@ function drawIllustratedClubShell(
   ctx.lineTo(se.x, se.y - 1.5 * scale);
   ctx.stroke();
 
-  // Vertical Glowing Genre-Mood Neon Light Strips along both Back Walls (Sequenced to BPM!)
+  // Full-Height Vertical Glowing Genre-Mood Neon Light Pillars along both Back Walls (Sequenced to BPM!)
   const leftStrips = [0.18, 0.34, 0.56, 0.84];
   for (let i = 0; i < leftStrips.length; i++) {
     const u = leftStrips[i];
@@ -4553,7 +5209,7 @@ function drawIllustratedClubShell(
     const sy = nw.y + (sw.y - nw.y) * u;
     const stripSeq = sequencer.getDecorEmissiveState(0, u * 10, i);
     ctx.strokeStyle = i % 2 === 0 ? moodSecondary : moodPrimary;
-    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.35;
+    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.38;
     ctx.lineWidth = (stripSeq.toggledOn ? 2.8 : 1.7) * scale;
     ctx.beginPath();
     ctx.moveTo(sx, sy - 6 * scale);
@@ -4568,7 +5224,7 @@ function drawIllustratedClubShell(
     const sy = nw.y + (se.y - nw.y) * u;
     const stripSeq = sequencer.getDecorEmissiveState(u * 10, 0, i + 4);
     ctx.strokeStyle = i % 2 === 0 ? moodPrimary : moodSecondary;
-    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.35;
+    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.38;
     ctx.lineWidth = (stripSeq.toggledOn ? 2.8 : 1.7) * scale;
     ctx.beginPath();
     ctx.moveTo(sx, sy - 6 * scale);
@@ -4578,7 +5234,7 @@ function drawIllustratedClubShell(
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  // 4. SINGLE GLOWING PURPLE/CYAN ENTRANCE DOORWAY ON THE BACK-LEFT WALL (gy = 6.2..7.3 along gx = 0)
+  // 4. GLOWING PURPLE/CYAN VIP ALCOVE DOORWAY ON THE BACK-LEFT WALL (gy = 6.2..7.3 along gx = 0)
   const doorTopA = {
     x: originX + (0 - 6.15) * halfW,
     y: originY + (0 + 6.15) * halfH,
@@ -4604,9 +5260,7 @@ function drawIllustratedClubShell(
   ctx.lineWidth = 2.4 * scale;
   ctx.stroke();
 
-  // 5. GLOWING ISOMETRIC WALL NEON SIGNS (Matching IMG_1506_5bdf15ca.jpeg):
-  // - Back-Left Wall: "GOOD TIMES" (purple/pink) & "CLUB NEON" (bright cyan/white)
-  // - Back-Right Wall: "LOVE THE BASS" (bright cyan) & "COCKTAILS" (glowing pink/purple)
+  // 5. GLOWING ISOMETRIC WALL NEON SIGNS (Lower & Upper Wall Tiers on Back-Left & Back-Right Walls)
   const drawIsoWallSign = (
     wx: number,
     wy: number,
@@ -4624,13 +5278,11 @@ function drawIllustratedClubShell(
     ctx.font = `900 ${Math.max(8, Math.round(fontSize * scale))}px "Outfit", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Neon outer glow backing toggled by the BPM sequencer
     ctx.strokeStyle = glowColor;
     ctx.lineWidth = (signSeq.toggledOn ? 4.2 : 2.2) * scale;
     ctx.globalAlpha = signSeq.toggledOn ? Math.min(1, 0.55 + sequencer.kickEnvelope * 0.45) : 0.25;
     ctx.strokeText(text, 0, 0);
     ctx.globalAlpha = 1;
-    // Crisp dark ink outline + bright core
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.6 * scale;
     ctx.strokeText(text, 0, 0);
@@ -4642,7 +5294,7 @@ function drawIllustratedClubShell(
   const isoAngleLeft = -Math.atan2(halfH, halfW);
   const isoAngleRight = Math.atan2(halfH, halfW);
 
-  // Back-left wall neon signs
+  // Back-left wall lower & upper neon signs
   drawIsoWallSign(
     nw.x + (sw.x - nw.x) * 0.25,
     nw.y + (sw.y - nw.y) * 0.25 - 40 * scale,
@@ -4663,11 +5315,21 @@ function drawIllustratedClubShell(
     9.5,
     2
   );
+  drawIsoWallSign(
+    nw.x + (sw.x - nw.x) * 0.42,
+    nw.y + (sw.y - nw.y) * 0.42 - 88 * scale,
+    isoAngleLeft,
+    '★ VIP LOUNGE ★',
+    moodTertiary,
+    '#fef9c3',
+    10.5,
+    5
+  );
 
-  // Back-right wall neon signs
+  // Back-right wall lower & upper neon signs (Fixed se.y - nw.y alignment!)
   drawIsoWallSign(
     nw.x + (se.x - nw.x) * 0.44,
-    nw.y + (se.x - nw.x) * 0.22 - 44 * scale,
+    nw.y + (se.y - nw.y) * 0.44 - 42 * scale,
     isoAngleRight,
     'LOVE THE BASS',
     moodSecondary,
@@ -4684,6 +5346,16 @@ function drawIllustratedClubShell(
     '#fbcfe8',
     10.5,
     4
+  );
+  drawIsoWallSign(
+    nw.x + (se.x - nw.x) * 0.52,
+    nw.y + (se.y - nw.y) * 0.52 - 88 * scale,
+    isoAngleRight,
+    'NEON NIGHTS',
+    moodPrimary,
+    '#fdf4ff',
+    11.0,
+    6
   );
 
   // 6. VERTICAL PINK/MAGENTA LIGHTING TRUSS TOWERS WITH CYAN SPOTLIGHT CONES (Matching IMG_1506_5bdf15ca.jpeg)
@@ -5284,17 +5956,49 @@ function drawTile(
 
       const ix = Math.round(gx * 2);
       const iy = Math.round(gy * 2);
-      const stepIndex = sequencer ? sequencer.step16 : Math.floor(t * 2.5);
-      const isPrimaryBase = (ix + iy) % 2 === 0;
-      const colorIdx = isPrimaryBase
-        ? (ix + iy + Math.floor(stepIndex * 0.5)) % 2
-        : Math.abs(ix * 3 + iy * 5 + Math.floor(stepIndex * 0.5)) % palette.length;
+      const liveStep16 = sequencer ? sequencer.liveAudioStep16 : Math.floor(t * 2.5) % 16;
+      const altStep = sequencer ? sequencer.alternatingStep : Math.floor(t * 3);
+      const vibePulseEnv = sequencer ? sequencer.vibeBeatEnvelope : 0.65;
+      const vibeRatio = sequencer ? sequencer.vibeRatio : 0.5;
+
+      // Cycle alternating geometric pattern mode every 4 beat-steps (Checkerboard -> Diagonal Wave -> Row/Col Stripes -> Diamond Ring)
+      const patternMode = Math.floor(liveStep16 / 4) % 4;
+      const centerIx = Math.round((item.gridX + fp.width * 0.5) * 2);
+      const centerIy = Math.round((item.gridY + fp.depth * 0.5) * 2);
+
+      let tileParity = 0;
+      if (patternMode === 0) {
+        // Classic Alternating Checkerboard
+        tileParity = Math.abs(ix + iy) % 2;
+      } else if (patternMode === 1) {
+        // Alternating Diagonal Beat Wave
+        tileParity = Math.abs(ix - iy + 16) % 2;
+      } else if (patternMode === 2) {
+        // Alternating Dual-Axis Stripes
+        tileParity = (liveStep16 % 2 === 0 ? Math.abs(ix) : Math.abs(iy)) % 2;
+      } else {
+        // Alternating Concentric Diamond Rings from Dance Floor Center
+        tileParity = Math.round(Math.abs(ix - centerIx) + Math.abs(iy - centerIy)) % 2;
+      }
+
+      // Alternating A/B phase flips at a rate that accelerates as the Vibe thermometer rises!
+      const isActiveAlternatingPhase = tileParity === altStep % 2;
+
+      // Color selection shifts strictly in lockstep with the 16-step beat-step & alternating phase
+      const colorIdx = isActiveAlternatingPhase
+        ? Math.abs(ix + iy + liveStep16) % palette.length
+        : Math.abs(ix * 2 + iy * 3 + Math.floor(liveStep16 * 0.5) + 3) % palette.length;
       const baseColor = palette[colorIdx];
 
-      // BPM-synced rhythmic sequencer toggles and pulses each sub-tile's emissive state
+      // BPM-synced rhythmic sequencer + Vibe-accelerated alternating pulse envelope
       const emissiveState = sequencer
         ? sequencer.getDecorEmissiveState(gx, gy, ix + iy)
         : { isToggledOn: true, emissiveIntensity: 1.0, channelIndex: 0 };
+
+      // Active-phase tiles surge brightly on each Vibe-accelerated beat pulse while counter-phase tiles dip for high-contrast alternation
+      const alternatingPulseFactor = isActiveAlternatingPhase
+        ? Math.min(1, 0.78 + vibePulseEnv * (0.28 + vibeRatio * 0.18))
+        : Math.max(0.28, 0.52 - vibePulseEnv * (0.18 + vibeRatio * 0.12));
 
       // Sunken recess offset (+1.0 * scale below floor level)
       const p0x = originX + (gx - gy) * halfW;
@@ -5329,10 +6033,16 @@ function drawTile(
       ctx.lineTo(p3x, p3y);
       ctx.closePath();
       ctx.fillStyle = baseColor;
-      ctx.globalAlpha = emissiveState.isToggledOn
-        ? Math.min(1, 0.88 + emissiveState.emissiveIntensity * 0.12)
-        : 0.62;
+      ctx.globalAlpha = alternatingPulseFactor;
       ctx.fill();
+
+      // Extra additive neon bloom flash on active alternating tiles when Vibe thermometer is high
+      if (isActiveAlternatingPhase && vibePulseEnv > 0.35) {
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = Math.min(0.42, (vibePulseEnv - 0.3) * (0.24 + vibeRatio * 0.25));
+        ctx.fill();
+      }
+
       ctx.globalAlpha = 1;
       ctx.strokeStyle = '#14141F';
       ctx.lineWidth = 2.4 * scale;
@@ -5341,14 +6051,14 @@ function drawTile(
       ctx.lineWidth = 1.6 * scale;
       ctx.stroke();
 
-      // Inner sunken bevel rim (crisp cel-shaded highlight)
+      // Inner sunken bevel rim (crisp cel-shaded highlight that flares on active alternating phase)
       const cx = p0x;
       const cy = (p0y + p2y) / 2;
-      const bevelAlpha = emissiveState.isToggledOn
-        ? Math.min(0.88, 0.35 + emissiveState.emissiveIntensity * 0.42)
-        : 0.22;
+      const bevelAlpha = isActiveAlternatingPhase
+        ? Math.min(0.96, 0.48 + vibePulseEnv * 0.48)
+        : Math.max(0.14, 0.24 - vibePulseEnv * 0.08);
       ctx.strokeStyle = `rgba(255, 255, 255, ${bevelAlpha.toFixed(2)})`;
-      ctx.lineWidth = (emissiveState.isToggledOn ? 1.3 : 0.95) * scale;
+      ctx.lineWidth = (isActiveAlternatingPhase ? 1.45 + vibePulseEnv * 0.45 : 0.85) * scale;
       ctx.beginPath();
       ctx.moveTo(cx, cy - tileH * 0.17);
       ctx.lineTo(cx + tileW * 0.17, cy);
@@ -5357,13 +6067,13 @@ function drawTile(
       ctx.closePath();
       ctx.stroke();
 
-      // Specular center glow core pulsing with the BPM beat envelope
-      const coreScale = emissiveState.isToggledOn
-        ? 0.11 + (emissiveState.emissiveIntensity - 0.6) * 0.045
-        : 0.08;
-      const coreAlpha = emissiveState.isToggledOn
-        ? Math.min(0.75, 0.24 + emissiveState.emissiveIntensity * 0.32)
-        : 0.14;
+      // Specular center glow core expanding and contracting with the alternating BPM + Vibe pulse
+      const coreScale = isActiveAlternatingPhase
+        ? 0.11 + vibePulseEnv * (0.065 + vibeRatio * 0.045)
+        : 0.06 + emissiveState.emissiveIntensity * 0.02;
+      const coreAlpha = isActiveAlternatingPhase
+        ? Math.min(0.92, 0.36 + vibePulseEnv * 0.52)
+        : 0.12;
       ctx.fillStyle = `rgba(255, 255, 255, ${coreAlpha.toFixed(2)})`;
       ctx.beginPath();
       ctx.moveTo(cx, cy - tileH * coreScale);
@@ -7527,14 +8237,48 @@ function drawCharacter(
       rightHandOffsetY = (-22.0 - jumpPeak * 3.8) * scale;
       moveRingColor = '#4ade80';
     }
+
+    // Dynamic 10-15s Synchronized Group Dancing movement patterns & cohesive crew formation offset
+    if (guest.groupDanceId && (guest.groupDanceTimer ?? 0) > 0) {
+      const pattern = guest.groupDancePattern || 'CIRCLE_GROOVE';
+      if (pattern === 'CIRCLE_GROOVE') {
+        swayX += Math.cos(phase * 0.5) * 4.4 * scale;
+        bounce += Math.sin(phase * 0.5) * 1.6 * scale;
+      } else if (pattern === 'LINE_SHUFFLE') {
+        swayX += Math.sin(phase * 0.5) * 5.2 * scale;
+        bodyScaleX = Math.cos(phase * 0.5) >= 0 ? Math.abs(bodyScaleX) : -Math.abs(bodyScaleX);
+      } else if (pattern === 'BOUNCE_WAVE') {
+        swayX += Math.sin(phase) * 3.4 * scale;
+        bounce += Math.max(0, Math.sin(phase)) * 2.2 * scale;
+      }
+    }
   }
 
-  // 0. Soft Contact Shadow (no stroke ring lines around sprite)
+  // 0. Soft Contact Shadow (plus soft lineless neon glow for synchronized Group Dancers)
   const shadowY = isSittingOnBarStool
     ? py - 12.2 * scale
     : isSittingInChair
     ? py - 9.8 * scale
     : py;
+
+  if (isDancing && guest.groupDanceId && (guest.groupDanceTimer ?? 0) > 0) {
+    ctx.save();
+    ctx.fillStyle = moveRingColor;
+    ctx.globalAlpha = 0.22 + 0.12 * Math.max(0, beatSin);
+    ctx.beginPath();
+    ctx.ellipse(
+      px + swayX * 0.5,
+      shadowY,
+      12.5 * scale,
+      6.2 * scale,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+    ctx.restore();
+  }
+
   ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
   ctx.beginPath();
   ctx.ellipse(
@@ -8286,6 +9030,11 @@ interface RhythmicLightingSequencerState {
   barStep4: number; // 0..3 quarter-note beat within bar
   kickEnvelope: number; // Sharp exponential decay envelope on each beat hit (0..1)
   danceFloorPulse: number; // Smooth pulsing light wave on the dance floor (0..1)
+  vibeRatio: number; // 0.24..1.0 Vibe thermometer normalized level
+  vibePulseFreqMultiplier: number; // 1x..4x pulse frequency scaling with Vibe thermometer
+  liveAudioStep16: number; // Live 0..15 beat-step from soundEngine
+  alternatingStep: number; // Alternating A/B step counter synchronized to BPM, beat-step, and Vibe frequency
+  vibeBeatEnvelope: number; // High-frequency beat envelope accelerated by Vibe thermometer (0..1)
   channels: [number, number, number, number]; // 4 rhythmic sequencer channel intensities
   getDecorEmissiveState: (
     gridX: number,
@@ -8301,19 +9050,37 @@ interface RhythmicLightingSequencerState {
 
 function computeRhythmicLightingSequencer(
   t: number,
-  clubBpm: number
+  clubBpm: number,
+  vibeRatio: number = 0.65,
+  liveStepFromEngine?: number
 ): RhythmicLightingSequencerState {
   const safeBpm = Math.max(85, Math.min(180, clubBpm || 124));
+  const clampedVibe = Math.max(0.24, Math.min(1, vibeRatio));
+
+  // As the Vibe thermometer rises, increase the alternating pulse frequency multiplier (1x -> 2x -> 3x -> 4x)
+  const vibePulseFreqMultiplier =
+    clampedVibe >= 0.86 ? 4 : clampedVibe >= 0.68 ? 3 : clampedVibe >= 0.46 ? 2 : 1;
+
   const beatsPerSec = safeBpm / 60;
   const totalBeats = t * beatsPerSec;
   const beatPhase = totalBeats - Math.floor(totalBeats);
   const barStep4 = Math.floor(totalBeats) % 4;
-  const step16 = Math.floor(totalBeats * 4) % 16;
+  const timeStep16 = Math.floor(totalBeats * 4) % 16;
+  const step16 =
+    typeof liveStepFromEngine === 'number' ? liveStepFromEngine % 16 : timeStep16;
+
+  // Vibe-accelerated beat phase & alternating step counter synchronized to BPM + live beat-step
+  const vibeScaledBeats = totalBeats * vibePulseFreqMultiplier;
+  const vibeBeatPhase = vibeScaledBeats - Math.floor(vibeScaledBeats);
+  const vibeBeatEnvelope = Math.pow(1 - vibeBeatPhase, 1.85);
+  const stepSubdivision = Math.max(1, Math.floor(4 / vibePulseFreqMultiplier));
+  const alternatingStep =
+    Math.floor(step16 / stepSubdivision) + Math.floor(vibeScaledBeats);
 
   // Punchy exponential decay on each quarter-note beat for realistic club kick-drum light pulsing
   const kickEnvelope = Math.pow(1 - beatPhase, 2.15);
   const halfBeatEnv = Math.pow(1 - ((totalBeats * 2) % 1), 1.85);
-  const danceFloorPulse = 0.35 + 0.65 * kickEnvelope;
+  const danceFloorPulse = 0.35 + 0.65 * Math.max(kickEnvelope, vibeBeatEnvelope * 0.85);
 
   // 4-Channel 16-Step Neon Sequencer Patterns
   const patternCh0 = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0]; // Four-on-the-floor kick pulse
@@ -8335,6 +9102,11 @@ function computeRhythmicLightingSequencer(
     barStep4,
     kickEnvelope,
     danceFloorPulse,
+    vibeRatio: clampedVibe,
+    vibePulseFreqMultiplier,
+    liveAudioStep16: step16,
+    alternatingStep,
+    vibeBeatEnvelope,
     channels,
     getDecorEmissiveState(gridX: number, gridY: number, itemIndex: number = 0) {
       const hash = Math.abs(Math.round(gridX * 3 + gridY * 5 + itemIndex)) % 4;
@@ -9462,7 +10234,20 @@ function computeGuestMoodInfo(
           : 'Great view of the LED floor from this table.');
     }
   } else if (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES') {
-    if (genreMatch || guest.isCelebrity) {
+    if (guest.groupDanceId && (guest.groupDanceTimer ?? 0) > 0) {
+      moodLabel = 'ECSTATIC';
+      moodEmoji = '🕺';
+      moodColor = '#4ade80';
+      moodScore = 99;
+      const crewCount = guest.groupDanceSize || 3;
+      const patName = (guest.groupDancePattern || 'CIRCLE_GROOVE').replace('_', ' ');
+      activity = `Synced Group Dance (${crewCount} Dancers · ${patName} · ${Math.ceil(
+        guest.groupDanceTimer || 10
+      )}s)`;
+      thought =
+        guest.chatText ||
+        `Our whole crew is locked in on this ${activeGenre || 'Neon'} beat! 🔥🕺💃`;
+    } else if (genreMatch || guest.isCelebrity) {
       moodLabel = 'ECSTATIC';
       moodEmoji = '🔥';
       moodColor = '#4ade80';

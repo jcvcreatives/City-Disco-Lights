@@ -38,6 +38,10 @@ export interface ClubSongTrack {
   patternId: string;
   isCustomBeat?: boolean;
   customAudioUrl?: string;
+  streamingSource?: 'SYNTH' | 'UPLOAD' | 'YOUTUBE' | 'SPOTIFY' | 'APPLE';
+  externalId?: string;
+  thumbnailUrl?: string;
+  externalUrl?: string;
 }
 
 export interface GenreDefinition {
@@ -467,6 +471,8 @@ class SoundEngine {
   private customAudioEl: HTMLAudioElement | null = null;
   private activeCustomAudioUrl: string | null = null;
   private hasUnlockedHardware: boolean = false;
+  private externalStreamActive: boolean = false;
+  private volumeLevel: number = 0.88;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -642,11 +648,32 @@ class SoundEngine {
   public setMuted(muted: boolean) {
     this.isMuted = muted;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setValueAtTime(muted ? 0 : 0.88, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(muted ? 0 : this.volumeLevel, this.ctx.currentTime);
     }
     if (this.customAudioEl) {
-      this.customAudioEl.volume = muted ? 0 : 0.9;
+      this.customAudioEl.volume = muted ? 0 : Math.min(1, this.volumeLevel);
     }
+  }
+
+  public setVolume(vol: number) {
+    this.volumeLevel = Math.max(0, Math.min(1, vol));
+    if (this.masterGain && this.ctx && !this.isMuted) {
+      this.masterGain.gain.setValueAtTime(this.volumeLevel, this.ctx.currentTime);
+    }
+    if (this.customAudioEl && !this.isMuted) {
+      this.customAudioEl.volume = this.volumeLevel;
+    }
+  }
+
+  public setExternalStreamActive(active: boolean) {
+    this.externalStreamActive = active;
+    if (active && this.customAudioEl) {
+      this.customAudioEl.pause();
+    }
+  }
+
+  public isExternalStreamActive(): boolean {
+    return this.externalStreamActive;
   }
 
   private env(gainNode: GainNode, t: number, attack: number, decay: number, peak: number) {
@@ -767,7 +794,11 @@ class SoundEngine {
     // Notify UI step sequencer LED playhead
     this.stepListeners.forEach((cb) => cb(stepIdx));
 
-    // If an external uploaded song is actively playing, let it provide the audio
+    // If an external streaming service (YouTube / Spotify / Apple Music) or uploaded song is actively playing,
+    // keep the 16-step beat clock running for dance floor lights & chibi dancers while muting internal synth notes
+    if (this.externalStreamActive) {
+      return;
+    }
     if (this.activeCustomAudioUrl && this.customAudioEl && !this.customAudioEl.paused) {
       return;
     }

@@ -116,6 +116,12 @@ export interface GuestAgent {
   danceMove?: DancerMoveVariant;
   danceMoveTimer?: number;
   dancePhaseOffset?: number;
+  groupDanceId?: string;
+  groupDanceTimer?: number;
+  groupDanceCenter?: { x: number; y: number };
+  groupDanceSlotIndex?: number;
+  groupDanceSize?: number;
+  groupDancePattern?: 'CIRCLE_GROOVE' | 'LINE_SHUFFLE' | 'BOUNCE_WAVE';
   seatPosture?: GuestSeatPosture;
   facingDir?: 'NE' | 'NW' | 'SE' | 'SW';
   assignedSlotId?: string;
@@ -768,9 +774,9 @@ export const INITIAL_QUESTS: QuestTask[] = [
     tier: 1,
     badgeEmoji: '🍾',
     categoryTag: 'VIP RUSH',
-    actionLabel: 'Serve VIP Tray',
+    actionLabel: '🍸 Play Mixology',
     title: 'Sparkler Bottle Service I',
-    description: 'Tap any VIP Booth or serve a premium Bottle Service tray with sparklers to ignite VIP spending.',
+    description: 'Pour the 3-layer VIP recipe & lock the Neon Shaker Sweet-Spot gauge, or serve a VIP booth on the floor.',
     targetValue: 1,
     currentValue: 0,
     rewardCash: 750,
@@ -784,9 +790,9 @@ export const INITIAL_QUESTS: QuestTask[] = [
     tier: 1,
     badgeEmoji: '🔊',
     categoryTag: 'DJ STUDIO',
-    actionLabel: 'Drop Sub-Bass',
-    title: 'Sub-Bass Shockwave I',
-    description: 'Drop the Sub-Bass Cannon, switch DJ genres, or dedicate a track to electrify the dance floor.',
+    actionLabel: '🎧 Beat-Match Drop',
+    title: 'Turntable Beat-Match I',
+    description: 'Sync Deck B’s tempo to the master BPM and land 3 on-beat Sub-Bass Drops on the golden downbeat pads.',
     targetValue: 2,
     currentValue: 1,
     rewardCash: 600,
@@ -800,9 +806,9 @@ export const INITIAL_QUESTS: QuestTask[] = [
     tier: 1,
     badgeEmoji: '🔥',
     categoryTag: 'CROWD HYPE',
-    actionLabel: 'Boost Mood',
-    title: 'Crowd Euphoria Rush I',
-    description: 'Tap clubbers or boost guest moods to ECSTATIC in the Sprite Moods inspector.',
+    actionLabel: '🪩 Sync Dance Grid',
+    title: 'Neon Groove Memory I',
+    description: 'Memorize and repeat the flashing 3x3 neon dance tile sequence to trigger a synchronized group dance.',
     targetValue: 2,
     currentValue: 1,
     rewardCash: 550,
@@ -816,9 +822,9 @@ export const INITIAL_QUESTS: QuestTask[] = [
     tier: 1,
     badgeEmoji: '🍸',
     categoryTag: 'VIP RUSH',
-    actionLabel: 'Craft Cocktails',
-    title: 'Neon Mixology Surge I',
-    description: 'Craft +30 cocktail servings or switch your active drink mix in the Tonight menu.',
+    actionLabel: '🍸 Shake Cocktails',
+    title: 'Flair Shaker Challenge I',
+    description: 'Match the 3 neon liquor bottles in order and release the pressure shaker inside the green sweet-spot zone.',
     targetValue: 1,
     currentValue: 0,
     rewardCash: 650,
@@ -832,9 +838,9 @@ export const INITIAL_QUESTS: QuestTask[] = [
     tier: 1,
     badgeEmoji: '🪩',
     categoryTag: 'TYCOON EMPIRE',
-    actionLabel: 'Decorate Club',
-    title: 'Neon Architect I',
-    description: 'Buy, place, or reposition any club decoration, lighting rig, or dance floor tile.',
+    actionLabel: '🪩 Play Tile Sync',
+    title: 'Neon Grid Synchronizer I',
+    description: 'Complete the Neon Dance Grid pattern challenge or place new glowing dance floor tiles in your club.',
     targetValue: 2,
     currentValue: 1,
     rewardCash: 700,
@@ -848,9 +854,9 @@ export const INITIAL_QUESTS: QuestTask[] = [
     tier: 1,
     badgeEmoji: '🎉',
     categoryTag: 'CROWD HYPE',
-    actionLabel: 'Throw Party',
-    title: 'Mega Laser Party I',
-    description: 'Hit THROW A PARTY or invite a VIP Celebrity to pack the floor and max out the Vibe meter.',
+    actionLabel: '🎧 DJ Drop Challenge',
+    title: 'Mega Laser Drop I',
+    description: 'Master the live DJ BPM pitch-match & downbeat drop challenge to unleash a full-floor laser party.',
     targetValue: 1,
     currentValue: 0,
     rewardCash: 900,
@@ -862,11 +868,11 @@ export const INITIAL_QUESTS: QuestTask[] = [
     id: 'quest_staff_team_t1',
     track: 'STAFF_TEAM',
     tier: 1,
-    badgeEmoji: '🕴️',
+    badgeEmoji: '🛡️',
     categoryTag: 'TYCOON EMPIRE',
-    actionLabel: 'Manage Staff',
-    title: 'Nightlife Crew Ops I',
-    description: 'Have your Bartenders, Waiters, and Bouncers serve drinks, check in guests, or hire new staff.',
+    actionLabel: '🛡️ Bouncer Scanner',
+    title: 'Velvet Rope ID Scanner I',
+    description: 'Inspect guest ID birth years, hologram VIP seals, and dress codes at the red carpet door.',
     targetValue: 4,
     currentValue: 2,
     rewardCash: 680,
@@ -880,9 +886,9 @@ export const INITIAL_QUESTS: QuestTask[] = [
     tier: 1,
     badgeEmoji: '💸',
     categoryTag: 'TYCOON EMPIRE',
-    actionLabel: 'Collect Cash',
+    actionLabel: '🛡️ VIP Door Shift',
     title: 'High-Roller Cashflow I',
-    description: 'Earn $1,200 in live bar sales, door cover charges, DJ tips, and VIP bottle orders.',
+    description: 'Run the Velvet Rope VIP Scanner to collect high-roller cover tips and earn $1,200 in club revenue.',
     targetValue: 1200,
     currentValue: 650,
     rewardCash: 1000,
@@ -915,14 +921,14 @@ export function createNextTierQuest(completed: QuestTask): QuestTask {
   const nextXp = Math.round(completed.rewardXp * 1.35);
 
   const trackDescriptions: Record<QuestTrackType, string> = {
-    BOTTLE_SERVICE: `Deliver ${nextTarget} sparkling VIP Bottle Service trays to booths across your club.`,
-    DJ_HYPE_DROP: `Trigger ${nextTarget} DJ Bass Drops, track switches, or song dedications from the booth.`,
-    MOOD_BOOST: `Boost ${nextTarget} clubbers or VIP guests into an ECSTATIC mood frenzy.`,
-    MIXOLOGY_CRAFT: `Craft or mix ${nextTarget} fresh batches of signature neon cocktails in Tonight.`,
-    DANCE_FLOOR: `Buy, place, upgrade, or reposition ${nextTarget} club items or floor expansions.`,
-    PARTY_FEVER: `Launch ${nextTarget} Mega Laser Parties or invite VIP Celebrities to the club.`,
-    STAFF_TEAM: `Complete ${nextTarget} live staff service actions or hire/station additional crew.`,
-    CLUB_REVENUE: `Generate $${nextTarget.toLocaleString()} in live nightclub revenue & VIP tips.`,
+    BOTTLE_SERVICE: `Master the Flair Mixology Shaker challenge or deliver ${nextTarget} sparkling VIP Bottle Service trays.`,
+    DJ_HYPE_DROP: `Beat-match Deck B to the club BPM and land on-beat Sub-Bass Drops ${nextTarget} times.`,
+    MOOD_BOOST: `Complete the 3x3 Neon Dance Grid memory sequence to synchronize ${nextTarget} ecstatic dance waves.`,
+    MIXOLOGY_CRAFT: `Pour & shake ${nextTarget} multi-layer neon cocktail recipes inside the green Sweet Spot gauge.`,
+    DANCE_FLOOR: `Complete the Neon Grid Synchronizer challenge or place/upgrade ${nextTarget} club decorations.`,
+    PARTY_FEVER: `Win the Live DJ Beat-Match Drop challenge ${nextTarget} times to ignite Mega Laser Parties.`,
+    STAFF_TEAM: `Inspect guest IDs & VIP hologram seals at the Velvet Rope Bouncer Scanner (${nextTarget} ops).`,
+    CLUB_REVENUE: `Generate $${nextTarget.toLocaleString()} via VIP Bouncer cover tips, bottle trays, and bar sales.`,
   };
 
   return {
@@ -1152,3 +1158,28 @@ export const INITIAL_STAFF_MEMBERS: StaffMemberAgent[] = [
   },
 ];
 
+export type ClubGossipCategory =
+  | 'DANCE_FLOOR'
+  | 'VIP_TEA'
+  | 'BAR_BUZZ'
+  | 'RED_CARPET'
+  | 'DJ_BOOTH';
+
+export interface ClubGossipPost {
+  id: string;
+  authorName: string;
+  authorHandle: string;
+  authorEmoji: string;
+  authorColor: string;
+  category: ClubGossipCategory;
+  categoryLabel: string;
+  message: string;
+  sourceThought: string;
+  hypeLevelAtPost: number;
+  isViralHypePost: boolean;
+  likes: number;
+  fireReactions: number;
+  userReacted?: boolean;
+  timestampLabel: string;
+  guestId?: string;
+}

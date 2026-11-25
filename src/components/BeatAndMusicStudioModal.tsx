@@ -6,6 +6,9 @@ import {
   Music,
   Play,
   Plus,
+  Radio,
+  Search,
+  Settings,
   Shuffle,
   Sliders,
   Sparkles,
@@ -23,6 +26,16 @@ import {
   soundEngine,
   SynthWaveType,
 } from '../audio/soundEngine';
+import {
+  CURATED_APPLE_MUSIC_TRACKS,
+  CURATED_SPOTIFY_TRACKS,
+  CURATED_YOUTUBE_MIXES,
+  ExternalStreamingTrack,
+  extractYouTubeVideoId,
+  streamingMusicManager,
+  StreamingServiceType,
+  StreamingStateSnapshot,
+} from '../audio/streamingMusicManager';
 
 interface BeatAndMusicStudioModalProps {
   isOpen: boolean;
@@ -130,6 +143,24 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
   const tapTimesRef = useRef<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // External Streaming Hub State
+  const [streamState, setStreamState] = useState<StreamingStateSnapshot>(() =>
+    streamingMusicManager.getState()
+  );
+  const [selectedStreamingPanel, setSelectedStreamingPanel] =
+    useState<StreamingServiceType | null>('YOUTUBE');
+  const [isSetupDrawerOpen, setIsSetupDrawerOpen] = useState<boolean>(false);
+  const [ytUrlInput, setYtUrlInput] = useState<string>('');
+  const [ytCustomGenre, setYtCustomGenre] = useState<string>('Dance');
+  const [spotifySearchInput, setSpotifySearchInput] = useState<string>('');
+  const [appleSearchInput, setAppleSearchInput] = useState<string>('');
+
+  useEffect(() => {
+    return streamingMusicManager.subscribe((snap) => {
+      setStreamState(snap);
+    });
+  }, []);
+
   useEffect(() => {
     if (isOpen && initialTab) {
       setActiveTab(initialTab);
@@ -142,8 +173,6 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
       setCurrentStep(step);
     });
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const filteredSongs =
     selectedGenreFilter === 'ALL'
@@ -178,7 +207,10 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
     const nextPattern: BeatPattern = {
       ...activePattern,
       kick: randSteps(0.22, true),
-      snare: Array.from({ length: 16 }, (_, idx) => idx === 4 || idx === 12 || Math.random() < 0.08),
+      snare: Array.from(
+        { length: 16 },
+        (_, idx) => idx === 4 || idx === 12 || Math.random() < 0.08
+      ),
       hihat: Array.from({ length: 16 }, (_, idx) => idx % 2 === 0 || Math.random() < 0.35),
       openHat: Array.from({ length: 16 }, (_, idx) => idx % 4 === 2 && Math.random() < 0.75),
       bass: randSteps(0.45, true),
@@ -192,7 +224,24 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
     const empty = Array(16).fill(false);
     const nextPattern: BeatPattern = {
       ...activePattern,
-      kick: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
+      kick: [
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+      ],
       snare: [...empty],
       hihat: [...empty],
       openHat: [...empty],
@@ -243,7 +292,9 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
       unlockLevel: 1,
       patternId: patternCopy.id,
       isCustomBeat: true,
+      streamingSource: 'SYNTH',
     };
+    streamingMusicManager.switchToBuiltInSynthOrUpload(false);
     onSaveCustomBeatSong(newSong, patternCopy);
     soundEngine.playUpgradeFanfare();
     setSavedNotice(`Saved "${cleanTitle}" & Spinning Live!`);
@@ -277,28 +328,56 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
       patternId: activePattern.id,
       isCustomBeat: true,
       customAudioUrl: objectUrl,
+      streamingSource: 'UPLOAD',
     };
+    streamingMusicManager.switchToBuiltInSynthOrUpload(true);
     onUploadCustomAudioSong(newSong);
     soundEngine.playUpgradeFanfare();
     setSavedNotice(`Uploaded "${cleanName}" & Spinning Now!`);
     setTimeout(() => setSavedNotice(null), 3500);
   };
 
+  const handleSpinYouTubeUrl = () => {
+    const vid = extractYouTubeVideoId(ytUrlInput);
+    if (!vid) {
+      streamingMusicManager.showToast(
+        'Paste a valid YouTube URL (youtube.com/watch?v=..., youtu.be/..., or 11-char Video ID).'
+      );
+      return;
+    }
+    const customTrack: ExternalStreamingTrack = {
+      id: `yt_custom_${vid}`,
+      service: 'YOUTUBE',
+      externalId: vid,
+      title: `YouTube Club Stream (${vid})`,
+      artist: 'YouTube DJ Turntable',
+      genre: ytCustomGenre,
+      bpm: 124,
+      thumbnailUrl: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+    };
+    streamingMusicManager.spinExternalTrack(customTrack);
+    setYtUrlInput('');
+    setSavedNotice(`Spinning YouTube Video (${vid}) in the Club!`);
+    setTimeout(() => setSavedNotice(null), 3500);
+  };
+
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-sm pointer-events-auto">
-      <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl bg-gradient-to-b from-[#1e1438] via-[#130c26] to-[#0c071a] border-[3px] border-[#111116] shadow-[0_10px_0_#111116,0_0_40px_rgba(168,85,247,0.45)] text-white overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm pointer-events-auto">
+      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-gradient-to-b from-[#1e1438] via-[#130c26] to-[#0c071a] border-[3px] border-[#111116] shadow-[0_10px_0_#111116,0_0_40px_rgba(168,85,247,0.45)] text-white overflow-hidden">
         {/* TOP MODAL HEADER */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-gradient-to-r from-[#2e1a5e] via-[#3b1d7a] to-[#1e1438] border-b-[2.5px] border-[#111116]">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 sm:px-4 sm:py-3 bg-gradient-to-r from-[#2e1a5e] via-[#3b1d7a] to-[#1e1438] border-b-[2.5px] border-[#111116]">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-purple-600 border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center justify-center">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-purple-600 border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center justify-center">
               <Disc className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '5s' }} />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-white drop-shadow-[0_2px_0_#111116]">
-                DJ Turntable · Music &amp; Custom Beat Studio
+              <h2 className="text-sm sm:text-lg font-black uppercase tracking-wider text-white drop-shadow-[0_2px_0_#111116]">
+                DJ Turntable · Streaming Hub &amp; Beat Studio
               </h2>
-              <p className="text-[11px] font-bold text-cyan-300">
-                Spin club genres, upload your own tracks, or program a live 16-step drum &amp; synth beat!
+              <p className="text-[10px] sm:text-[11px] font-bold text-cyan-300">
+                Spin YouTube, Spotify, Apple Music, MP3 uploads, or live 16-step synth beats!
               </p>
             </div>
           </div>
@@ -311,57 +390,471 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
                   soundEngine.playClick();
                   setActiveTab('MUSIC');
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer transition-all ${
+                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer transition-all ${
                   activeTab === 'MUSIC'
                     ? 'bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white shadow'
                     : 'text-purple-300 hover:text-white'
                 }`}
               >
                 <Music className="w-3.5 h-3.5" />
-                <span>Choose Music ({songs.length})</span>
+                <span>Streaming &amp; Tracks</span>
               </button>
               <button
                 onClick={() => {
                   soundEngine.playClick();
                   setActiveTab('BEAT_MAKER');
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer transition-all ${
+                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-black uppercase flex items-center gap-1.5 cursor-pointer transition-all ${
                   activeTab === 'BEAT_MAKER'
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow'
                     : 'text-purple-300 hover:text-white'
                 }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>Customize Beat (16-Step)</span>
+                <span>16-Step Beat Maker</span>
               </button>
             </div>
 
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-rose-600 hover:bg-rose-500 border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center justify-center text-white cursor-pointer"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-rose-600 hover:bg-rose-500 border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center justify-center text-white cursor-pointer"
               aria-label="Close Studio"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
-        {savedNotice && (
-          <div className="px-4 py-2 bg-emerald-500/20 border-b border-emerald-400/40 text-emerald-300 text-xs font-black flex items-center justify-center gap-2">
-            <Check className="w-4 h-4" />
-            <span>{savedNotice}</span>
+        {(savedNotice || streamState.toastMessage) && (
+          <div className="px-4 py-1.5 bg-emerald-500/20 border-b border-emerald-400/40 text-emerald-300 text-xs font-black flex items-center justify-center gap-2">
+            <Check className="w-4 h-4 shrink-0" />
+            <span>{streamState.toastMessage || savedNotice}</span>
           </div>
         )}
 
         {/* MODAL BODY */}
-        <div className="p-4 overflow-y-auto space-y-4 flex-1">
+        <div className="p-3 sm:p-4 overflow-y-auto space-y-4 flex-1">
           {activeTab === 'MUSIC' ? (
             <>
+              {/* ===============================================================
+                  EXTERNAL STREAMING SERVICES CONNECTION BAR (YouTube / Spotify / Apple Music)
+                 =============================================================== */}
+              <div className="p-3 rounded-2xl bg-[#140d29] border-2 border-[#111116] shadow-inner space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-cyan-300 animate-pulse" />
+                    <span className="text-xs font-black uppercase tracking-wider text-white">
+                      STREAMING SERVICES HUB
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-purple-900/80 border border-cyan-400/40 text-[9px] font-mono font-bold text-cyan-300">
+                      Active Source: {streamState.activeService}
+                    </span>
+                  </div>
+
+                  {/* Branded Pill Buttons: YouTube (#FF0000), Spotify (#1DB954), Apple Music (#FA243C) + Setup Gear */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* 1. YouTube Pill (#FF0000) */}
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setSelectedStreamingPanel((p) => (p === 'YOUTUBE' ? null : 'YOUTUBE'));
+                      }}
+                      className={`px-3 py-1.5 rounded-full border-2 text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+                        selectedStreamingPanel === 'YOUTUBE' ||
+                        streamState.activeService === 'YOUTUBE'
+                          ? 'bg-[#FF0000] border-white text-white shadow-[0_0_14px_rgba(255,0,0,0.6)]'
+                          : 'bg-[#2a1018] border-[#FF0000]/60 text-rose-200 hover:bg-[#FF0000]/30'
+                      }`}
+                    >
+                      <span>▶</span>
+                      <span>YouTube</span>
+                      <span className="px-1.5 py-0.2 rounded-full bg-black/40 text-[9px] font-mono">
+                        Ready
+                      </span>
+                    </button>
+
+                    {/* 2. Spotify Pill (#1DB954) */}
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setSelectedStreamingPanel((p) => (p === 'SPOTIFY' ? null : 'SPOTIFY'));
+                      }}
+                      className={`px-3 py-1.5 rounded-full border-2 text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+                        selectedStreamingPanel === 'SPOTIFY' ||
+                        streamState.activeService === 'SPOTIFY'
+                          ? 'bg-[#1DB954] border-white text-slate-950 shadow-[0_0_14px_rgba(29,185,84,0.6)]'
+                          : 'bg-[#0e291b] border-[#1DB954]/60 text-emerald-200 hover:bg-[#1DB954]/30'
+                      }`}
+                    >
+                      <span>🟢</span>
+                      <span>Spotify</span>
+                      <span className="px-1.5 py-0.2 rounded-full bg-black/30 text-[9px] font-mono text-white">
+                        {streamState.spotifyConnected
+                          ? streamState.spotifyUserName || 'Linked'
+                          : 'Turntable'}
+                      </span>
+                    </button>
+
+                    {/* 3. Apple Music Pill (#FA243C) */}
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setSelectedStreamingPanel((p) => (p === 'APPLE' ? null : 'APPLE'));
+                      }}
+                      className={`px-3 py-1.5 rounded-full border-2 text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+                        selectedStreamingPanel === 'APPLE' ||
+                        streamState.activeService === 'APPLE'
+                          ? 'bg-[#FA243C] border-white text-white shadow-[0_0_14px_rgba(250,36,60,0.6)]'
+                          : 'bg-[#2d101c] border-[#FA243C]/60 text-pink-200 hover:bg-[#FA243C]/30'
+                      }`}
+                    >
+                      <span></span>
+                      <span>Apple Music</span>
+                      <span className="px-1.5 py-0.2 rounded-full bg-black/35 text-[9px] font-mono">
+                        {streamState.appleConnected ? 'Linked' : 'Turntable'}
+                      </span>
+                    </button>
+
+                    {/* Streaming Setup / Connection Guide Gear Icon */}
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setIsSetupDrawerOpen((o) => !o);
+                      }}
+                      title="Streaming Setup & OAuth / MusicKit Connection Status"
+                      className={`w-8 h-8 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${
+                        isSetupDrawerOpen
+                          ? 'bg-cyan-400 border-white text-slate-950'
+                          : 'bg-[#1f143d] border-purple-500/40 text-purple-200 hover:text-white'
+                      }`}
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* STREAMING SETUP & CONNECTION DRAWER */}
+                {isSetupDrawerOpen && (
+                  <div className="p-3 rounded-xl bg-[#0e091d] border border-cyan-400/50 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black uppercase tracking-wider text-cyan-300">
+                        ⚙️ Streaming Turntable Setup &amp; SDK Status
+                      </span>
+                      <button
+                        onClick={() => setIsSetupDrawerOpen(false)}
+                        className="text-purple-300 hover:text-white cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                      <div className="p-2 rounded-lg bg-[#191130] border border-[#FF0000]/40 space-y-1">
+                        <div className="font-black text-[#FF0000]">1. YouTube IFrame API</div>
+                        <p className="text-purple-200 text-[10px]">
+                          Works immediately with 0 setup! Paste any YouTube link or click the 6 pre-loaded 24/7 Club Mixes below.
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-[#191130] border border-[#1DB954]/40 space-y-1">
+                        <div className="font-black text-[#1DB954]">2. Spotify SDK + Embed</div>
+                        <p className="text-purple-200 text-[10px]">
+                          {streamState.spotifyConnected
+                            ? `Connected as ${streamState.spotifyUserName} (${
+                                streamState.spotifyIsPremium ? 'Premium SDK' : 'Embed Mode'
+                              }).`
+                            : 'Spin curated Spotify club tracks & pasted Spotify links immediately, or link via OAuth 2.0 PKCE (VITE_SPOTIFY_CLIENT_ID).'}
+                        </p>
+                        <button
+                          onClick={() => void streamingMusicManager.connectSpotifyPKCE()}
+                          className="w-full py-1 rounded bg-[#1DB954] text-slate-950 font-black text-[10px] uppercase cursor-pointer"
+                        >
+                          {streamState.spotifyConnected ? '✓ Spotify Linked' : 'Connect Spotify OAuth'}
+                        </button>
+                      </div>
+                      <div className="p-2 rounded-lg bg-[#191130] border border-[#FA243C]/40 space-y-1">
+                        <div className="font-black text-[#FA243C]">3. Apple MusicKit v3</div>
+                        <p className="text-purple-200 text-[10px]">
+                          {streamState.appleConnected
+                            ? 'Authorized via Apple MusicKit JS v3!'
+                            : 'Spin Apple Music club mixes & pasted Apple Music links immediately, or authorize MusicKit JS v3 (VITE_APPLE_MUSIC_DEV_TOKEN).'}
+                        </p>
+                        <button
+                          onClick={() => void streamingMusicManager.connectAppleMusic()}
+                          className="w-full py-1 rounded bg-[#FA243C] text-white font-black text-[10px] uppercase cursor-pointer"
+                        >
+                          {streamState.appleConnected ? '✓ Apple Music Linked' : 'Authorize Apple Music'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PANEL A: YOUTUBE IFRAME PLAYER & 6 PRE-LOADED 24/7 CLUB MIXES */}
+                {selectedStreamingPanel === 'YOUTUBE' && (
+                  <div className="space-y-2.5 pt-1 border-t border-purple-500/25">
+                    {/* Paste YouTube URL / Video ID Input */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex-1 min-w-[210px] flex items-center gap-1.5 bg-[#0d081d] px-2.5 py-1.5 rounded-xl border-2 border-[#111116]">
+                        <span className="text-xs font-black text-[#FF0000]">▶ YT</span>
+                        <input
+                          type="text"
+                          value={ytUrlInput}
+                          onChange={(e) => setYtUrlInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSpinYouTubeUrl();
+                          }}
+                          placeholder="Paste YouTube URL (youtube.com/watch?v=... or youtu.be/...) or Video ID"
+                          className="w-full bg-transparent text-xs font-bold text-white focus:outline-none"
+                        />
+                      </div>
+                      <select
+                        value={ytCustomGenre}
+                        onChange={(e) => setYtCustomGenre(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-[#1c1236] border-2 border-[#111116] text-xs font-black text-cyan-300"
+                        title="Select Club Mood Lighting Filter for this stream"
+                      >
+                        {CLUB_GENRES.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            Mood: {g.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleSpinYouTubeUrl}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#FF0000] hover:bg-red-500 border-2 border-[#111116] shadow-[0_2px_0_#111116] text-xs font-black uppercase text-white cursor-pointer"
+                      >
+                        Spin YouTube Link
+                      </button>
+                    </div>
+
+                    {/* 6 Pre-Loaded 24/7 Club Mixes */}
+                    <div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-rose-300 font-bold mb-1.5">
+                        PRE-LOADED 24/7 YOUTUBE CLUB MIXES (1-CLICK INSTANT PLAYBACK):
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {CURATED_YOUTUBE_MIXES.map((mix) => {
+                          const isSpinning =
+                            streamState.activeService === 'YOUTUBE' &&
+                            streamState.activeExternalTrack?.externalId === mix.externalId;
+                          return (
+                            <button
+                              key={mix.id}
+                              onClick={() => {
+                                soundEngine.playClick();
+                                streamingMusicManager.spinExternalTrack(mix);
+                              }}
+                              className={`p-2 rounded-xl border-2 text-left flex items-center gap-2.5 cursor-pointer transition-all ${
+                                isSpinning
+                                  ? 'bg-[#FF0000]/25 border-cyan-300 shadow-[0_0_12px_rgba(255,0,0,0.45)]'
+                                  : 'bg-[#1a1133] border-[#111116] hover:border-[#FF0000]/60'
+                              }`}
+                            >
+                              <img
+                                src={mix.thumbnailUrl}
+                                alt={mix.title}
+                                className="w-11 h-9 rounded-lg object-cover border border-[#111116] shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-black text-white truncate">
+                                  {mix.title}
+                                </div>
+                                <div className="text-[10px] font-bold text-purple-300 truncate">
+                                  {mix.artist} · {mix.genre} ({mix.bpm} BPM)
+                                </div>
+                              </div>
+                              <span
+                                className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase shrink-0 ${
+                                  isSpinning
+                                    ? 'bg-emerald-400 text-slate-950'
+                                    : 'bg-[#FF0000] text-white'
+                                }`}
+                              >
+                                {isSpinning ? 'LIVE' : 'SPIN'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PANEL B: SPOTIFY WEB PLAYBACK SDK + OFFICIAL EMBED TURNTABLE */}
+                {selectedStreamingPanel === 'SPOTIFY' && (
+                  <div className="space-y-2.5 pt-1 border-t border-purple-500/25">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex-1 min-w-[210px] flex items-center gap-1.5 bg-[#0d081d] px-2.5 py-1.5 rounded-xl border-2 border-[#111116]">
+                        <Search className="w-3.5 h-3.5 text-[#1DB954]" />
+                        <input
+                          type="text"
+                          value={spotifySearchInput}
+                          onChange={(e) => setSpotifySearchInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              void streamingMusicManager.searchSpotifyCatalog(spotifySearchInput);
+                            }
+                          }}
+                          placeholder="Paste Spotify Track/Playlist URL (open.spotify.com/...) or search artist..."
+                          className="w-full bg-transparent text-xs font-bold text-white focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={() =>
+                          void streamingMusicManager.searchSpotifyCatalog(spotifySearchInput)
+                        }
+                        className="px-3.5 py-1.5 rounded-xl bg-[#1DB954] hover:brightness-110 border-2 border-[#111116] text-xs font-black uppercase text-slate-950 cursor-pointer"
+                      >
+                        Load / Search Spotify
+                      </button>
+                      <button
+                        onClick={() => void streamingMusicManager.connectSpotifyPKCE()}
+                        className="px-3 py-1.5 rounded-xl bg-[#122e1f] hover:bg-[#19422c] border-2 border-[#1DB954] text-xs font-black text-[#1DB954] cursor-pointer"
+                      >
+                        {streamState.spotifyConnected ? '✓ Account Linked' : 'Link Spotify Account'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {(streamState.spotifySearchResults.length > 0
+                        ? streamState.spotifySearchResults
+                        : streamState.spotifyPlaylists
+                      ).map((tr) => {
+                        const isSpinning =
+                          streamState.activeService === 'SPOTIFY' &&
+                          streamState.activeExternalTrack?.externalId === tr.externalId;
+                        return (
+                          <button
+                            key={tr.id}
+                            onClick={() => {
+                              soundEngine.playClick();
+                              streamingMusicManager.spinExternalTrack(tr);
+                            }}
+                            className={`p-2 rounded-xl border-2 text-left flex items-center gap-2.5 cursor-pointer transition-all ${
+                              isSpinning
+                                ? 'bg-[#1DB954]/25 border-cyan-300 shadow-[0_0_12px_rgba(29,185,84,0.45)]'
+                                : 'bg-[#1a1133] border-[#111116] hover:border-[#1DB954]/60'
+                            }`}
+                          >
+                            <img
+                              src={tr.thumbnailUrl}
+                              alt={tr.title}
+                              className="w-10 h-10 rounded-lg object-cover border border-[#111116] shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-black text-white truncate">
+                                {tr.title}
+                              </div>
+                              <div className="text-[10px] font-bold text-emerald-300 truncate">
+                                {tr.artist} · {tr.bpm} BPM
+                              </div>
+                            </div>
+                            <span
+                              className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase shrink-0 ${
+                                isSpinning
+                                  ? 'bg-emerald-400 text-slate-950'
+                                  : 'bg-[#1DB954] text-slate-950'
+                              }`}
+                            >
+                              {isSpinning ? 'LIVE' : 'SPIN'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* PANEL C: APPLE MUSICKIT JS V3 + OFFICIAL EMBED TURNTABLE */}
+                {selectedStreamingPanel === 'APPLE' && (
+                  <div className="space-y-2.5 pt-1 border-t border-purple-500/25">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex-1 min-w-[210px] flex items-center gap-1.5 bg-[#0d081d] px-2.5 py-1.5 rounded-xl border-2 border-[#111116]">
+                        <Search className="w-3.5 h-3.5 text-[#FA243C]" />
+                        <input
+                          type="text"
+                          value={appleSearchInput}
+                          onChange={(e) => setAppleSearchInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              void streamingMusicManager.searchAppleMusicCatalog(appleSearchInput);
+                            }
+                          }}
+                          placeholder="Paste Apple Music URL (music.apple.com/...) or search catalog..."
+                          className="w-full bg-transparent text-xs font-bold text-white focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={() =>
+                          void streamingMusicManager.searchAppleMusicCatalog(appleSearchInput)
+                        }
+                        className="px-3.5 py-1.5 rounded-xl bg-[#FA243C] hover:brightness-110 border-2 border-[#111116] text-xs font-black uppercase text-white cursor-pointer"
+                      >
+                        Load / Search Apple Music
+                      </button>
+                      <button
+                        onClick={() => void streamingMusicManager.connectAppleMusic()}
+                        className="px-3 py-1.5 rounded-xl bg-[#2e1019] hover:bg-[#421523] border-2 border-[#FA243C] text-xs font-black text-[#FA243C] cursor-pointer"
+                      >
+                        {streamState.appleConnected ? '✓ MusicKit Linked' : 'Connect Apple Music'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      {(streamState.appleSearchResults.length > 0
+                        ? streamState.appleSearchResults
+                        : streamState.applePlaylists
+                      ).map((tr) => {
+                        const isSpinning =
+                          streamState.activeService === 'APPLE' &&
+                          streamState.activeExternalTrack?.externalId === tr.externalId;
+                        return (
+                          <button
+                            key={tr.id}
+                            onClick={() => {
+                              soundEngine.playClick();
+                              streamingMusicManager.spinExternalTrack(tr);
+                            }}
+                            className={`p-2 rounded-xl border-2 text-left flex items-center gap-2.5 cursor-pointer transition-all ${
+                              isSpinning
+                                ? 'bg-[#FA243C]/25 border-cyan-300 shadow-[0_0_12px_rgba(250,36,60,0.45)]'
+                                : 'bg-[#1a1133] border-[#111116] hover:border-[#FA243C]/60'
+                            }`}
+                          >
+                            <img
+                              src={tr.thumbnailUrl}
+                              alt={tr.title}
+                              className="w-10 h-10 rounded-lg object-cover border border-[#111116] shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-black text-white truncate">
+                                {tr.title}
+                              </div>
+                              <div className="text-[10px] font-bold text-pink-300 truncate">
+                                {tr.artist} · {tr.bpm} BPM
+                              </div>
+                            </div>
+                            <span
+                              className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase shrink-0 ${
+                                isSpinning
+                                  ? 'bg-emerald-400 text-slate-950'
+                                  : 'bg-[#FA243C] text-white'
+                              }`}
+                            >
+                              {isSpinning ? 'LIVE' : 'SPIN'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* GENRE CARDS (Inspired by Neon Nights Club What'll You Spin?) */}
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <span className="text-xs font-black uppercase tracking-wider text-purple-200">
-                    1. Pick a Club Genre or Upload Your Own Music
+                    2. Or Pick a Built-In Synth Club Genre / Upload MP3
                   </span>
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -385,7 +878,7 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
                       soundEngine.playClick();
                       setSelectedGenreFilter('ALL');
                     }}
-                    className={`p-2.5 rounded-2xl border-2 text-left flex flex-col justify-between min-h-[76px] cursor-pointer transition-all ${
+                    className={`p-2.5 rounded-2xl border-2 text-left flex flex-col justify-between min-h-[72px] cursor-pointer transition-all ${
                       selectedGenreFilter === 'ALL'
                         ? 'border-white ring-2 ring-cyan-400 bg-gradient-to-br from-purple-600 to-indigo-900'
                         : 'border-[#111116] bg-[#1a1133] hover:border-purple-400'
@@ -413,7 +906,7 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
                         style={{
                           background: `linear-gradient(155deg, ${g.color}, ${g.color2})`,
                         }}
-                        className={`p-2.5 rounded-2xl border-2 text-left flex flex-col justify-between min-h-[76px] cursor-pointer transition-all ${
+                        className={`p-2.5 rounded-2xl border-2 text-left flex flex-col justify-between min-h-[72px] cursor-pointer transition-all ${
                           isSelected
                             ? 'border-white ring-2 ring-yellow-300 scale-[1.02]'
                             : 'border-[#111116] opacity-90 hover:opacity-100'
@@ -441,9 +934,9 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
 
               {/* SONG LIST */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
-                    2. Select Track to Spin at the Turntable
+                    3. Built-In Synth &amp; Uploaded Club Tracks
                   </span>
                   <button
                     onClick={() => {
@@ -453,13 +946,17 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
                     className="text-xs font-black text-amber-300 hover:text-amber-200 underline cursor-pointer flex items-center gap-1"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Want to craft your own drum &amp; bass beat? Open Beat Maker →</span>
+                    <span>Open 16-Step Beat Maker →</span>
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {filteredSongs.map((song, idx) => {
-                    const isPlaying = song.id === activeSongId;
+                    const isPlaying =
+                      song.id === activeSongId &&
+                      streamState.activeService !== 'YOUTUBE' &&
+                      streamState.activeService !== 'SPOTIFY' &&
+                      streamState.activeService !== 'APPLE';
                     const mins = Math.floor(song.durationSec / 60);
                     const secs = String(song.durationSec % 60).padStart(2, '0');
                     return (
@@ -518,6 +1015,9 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
                             <button
                               onClick={() => {
                                 soundEngine.playClick();
+                                streamingMusicManager.switchToBuiltInSynthOrUpload(
+                                  Boolean(song.customAudioUrl)
+                                );
                                 onSelectSong(song);
                               }}
                               className="px-3 py-1.5 rounded-xl bg-gradient-to-b from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 border-2 border-[#111116] shadow-[0_2px_0_#111116] text-xs font-black uppercase text-white flex items-center gap-1 cursor-pointer"
@@ -557,6 +1057,7 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
                       key={pr.id}
                       onClick={() => {
                         soundEngine.playClick();
+                        streamingMusicManager.switchToBuiltInSynthOrUpload(false);
                         const preset = PRESET_BEAT_PATTERNS[pr.id];
                         if (preset) {
                           onUpdatePattern({ ...preset });
@@ -735,7 +1236,13 @@ export const BeatAndMusicStudioModal: React.FC<BeatAndMusicStudioModalProps> = (
                             : 'bg-[#231742] border-purple-500/30 text-purple-200'
                         }`}
                       >
-                        {w === 'sawtooth' ? 'SAW' : w === 'square' ? 'SQR' : w === 'triangle' ? 'TRI' : '808'}
+                        {w === 'sawtooth'
+                          ? 'SAW'
+                          : w === 'square'
+                          ? 'SQR'
+                          : w === 'triangle'
+                          ? 'TRI'
+                          : '808'}
                       </button>
                     ))}
                   </div>
