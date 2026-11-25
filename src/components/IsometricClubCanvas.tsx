@@ -7098,37 +7098,26 @@ function drawVipBoothForegroundTable(
       }
     }
 
-    // 6. Floating Live Bottle Service Active Multiplier Pill Badge
-    const pillY = by - 27 * scale - Math.abs(Math.sin(t * 3.5)) * 2 * scale;
-    const pillText = `🍾 ${bottleService.spendingMultiplier}x VIP TRAY · +${bottleService.hypeBoost}⚡ (${Math.ceil(
-      bottleService.timer
-    )}s)`;
-    ctx.font = `800 ${Math.max(8, Math.round(7.5 * scale))}px "Outfit", sans-serif`;
+    // 6. Compact Floating Bottle Service Multiplier Badge
+    const pillY = by - 24 * scale - Math.abs(Math.sin(t * 3.5)) * 1.5 * scale;
+    const pillText = `🍾 ${bottleService.spendingMultiplier}x VIP`;
+    ctx.font = `800 ${Math.max(7, Math.round(6.8 * scale))}px "Outfit", sans-serif`;
     const tw = ctx.measureText(pillText).width;
-    const pw = tw + 12 * scale;
-    const ph = 14 * scale;
+    const pw = tw + 8 * scale;
+    const ph = 11.5 * scale;
     fillStrokeRoundedRect(
       ctx,
       bx - pw * 0.5,
       pillY - ph * 0.5,
       pw,
       ph,
-      5 * scale,
-      'rgba(15, 9, 32, 0.92)'
-    );
-    fillStrokeRoundedRect(
-      ctx,
-      bx - pw * 0.5 + 3 * scale,
-      pillY + ph * 0.5 - 2.2 * scale,
-      pw - 6 * scale,
-      1.6 * scale,
-      1 * scale,
-      bottleService.trayColor
+      4 * scale,
+      'rgba(15, 9, 32, 0.88)'
     );
     ctx.fillStyle = '#fef08a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(pillText, bx, pillY - 0.5 * scale);
+    ctx.fillText(pillText, bx, pillY);
     ctx.restore();
     return;
   }
@@ -8676,53 +8665,9 @@ function drawCharacter(
     ctx.fill();
   }
 
-  // 7. Clean Lineless Circular Speech / Thought Bubbles & Floating Dark Patron Quote Tooltips
-  if (guest.name === 'Kira R.' || guest.id === 'g_seat_bistro_1') {
-    drawPatronQuoteTooltip(
-      ctx,
-      headX,
-      headY - 22 * scale,
-      scale,
-      'KIRA R.',
-      'Corner pocket. Watch this.',
-      false
-    );
-  } else if (guest.name === 'Mia J.' || guest.id === 'g_dance_2') {
-    drawPatronQuoteTooltip(
-      ctx,
-      headX,
-      headY - 22 * scale,
-      scale,
-      'MIA J.',
-      'Could you play Drum & Bass?',
-      false
-    );
-  } else if (guest.name === 'Ivy W.' || guest.id === 'g_bar_2') {
-    drawPatronQuoteTooltip(
-      ctx,
-      headX,
-      headY - 22 * scale,
-      scale,
-      'IVY W.',
-      'You remembered! This is my kind of night.',
-      false
-    );
-  } else if (guest.name === 'Mia H.') {
-    drawPatronQuoteTooltip(
-      ctx,
-      headX,
-      headY - 22 * scale,
-      scale,
-      'MIA H.',
-      "I think I'm in love.",
-      true
-    );
-  } else if (guest.bubble) {
-    drawIllustratedSpeechBubble(ctx, headX, headY - 20 * scale, scale, guest.bubble);
-  } else if (seed % 3 === 0) {
-    const badgeType: BubbleType =
-      seed % 9 === 0 ? 'VIP_CROWN' : seed % 6 === 0 ? 'CASH' : 'SPARKLE';
-    drawIllustratedSpeechBubble(ctx, headX, headY - 19 * scale, scale * 0.88, badgeType);
+  // 7. Clean Event-Driven Speech / Thought Bubbles (Only shown when guest has an active event bubble)
+  if (guest.bubble && (guest.bubbleTimer ?? 0) > 0) {
+    drawIllustratedSpeechBubble(ctx, headX, headY - 19 * scale, scale * 0.88, guest.bubble);
   }
 }
 

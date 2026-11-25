@@ -11,6 +11,7 @@ import {
   Star,
   Trash2,
   Upload,
+  Users,
   Volume2,
   VolumeX,
   X,
@@ -2729,64 +2730,42 @@ export default function App() {
          ===================================================================== */}
       <div className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-1.5 sm:p-3 overflow-hidden">
         {/* -------------------------------------------------------------------
-            UNIFIED NON-OVERLAPPING TWO-TIER TOP HUD BAR
-            - Tier 1: Single responsive top bar (Left: Level/XP/Energy + DJ Avatar + 4 DJ Actions;
-                      Center: Now Playing Card with YouTube/Spotify/Apple Music badge & controls;
-                      Right: Club Open/Cash/Crowd/Gems/Rating + Throw Party + Quests Toggle)
-            - Tier 2: Single exclusive dropdown slot directly below Tier 1 (either DJ Action Modal OR Live Quests Card)
-                      with pointer-events-none on the row so it NEVER blocks clicks on the Mood Panel or Canvas!
+            SLEEK SINGLE-ROW NON-OVERLAPPING TOP HUD BAR
+            - Single compact row that never wraps into two thick rows on phone/iPad landscape
+            - Left: Level + Energy + DJ Avatar + Inline Economy Strip ($Cash, 💎Gems, 👥Crowd, 🍸Vibe%)
+            - Center: BPM-Synced Now Playing Pill (YouTube / Spotify / Apple Music / Synth)
+            - Right: Compact DJ FX + Party + Quests
            ------------------------------------------------------------------- */}
-        <div className="w-full flex flex-col gap-1.5 pointer-events-none z-30">
-          {/* TIER 1: MAIN UNIFIED TOP BAR */}
-          <div className="pointer-events-auto w-full flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-2xl bg-[#110b20]/94 backdrop-blur-md border-2 sm:border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116,0_0_20px_rgba(0,0,0,0.65)]">
-            {/* LEFT GROUP: Level Badge + Compact XP/Energy + DJ Avatar + 4 DJ Action Buttons */}
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-              {/* Purple Square Level Badge */}
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#a855f7] via-[#7e22ce] to-[#4c1d95] border-2 border-[#111116] shadow-[0_2px_0_#111116] flex flex-col items-center justify-center shrink-0">
-                <span className="text-[6px] sm:text-[7px] font-black uppercase tracking-wider text-purple-200 leading-none">
-                  LVL
-                </span>
-                <span className="text-xs sm:text-base font-black text-white leading-none mt-0.5">
-                  {level}
-                </span>
+        <div className="w-full flex flex-col gap-1 pointer-events-none z-30">
+          {/* TIER 1: SLEEK SINGLE-ROW TOP BAR */}
+          <div className="pointer-events-auto w-full flex items-center justify-between gap-1 sm:gap-2 px-2 py-1 rounded-xl bg-[#110b20]/88 backdrop-blur-md border border-white/15 shadow-[0_4px_16px_rgba(0,0,0,0.6)] overflow-x-auto no-scrollbar">
+            {/* LEFT CLUSTER: Level + Energy + DJ + Economy Strip */}
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+              {/* Compact Level Pill */}
+              <div
+                className="relative px-1.5 h-7 rounded-lg bg-gradient-to-b from-[#a855f7] to-[#581c87] border border-white/20 flex items-center gap-1 shrink-0"
+                title={`Level ${level} (${xp}/${xpToNextLevel} XP)`}
+              >
+                <span className="text-[8px] font-black uppercase text-purple-200">LVL</span>
+                <span className="text-xs font-black text-white leading-none">{level}</span>
               </div>
 
-              {/* Compact Stacked XP & Energy Bars */}
-              <div className="flex flex-col gap-1 w-[82px] sm:w-[116px] shrink-0">
-                <div className="relative h-3.5 sm:h-4 bg-[#120d24] border border-[#111116] rounded-md overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#06b6d4] via-[#22d3ee] to-[#67e8f9] transition-all duration-300"
-                    style={{ width: `${Math.min(100, (xp / xpToNextLevel) * 100)}%` }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-between px-1 text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_1px_#111116]">
-                    <span>XP</span>
-                    <span className="font-mono">{xp}/{xpToNextLevel}</span>
-                  </div>
-                </div>
+              {/* Compact Energy Refill Pill */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  setEnergy(maxEnergy);
+                }}
+                title="Tap to Refill DJ Energy"
+                className="px-1.5 h-7 rounded-lg bg-[#1a1130] hover:bg-[#251845] border border-amber-400/40 flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <Zap className="w-3 h-3 text-yellow-300 fill-yellow-300 shrink-0" />
+                <span className="text-[10px] font-mono font-black text-yellow-200">
+                  {energy}/{maxEnergy}
+                </span>
+              </button>
 
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setEnergy(maxEnergy);
-                  }}
-                  title="Tap to Refill DJ Energy (12/12)"
-                  className="relative h-3.5 sm:h-4 bg-[#120d24] border border-[#111116] rounded-md overflow-hidden flex items-center cursor-pointer"
-                >
-                  <div
-                    className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-lime-300 transition-all duration-300"
-                    style={{ width: `${(energy / maxEnergy) * 100}%` }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-between px-1 text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_1px_#111116]">
-                    <span className="flex items-center gap-0.5">
-                      <Zap className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-yellow-300 fill-yellow-300" />
-                      <span>EN</span>
-                    </span>
-                    <span className="font-mono">{energy}/{maxEnergy}</span>
-                  </div>
-                </button>
-              </div>
-
-              {/* Chibi DJ Avatar Button */}
+              {/* Compact DJ Avatar Button */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
@@ -2799,383 +2778,45 @@ export default function App() {
                     return next;
                   });
                 }}
-                title="Customize DJ Avatar Streetwear"
-                className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#2e1a5e] to-[#160c30] border-2 border-[#111116] shadow-[0_2px_0_#111116] flex items-center justify-center shrink-0 cursor-pointer hover:border-purple-400"
+                title="Customize DJ Avatar"
+                className="w-7 h-7 rounded-lg bg-[#241645] hover:bg-[#311e5e] border border-white/20 flex items-center justify-center shrink-0 cursor-pointer"
               >
-                <svg viewBox="0 0 44 44" className="w-6 h-6 sm:w-8 sm:h-8">
-                  <path
-                    d="M11,40 C11,30 33,30 33,40 Z"
-                    fill={currentAvatar.top}
-                    stroke="#111116"
-                    strokeWidth="2.5"
-                  />
+                <svg viewBox="0 0 44 44" className="w-5 h-5">
+                  <path d="M11,40 C11,30 33,30 33,40 Z" fill={currentAvatar.top} stroke="#111116" strokeWidth="2.5" />
                   <circle cx="22" cy="21" r="11" fill="#f3c69f" stroke="#111116" strokeWidth="2.5" />
-                  <path
-                    d="M11,19 C11,8 33,8 33,19 Z"
-                    fill={currentAvatar.hair}
-                    stroke="#111116"
-                    strokeWidth="2.4"
-                  />
-                  <circle cx="30" cy="11" r="3.5" fill={currentAvatar.cap} stroke="#111116" strokeWidth="2" />
+                  <path d="M11,19 C11,8 33,8 33,19 Z" fill={currentAvatar.hair} stroke="#111116" strokeWidth="2.4" />
                   <circle cx="18" cy="22" r="1.9" fill="#111116" />
                   <circle cx="26" cy="22" r="1.9" fill="#111116" />
                 </svg>
-                <span className="absolute -bottom-1 -right-1 px-1 rounded bg-purple-600 border border-[#111116] text-[6px] sm:text-[7px] font-black text-white">
-                  DJ
-                </span>
-              </button>
-
-              {/* 4 Compact DJ Action Buttons: GENRE, BEAT, BASS, DEDICATE */}
-              <div className="flex items-center gap-1">
-                {(
-                  [
-                    { id: 'GENRE', label: 'STREAM', icon: '♫', cost: 1 },
-                    { id: 'BEAT', label: 'BEAT', icon: '🎛️', cost: 1 },
-                    { id: 'BASS', label: 'BASS', icon: '◎', cost: 2 },
-                    { id: 'DEDICATE', label: 'DEDICATE', icon: '♥', cost: 2 },
-                  ] as const
-                ).map((btn) => {
-                  const isActive =
-                    (btn.id === 'GENRE' && beatStudioModalTab === 'MUSIC') ||
-                    (btn.id === 'BEAT' && beatStudioModalTab === 'BEAT_MAKER') ||
-                    activeTopLeftModal === btn.id;
-                  return (
-                    <button
-                      key={btn.id}
-                      onClick={() => {
-                        soundEngine.playClick();
-                        if (btn.id === 'GENRE') {
-                          setActiveTopLeftModal(null);
-                          setBeatStudioModalTab((t) => (t === 'MUSIC' ? null : 'MUSIC'));
-                        } else if (btn.id === 'BEAT') {
-                          setActiveTopLeftModal(null);
-                          setBeatStudioModalTab((t) => (t === 'BEAT_MAKER' ? null : 'BEAT_MAKER'));
-                        } else {
-                          setBeatStudioModalTab(null);
-                          setIsQuestTrackerMinimized(true);
-                          setActiveTopLeftModal((m) => (m === btn.id ? null : btn.id));
-                        }
-                      }}
-                      title={`${btn.label} (⚡${btn.cost})`}
-                      className={`relative px-1.5 py-1 sm:px-2 sm:py-1 rounded-xl border-2 flex items-center gap-1 cursor-pointer transition-all ${
-                        isActive
-                          ? 'bg-purple-600 border-cyan-300 text-white shadow-[0_0_10px_rgba(34,211,238,0.45)]'
-                          : 'bg-[#1c1236] hover:bg-[#28194d] border-[#111116] text-purple-100'
-                      }`}
-                    >
-                      <span className="text-[10px] sm:text-xs">{btn.icon}</span>
-                      <span className="hidden xl:inline text-[9px] font-black tracking-wider">
-                        {btn.label}
-                      </span>
-                      <span className="px-1 rounded-full bg-[#facc15] text-[#111116] text-[7px] font-black leading-tight">
-                        ⚡{btn.cost}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* CENTER GROUP: UNIFIED "NOW PLAYING" & STREAMING HUB CARD (BPM-SYNCED GLOW + SMOOTH TRACK FADE-OUT) */}
-            <div
-              className={`relative overflow-hidden flex items-center gap-1.5 sm:gap-2 px-2 py-1 sm:px-2.5 sm:py-1 rounded-xl border-2 min-w-0 flex-1 max-w-full sm:max-w-[445px] transition-all duration-150 ${
-                trackFadePhase === 'FADING_OUT'
-                  ? 'bg-[#120b24]/95 border-fuchsia-400/80 shadow-[0_0_24px_rgba(232,121,249,0.55)] scale-[0.985]'
-                  : trackFadePhase === 'FADING_IN'
-                  ? 'bg-[#1d1238]/98 border-cyan-300 shadow-[0_0_26px_rgba(34,211,238,0.75)] scale-[1.01]'
-                  : isBpmDownbeat
-                  ? displayedTrack.streamingSource === 'YOUTUBE'
-                    ? 'bg-[#21102e]/98 border-[#FF0000] shadow-[0_0_22px_rgba(255,0,0,0.68),inset_0_0_12px_rgba(255,0,0,0.22)]'
-                    : displayedTrack.streamingSource === 'SPOTIFY'
-                    ? 'bg-[#122628]/98 border-[#1DB954] shadow-[0_0_22px_rgba(29,185,84,0.68),inset_0_0_12px_rgba(29,185,84,0.22)]'
-                    : displayedTrack.streamingSource === 'APPLE'
-                    ? 'bg-[#261028]/98 border-[#FA243C] shadow-[0_0_22px_rgba(250,36,60,0.68),inset_0_0_12px_rgba(250,36,60,0.22)]'
-                    : 'bg-[#1e133a]/98 border-cyan-300 shadow-[0_0_22px_rgba(34,211,238,0.68),inset_0_0_12px_rgba(168,85,247,0.28)]'
-                  : isBpmHalfBeat
-                  ? 'bg-[#1a1133]/96 border-purple-400/80 shadow-[0_0_14px_rgba(168,85,247,0.42)]'
-                  : 'bg-[#18102e]/95 border-[#111116] shadow-inner'
-              }`}
-            >
-              {/* Subtle BPM-Synced Ambient Backlight & Track-Change Crossfade Sweep */}
-              <div
-                className={`pointer-events-none absolute inset-0 transition-opacity duration-150 ${
-                  trackFadePhase === 'FADING_OUT'
-                    ? 'opacity-45 bg-gradient-to-r from-fuchsia-500/30 via-cyan-400/25 to-purple-600/30'
-                    : isBpmDownbeat
-                    ? 'opacity-30 bg-gradient-to-r from-cyan-400/25 via-fuchsia-500/20 to-transparent'
-                    : isBpmHalfBeat
-                    ? 'opacity-15 bg-gradient-to-r from-purple-500/15 via-cyan-400/10 to-transparent'
-                    : 'opacity-0'
-                }`}
-              />
-
-              {/* Bottom BPM Beat Pulse Line */}
-              <div
-                className={`pointer-events-none absolute bottom-0 left-0 right-0 h-[2px] transition-all duration-100 ${
-                  !isPlayingMusicActive
-                    ? 'opacity-0'
-                    : isBpmDownbeat
-                    ? 'opacity-100 bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300 scale-x-100'
-                    : isBpmHalfBeat
-                    ? 'opacity-70 bg-gradient-to-r from-purple-400 via-cyan-400 to-purple-500 scale-x-95'
-                    : 'opacity-25 bg-purple-600/50 scale-x-90'
-                }`}
-              />
-
-              {(!isAudioReady || isMuted || isMusicPaused) && (
-                <button
-                  onClick={() => {
-                    setIsMuted(false);
-                    setIsMusicPaused(false);
-                    soundEngine.setMuted(false);
-                    soundEngine.setPaused(false);
-                    soundEngine.unlockAudio();
-                    streamingMusicManager.play();
-                    soundEngine.playBeatStep(clubMetrics.hypeSegments);
-                  }}
-                  className="relative z-10 px-2 py-1 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 font-black text-[8px] sm:text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse cursor-pointer"
-                >
-                  <Volume2 className="w-3 h-3 shrink-0" />
-                  <span>PLAY</span>
-                </button>
-              )}
-
-              {/* Album Thumbnail or Spinning Turntable Disc + Track Metadata (Smoothly Fades Out & In on Track Change) */}
-              <div
-                onClick={() => {
-                  soundEngine.unlockAudio();
-                  soundEngine.playClick();
-                  setBeatStudioModalTab('MUSIC');
-                }}
-                className={`relative z-10 flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 cursor-pointer group transition-all duration-200 ease-out ${
-                  trackFadePhase === 'FADING_OUT'
-                    ? 'opacity-0 -translate-y-1 scale-95 blur-[1px]'
-                    : trackFadePhase === 'FADING_IN'
-                    ? 'opacity-100 translate-y-0 scale-100 blur-0'
-                    : 'opacity-100 translate-y-0 scale-100'
-                }`}
-                title="Click to open Beat Studio & Streaming Hub (YouTube, Spotify, Apple Music)"
-              >
-                {displayedTrack.thumbnailUrl ? (
-                  <img
-                    src={displayedTrack.thumbnailUrl}
-                    alt={displayedTrack.title}
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover border-2 shrink-0 transition-transform duration-100 ${
-                      isBpmDownbeat
-                        ? 'scale-110 border-cyan-300 ring-2 ring-cyan-400/70'
-                        : isPlayingMusicActive
-                        ? 'scale-100 border-[#111116] ring-1 ring-cyan-400/40'
-                        : 'border-[#111116]'
-                    }`}
-                  />
-                ) : (
-                  <div
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-fuchsia-500 to-cyan-400 border-2 flex items-center justify-center shrink-0 text-xs font-black text-white transition-transform duration-100 ${
-                      isPlayingMusicActive ? 'animate-spin' : ''
-                    } ${
-                      isBpmDownbeat
-                        ? 'scale-110 border-white shadow-[0_0_12px_rgba(34,211,238,0.9)]'
-                        : 'border-[#111116]'
-                    }`}
-                  >
-                    ♫
-                  </div>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    {/* Streaming Service Badge */}
-                    {displayedTrack.streamingSource === 'YOUTUBE' ? (
-                      <span className="px-1.5 py-0.2 rounded bg-[#FF0000] text-white text-[7px] sm:text-[8px] font-black uppercase shrink-0">
-                        ▶ YT
-                      </span>
-                    ) : displayedTrack.streamingSource === 'SPOTIFY' ? (
-                      <span className="px-1.5 py-0.2 rounded bg-[#1DB954] text-slate-950 text-[7px] sm:text-[8px] font-black uppercase shrink-0">
-                        ● SPOTIFY
-                      </span>
-                    ) : displayedTrack.streamingSource === 'APPLE' ? (
-                      <span className="px-1.5 py-0.2 rounded bg-[#FA243C] text-white text-[7px] sm:text-[8px] font-black uppercase shrink-0">
-                         APPLE
-                      </span>
-                    ) : displayedTrack.customAudioUrl ? (
-                      <span className="px-1.5 py-0.2 rounded bg-pink-500 text-white text-[7px] sm:text-[8px] font-black uppercase shrink-0">
-                        MP3
-                      </span>
-                    ) : (
-                      <span className="px-1.5 py-0.2 rounded bg-purple-600 text-white text-[7px] sm:text-[8px] font-black uppercase shrink-0">
-                        SYNTH
-                      </span>
-                    )}
-
-                    <span
-                      className={`text-[9px] sm:text-[11px] font-black truncate transition-colors duration-100 ${
-                        isBpmDownbeat
-                          ? 'text-cyan-200 drop-shadow-[0_0_6px_rgba(34,211,238,0.65)]'
-                          : 'text-white group-hover:text-cyan-300'
-                      }`}
-                    >
-                      {displayedTrack.title}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-[8px] sm:text-[9px] font-mono text-purple-300 truncate">
-                    <span className="truncate">{displayedTrack.artist}</span>
-                    <span>·</span>
-                    <span
-                      className={`font-bold shrink-0 transition-colors duration-100 ${
-                        isBpmDownbeat ? 'text-amber-300' : 'text-cyan-300'
-                      }`}
-                    >
-                      {selectedBpm} BPM
-                    </span>
-
-                    {/* 4-Bar BPM-Synced Mini Equalizer */}
-                    <span
-                      className="hidden sm:inline-flex items-end gap-[1.5px] h-2.5 px-1 shrink-0"
-                      title={`Pulsing at ${selectedBpm} BPM`}
-                    >
-                      <span
-                        className={`w-[2px] rounded-full transition-all duration-75 ${
-                          !isPlayingMusicActive
-                            ? 'h-1 bg-purple-500/40'
-                            : beatStep % 4 === 0
-                            ? 'h-2.5 bg-cyan-300'
-                            : beatStep % 4 === 2
-                            ? 'h-2 bg-cyan-400'
-                            : 'h-1 bg-purple-400'
-                        }`}
-                      />
-                      <span
-                        className={`w-[2px] rounded-full transition-all duration-75 ${
-                          !isPlayingMusicActive
-                            ? 'h-1 bg-purple-500/40'
-                            : beatStep % 4 === 1
-                            ? 'h-2.5 bg-fuchsia-400'
-                            : beatStep % 4 === 0
-                            ? 'h-2 bg-pink-400'
-                            : 'h-1 bg-purple-400'
-                        }`}
-                      />
-                      <span
-                        className={`w-[2px] rounded-full transition-all duration-75 ${
-                          !isPlayingMusicActive
-                            ? 'h-1 bg-purple-500/40'
-                            : beatStep % 4 === 2
-                            ? 'h-2.5 bg-emerald-300'
-                            : beatStep % 4 === 0
-                            ? 'h-2 bg-cyan-300'
-                            : 'h-1 bg-purple-400'
-                        }`}
-                      />
-                      <span
-                        className={`w-[2px] rounded-full transition-all duration-75 ${
-                          !isPlayingMusicActive
-                            ? 'h-1 bg-purple-500/40'
-                            : beatStep % 4 === 3
-                            ? 'h-2.5 bg-amber-300'
-                            : beatStep % 4 === 1
-                            ? 'h-2 bg-yellow-300'
-                            : 'h-1 bg-purple-400'
-                        }`}
-                      />
-                    </span>
-
-                    <span className="hidden md:inline-flex items-center gap-1 font-black uppercase shrink-0 text-fuchsia-300">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full inline-block transition-transform duration-100 ${
-                          isBpmDownbeat
-                            ? 'bg-cyan-300 scale-125 shadow-[0_0_6px_#22d3ee]'
-                            : 'bg-fuchsia-400'
-                        }`}
-                      />
-                      {displayedTrack.genre}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Unified Playback Controls: Pause/Play, Next/Change, Open Hub, Mute */}
-              <div className="relative z-10 flex items-center gap-1 shrink-0">
-                <button
-                  onClick={handleTogglePauseMusic}
-                  title={isMusicPaused ? 'Resume Playback' : 'Pause Playback'}
-                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#251842] hover:bg-[#36225e] border border-[#111116] text-cyan-300 flex items-center justify-center cursor-pointer"
-                >
-                  {isMusicPaused ? (
-                    <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  ) : (
-                    <Pause className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  )}
-                </button>
-                <button
-                  onClick={handleNextClubTrack}
-                  title="Spin Next Track in Queue"
-                  className="px-1.5 h-6 sm:h-7 rounded-lg bg-purple-700 hover:bg-purple-600 border border-[#111116] text-[8px] sm:text-[9px] font-black uppercase text-white flex items-center justify-center cursor-pointer"
-                >
-                  NEXT ⏭
-                </button>
-                <button
-                  onClick={() => {
-                    soundEngine.playClick();
-                    setBeatStudioModalTab('MUSIC');
-                  }}
-                  title="Open Streaming Hub (YouTube, Spotify, Apple Music)"
-                  className="hidden sm:flex px-1.5 h-7 rounded-lg bg-cyan-400 hover:bg-cyan-300 border border-[#111116] text-[9px] font-black uppercase text-slate-950 items-center justify-center cursor-pointer"
-                >
-                  CHANGE
-                </button>
-                <button
-                  onClick={handleToggleMuteMusic}
-                  title={isMuted ? 'Unmute Club Audio' : 'Mute Club Audio'}
-                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg border border-[#111116] flex items-center justify-center cursor-pointer ${
-                    isMuted
-                      ? 'bg-rose-600 text-white'
-                      : 'bg-[#251842] hover:bg-[#36225e] text-emerald-300'
-                  }`}
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  ) : (
-                    <Volume2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* RIGHT GROUP: Club Status, Cash, Crowd, Gems, Stars, Throw Party, Quests Toggle */}
-            <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5">
-              {/* Club Name & OPEN Status Button (Desktop) */}
-              <button
-                onClick={() => {
-                  soundEngine.playClick();
-                  setIsClubOpenStatus((prev) => !prev);
-                }}
-                title="Click to toggle OPEN / VIP PRIVATE status"
-                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#18102e] border border-purple-500/40 cursor-pointer"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isClubOpenStatus
-                      ? 'bg-emerald-400 shadow-[0_0_6px_#4ade80]'
-                      : 'bg-rose-500 shadow-[0_0_6px_#f43f5e]'
-                  }`}
-                />
-                <span className="text-[11px] font-black tracking-wider text-white">
-                  {clubName}
-                </span>
               </button>
 
               {/* Cash Pill */}
-              <div className="flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-[#18102e] border border-[#111116]">
-                <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-400 text-slate-950 font-black text-[9px] sm:text-[10px] flex items-center justify-center">
-                  $
-                </span>
+              <div className="px-2 h-7 rounded-lg bg-[#18102e] border border-white/10 flex items-center gap-1 shrink-0">
+                <span className="text-[10px] font-black text-emerald-400">$</span>
                 <span className="text-[10px] sm:text-xs font-black text-emerald-300 tabular-nums">
-                  ${cash.toLocaleString()}
+                  {cash.toLocaleString()}
                 </span>
               </div>
 
-              {/* Crowd & Queue Pill */}
+              {/* Gems Pill */}
+              <div className="pl-1.5 pr-1 h-7 rounded-lg bg-[#18102e] border border-white/10 flex items-center gap-1 shrink-0">
+                <span className="text-[10px]">💎</span>
+                <span className="text-[10px] sm:text-xs font-black text-fuchsia-300 tabular-nums">
+                  {gems}
+                </span>
+                <button
+                  onClick={() => {
+                    setGems((g) => g + 5);
+                    soundEngine.playCashRegister();
+                  }}
+                  title="Add +5 Gems"
+                  className="w-4 h-4 rounded-full bg-fuchsia-500 hover:bg-fuchsia-400 text-white flex items-center justify-center cursor-pointer"
+                >
+                  <Plus className="w-2.5 h-2.5 stroke-[3]" />
+                </button>
+              </div>
+
+              {/* Crowd Count Pill */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
@@ -3192,65 +2833,207 @@ export default function App() {
                     return next;
                   });
                 }}
-                title="Inside Crowd & Red Carpet Door Line (Click to toggle Sprite Moods)"
-                className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border cursor-pointer transition-colors ${
+                title="Inside Crowd & Door Queue (Click to inspect moods)"
+                className={`px-2 h-7 rounded-lg border flex items-center gap-1 shrink-0 cursor-pointer transition-colors ${
                   isMoodPanelOpen
                     ? 'bg-cyan-400 text-slate-950 border-white font-black'
-                    : 'bg-[#18102e] border-[#111116] hover:border-cyan-400 text-white'
+                    : 'bg-[#18102e] border-white/10 hover:border-cyan-400 text-white'
                 }`}
               >
-                <span
-                  className={`text-[8px] sm:text-[9px] font-black uppercase ${
-                    isMoodPanelOpen ? 'text-slate-950' : 'text-cyan-300'
-                  }`}
-                >
-                  CROWD
-                </span>
+                <Users className="w-3 h-3 text-cyan-300 shrink-0" />
                 <span className="text-[10px] sm:text-xs font-black tabular-nums">
                   {guestsRef.current.filter((g) => g.state !== 'QUEUEING').length}/{clubMetrics.maxGuests}
                 </span>
-                {queueCount > 0 && (
-                  <span className="hidden md:inline-block px-1 rounded-full bg-rose-500/30 text-[8px] font-black text-rose-200">
-                    +{queueCount}
-                  </span>
-                )}
               </button>
 
-              {/* Gems Pill */}
-              <div className="flex items-center gap-1 pl-2 pr-1 py-0.5 sm:py-1 rounded-full bg-[#18102e] border border-[#111116]">
-                <span className="text-[10px] sm:text-xs">💎</span>
-                <span className="text-[10px] sm:text-xs font-black text-fuchsia-300 tabular-nums">
-                  {gems}
+              {/* Inline Vibe Thermometer Pill (Replaces the tall overlapping right-side thermometer tube) */}
+              <button
+                onClick={() => {
+                  soundEngine.playUpgradeFanfare();
+                  setHypeSurgeBonus((prev) => (prev >= 120 ? 45 : 140));
+                  triggerHypeBlast(40, clubMetrics.totalHype + 40, clubMetrics.tipBonus);
+                }}
+                title="Club Vibe Meter (Tap to Surge Vibe!)"
+                className="hidden sm:flex items-center gap-1.5 px-2 h-7 rounded-lg bg-[#18102e] hover:bg-[#231742] border border-fuchsia-400/40 shrink-0 cursor-pointer"
+              >
+                <span className="text-[10px]">🍸</span>
+                <div className="w-10 h-2 rounded-full bg-[#090514] overflow-hidden border border-white/15">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-cyan-300 transition-all duration-300"
+                    style={{ width: `${vibeThermometerPercent}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-black text-fuchsia-300">
+                  {vibeThermometerPercent}%
                 </span>
+              </button>
+            </div>
+
+            {/* CENTER CLUSTER: COMPACT BPM-SYNCED "NOW PLAYING" TURNTABLE PILL */}
+            <div
+              className={`relative overflow-hidden flex items-center gap-1.5 px-2 h-7 sm:h-8 rounded-lg border min-w-[175px] max-w-[235px] sm:max-w-[320px] flex-1 transition-all duration-150 ${
+                trackFadePhase === 'FADING_OUT'
+                  ? 'bg-[#120b24]/95 border-fuchsia-400/80 shadow-[0_0_16px_rgba(232,121,249,0.5)] scale-[0.985]'
+                  : trackFadePhase === 'FADING_IN'
+                  ? 'bg-[#1d1238]/98 border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.65)] scale-[1.01]'
+                  : isBpmDownbeat
+                  ? displayedTrack.streamingSource === 'YOUTUBE'
+                    ? 'bg-[#21102e]/95 border-[#FF0000] shadow-[0_0_14px_rgba(255,0,0,0.55)]'
+                    : displayedTrack.streamingSource === 'SPOTIFY'
+                    ? 'bg-[#122628]/95 border-[#1DB954] shadow-[0_0_14px_rgba(29,185,84,0.55)]'
+                    : displayedTrack.streamingSource === 'APPLE'
+                    ? 'bg-[#261028]/95 border-[#FA243C] shadow-[0_0_14px_rgba(250,36,60,0.55)]'
+                    : 'bg-[#1e133a]/95 border-cyan-300 shadow-[0_0_14px_rgba(34,211,238,0.55)]'
+                  : 'bg-[#18102e]/90 border-white/15'
+              }`}
+            >
+              {/* Bottom BPM Beat Pulse Line */}
+              <div
+                className={`pointer-events-none absolute bottom-0 left-0 right-0 h-[1.5px] transition-all duration-100 ${
+                  !isPlayingMusicActive
+                    ? 'opacity-0'
+                    : isBpmDownbeat
+                    ? 'opacity-100 bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-amber-300'
+                    : 'opacity-30 bg-purple-500/50'
+                }`}
+              />
+
+              {/* Track Info (Click opens Beat & Streaming Studio) */}
+              <div
+                onClick={() => {
+                  soundEngine.unlockAudio();
+                  soundEngine.playClick();
+                  setBeatStudioModalTab('MUSIC');
+                }}
+                title="Open Beat Studio & Streaming Hub (YouTube, Spotify, Apple Music)"
+                className={`relative z-10 flex items-center gap-1.5 min-w-0 flex-1 cursor-pointer transition-all duration-200 ${
+                  trackFadePhase === 'FADING_OUT' ? 'opacity-0 -translate-y-0.5' : 'opacity-100 translate-y-0'
+                }`}
+              >
+                {displayedTrack.thumbnailUrl ? (
+                  <img
+                    src={displayedTrack.thumbnailUrl}
+                    alt={displayedTrack.title}
+                    className="w-5 h-5 rounded object-cover border border-white/20 shrink-0"
+                  />
+                ) : (
+                  <div
+                    className={`w-5 h-5 rounded-full bg-gradient-to-br from-fuchsia-500 to-cyan-400 flex items-center justify-center shrink-0 text-[9px] font-black text-white ${
+                      isPlayingMusicActive ? 'animate-spin' : ''
+                    }`}
+                  >
+                    ♫
+                  </div>
+                )}
+
+                {displayedTrack.streamingSource === 'YOUTUBE' ? (
+                  <span className="px-1 rounded bg-[#FF0000] text-white text-[7px] font-black uppercase shrink-0">
+                    YT
+                  </span>
+                ) : displayedTrack.streamingSource === 'SPOTIFY' ? (
+                  <span className="px-1 rounded bg-[#1DB954] text-slate-950 text-[7px] font-black uppercase shrink-0">
+                    SPOTIFY
+                  </span>
+                ) : displayedTrack.streamingSource === 'APPLE' ? (
+                  <span className="px-1 rounded bg-[#FA243C] text-white text-[7px] font-black uppercase shrink-0">
+                    APPLE
+                  </span>
+                ) : displayedTrack.customAudioUrl ? (
+                  <span className="px-1 rounded bg-pink-500 text-white text-[7px] font-black uppercase shrink-0">
+                    MP3
+                  </span>
+                ) : (
+                  <span className="px-1 rounded bg-purple-600 text-white text-[7px] font-black uppercase shrink-0">
+                    SYNTH
+                  </span>
+                )}
+
+                <span className="text-[10px] font-black text-white truncate">
+                  {displayedTrack.title}
+                </span>
+                <span className="hidden md:inline text-[9px] font-mono font-bold text-cyan-300 shrink-0">
+                  {selectedBpm} BPM
+                </span>
+              </div>
+
+              {/* Compact Transport Controls */}
+              <div className="relative z-10 flex items-center gap-0.5 shrink-0">
+                <button
+                  onClick={handleTogglePauseMusic}
+                  title={isMusicPaused ? 'Resume Playback' : 'Pause Playback'}
+                  className="w-5 h-5 rounded bg-[#251842] hover:bg-[#36225e] text-cyan-300 flex items-center justify-center cursor-pointer"
+                >
+                  {isMusicPaused ? <Play className="w-2.5 h-2.5" /> : <Pause className="w-2.5 h-2.5" />}
+                </button>
+                <button
+                  onClick={handleNextClubTrack}
+                  title="Next Track"
+                  className="px-1 h-5 rounded bg-purple-700 hover:bg-purple-600 text-[8px] font-black text-white flex items-center justify-center cursor-pointer"
+                >
+                  ⏭
+                </button>
                 <button
                   onClick={() => {
-                    setGems((g) => g + 5);
-                    soundEngine.playCashRegister();
+                    soundEngine.playClick();
+                    setBeatStudioModalTab('MUSIC');
                   }}
-                  title="Add +5 Gems"
-                  className="w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-fuchsia-500 hover:bg-fuchsia-400 text-white flex items-center justify-center cursor-pointer"
+                  title="Open Streaming Hub"
+                  className="px-1.5 h-5 rounded bg-cyan-400 hover:bg-cyan-300 text-[8px] font-black text-slate-950 flex items-center justify-center cursor-pointer"
                 >
-                  <Plus className="w-2.5 h-2.5 stroke-[3]" />
+                  HUB
                 </button>
               </div>
+            </div>
 
-              {/* Star Rating Pill */}
-              <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-[#18102e] border border-[#111116]">
-                <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                <span className="text-xs font-black text-yellow-300 tabular-nums">{starRating}</span>
-              </div>
+            {/* RIGHT CLUSTER: COMPACT DJ FX + PARTY + QUESTS */}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Compact DJ FX Buttons */}
+              {(
+                [
+                  { id: 'BEAT', label: 'BEAT', icon: '🎛️' },
+                  { id: 'BASS', label: 'BASS', icon: '◎' },
+                  { id: 'DEDICATE', label: 'LOVE', icon: '♥' },
+                ] as const
+              ).map((btn) => {
+                const isActive =
+                  (btn.id === 'BEAT' && beatStudioModalTab === 'BEAT_MAKER') ||
+                  activeTopLeftModal === btn.id;
+                return (
+                  <button
+                    key={btn.id}
+                    onClick={() => {
+                      soundEngine.playClick();
+                      if (btn.id === 'BEAT') {
+                        setActiveTopLeftModal(null);
+                        setBeatStudioModalTab((t) => (t === 'BEAT_MAKER' ? null : 'BEAT_MAKER'));
+                      } else {
+                        setBeatStudioModalTab(null);
+                        setIsQuestTrackerMinimized(true);
+                        setActiveTopLeftModal((m) => (m === btn.id ? null : btn.id));
+                      }
+                    }}
+                    title={btn.label}
+                    className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs cursor-pointer transition-colors ${
+                      isActive
+                        ? 'bg-purple-600 border-cyan-300 text-white'
+                        : 'bg-[#1c1236] hover:bg-[#28194d] border-white/15 text-purple-100'
+                    }`}
+                  >
+                    {btn.icon}
+                  </button>
+                );
+              })}
 
-              {/* THROW A PARTY Button */}
+              {/* Throw Party Button */}
               <button
                 onClick={handleThrowParty}
-                className="px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-[#ec4899] via-[#d946ef] to-[#a855f7] hover:brightness-110 border-2 border-[#111116] shadow-[0_2px_0_#111116] text-white font-black text-[9px] sm:text-[11px] tracking-wider uppercase flex items-center gap-1 cursor-pointer active:translate-y-0.5"
+                className="px-2 h-7 rounded-lg bg-gradient-to-r from-[#ec4899] to-[#a855f7] hover:brightness-110 border border-white/20 text-white font-black text-[9px] sm:text-[10px] uppercase flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <Sparkles className="w-3 h-3 text-yellow-300 fill-yellow-300 shrink-0" />
-                <span className="hidden sm:inline">THROW</span>
                 <span>PARTY</span>
               </button>
 
-              {/* Quests Dropdown Toggle Pill */}
+              {/* Quests Toggle Button */}
               <button
                 onClick={() => {
                   soundEngine.playClick();
@@ -3267,35 +3050,16 @@ export default function App() {
                     return nextMin;
                   });
                 }}
-                className={`px-2 py-1 sm:px-2.5 sm:py-1 rounded-full border-2 flex items-center gap-1 cursor-pointer transition-all ${
+                className={`px-2 h-7 rounded-lg border flex items-center gap-1 cursor-pointer shrink-0 transition-all ${
                   !isQuestTrackerMinimized
                     ? 'bg-amber-400 text-slate-950 border-white font-black'
-                    : 'bg-[#18102e] text-amber-300 border-amber-400/80 hover:border-cyan-300 font-black'
+                    : 'bg-[#18102e] text-amber-300 border-amber-400/60 hover:border-cyan-300 font-black'
                 }`}
               >
-                <span className="text-[10px] sm:text-xs">🏆</span>
+                <span className="text-[10px]">🏆</span>
                 <span className="text-[9px] sm:text-[10px] uppercase">
-                  {unclaimedQuestCount > 0 ? `${unclaimedQuestCount} READY!` : `Quests (${questStreakMultiplier}x)`}
+                  {unclaimedQuestCount > 0 ? `${unclaimedQuestCount} READY` : 'QUESTS'}
                 </span>
-              </button>
-
-              {/* Quick Edit Decor Toggle (Desktop) */}
-              <button
-                onClick={() => {
-                  soundEngine.playClick();
-                  const next = !isEditDecorMode;
-                  setIsEditDecorMode(next);
-                  setIsRemoveMode(false);
-                  if (!next) setEditingPlacedItemUid(null);
-                }}
-                title="Edit Position of Placed Decorations on the Floor"
-                className={`hidden lg:flex px-2 py-1 rounded-full border-2 border-[#111116] items-center gap-1 text-[9px] font-black cursor-pointer ${
-                  isEditDecorMode || editingPlacedItemUid
-                    ? 'bg-cyan-400 text-slate-950'
-                    : 'bg-[#18102e] text-cyan-300 hover:border-cyan-400'
-                }`}
-              >
-                <span>✥ {isEditDecorMode || editingPlacedItemUid ? 'EDITING' : 'DECOR'}</span>
               </button>
             </div>
           </div>
@@ -3520,15 +3284,15 @@ export default function App() {
 
           {/* STREAMING OR VIP BOTTLE TOAST NOTIFICATION BANNER */}
           {(streamState.toastMessage || vipBottleToast) && (
-            <div className="pointer-events-auto mx-auto px-3.5 py-1.5 rounded-xl bg-[#18102e]/98 border-2 border-amber-300 shadow-lg text-xs font-black text-amber-200 flex items-center gap-2">
+            <div className="pointer-events-auto mx-auto px-3 py-1 rounded-full bg-[#18102e]/95 border border-amber-300/80 shadow-md text-[10px] font-black text-amber-200 flex items-center gap-1.5">
               <span>{vipBottleToast ? '🍾' : '🎧'}</span>
-              <span>{vipBottleToast || streamState.toastMessage}</span>
+              <span className="truncate max-w-[340px] sm:max-w-[520px]">{vipBottleToast || streamState.toastMessage}</span>
             </div>
           )}
         </div>
 
         {/* -------------------------------------------------------------------
-            MIDDLE ZONE: SIDE SPRITE MOOD PANEL + CLUB GOSSIP OVERLAY + FAR-RIGHT VERTICAL VIBE THERMOMETER & ZOOM
+            MIDDLE ZONE: COMPACT LEFT MOOD/GOSSIP PILLS + COMPACT RIGHT CAMERA/VIBE UTILITY PILL
            ------------------------------------------------------------------- */}
         <div className="flex-1 flex items-center justify-between relative my-1 min-h-0">
           {/* ==================== LEFT-SIDE SPRITE MOOD INSPECTOR & CLUB GOSSIP FEED OVERLAY ==================== */}
@@ -3550,19 +3314,13 @@ export default function App() {
                     setActiveDockTab(null);
                   }
                 }}
-                className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl sm:rounded-2xl bg-[#130d24]/94 border-2 sm:border-[2.5px] border-[#111116] shadow-[0_3px_0_#111116] sm:shadow-[0_4px_0_#111116] text-left flex items-center gap-1.5 sm:gap-2 cursor-pointer hover:border-cyan-400 transition-all"
+                title="Inspect Crowd & Staff Moods"
+                className="px-2.5 py-1 rounded-full bg-[#110b20]/88 backdrop-blur-md border border-white/15 shadow-md text-left flex items-center gap-1.5 cursor-pointer hover:border-cyan-400 transition-all w-fit"
               >
-                <span className="text-sm sm:text-base">{selectedSpriteMood?.moodEmoji || '🔥'}</span>
-                <div>
-                  <div className="text-[8px] sm:text-[9px] font-mono uppercase tracking-wider text-cyan-300 font-bold">
-                    MOODS ({spriteMoodList.length})
-                  </div>
-                  <div className="text-[10px] sm:text-xs font-black text-white max-w-[115px] sm:max-w-none truncate">
-                    {selectedSpriteMood
-                      ? `${selectedSpriteMood.name}: ${selectedSpriteMood.moodLabel}`
-                      : 'Tap Sprite'}
-                  </div>
-                </div>
+                <span className="text-xs">{selectedSpriteMood?.moodEmoji || '🔥'}</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-cyan-200">
+                  Moods ({spriteMoodList.length})
+                </span>
               </button>
             ) : (
               <div
@@ -3789,29 +3547,21 @@ export default function App() {
                     setActiveDockTab(null);
                   }
                 }}
-                className="relative px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#170e2e]/96 via-[#241346]/96 to-[#170e2e]/96 border-2 sm:border-[2.5px] border-[#111116] shadow-[0_3px_0_#111116,0_0_16px_rgba(236,72,153,0.3)] text-left flex items-center gap-2 cursor-pointer hover:border-pink-400 transition-all max-w-[195px] sm:max-w-[265px]"
+                title="Open Club Gossip Feed"
+                className="relative px-2.5 py-1 rounded-full bg-[#110b20]/88 backdrop-blur-md border border-white/15 shadow-md text-left flex items-center gap-1.5 cursor-pointer hover:border-pink-400 transition-all w-fit"
               >
+                <span className="text-xs">📱</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-pink-200">
+                  Gossip
+                </span>
+                <span className="px-1 rounded bg-pink-500/25 text-[8px] font-mono font-black text-amber-300">
+                  {gossipHypeMultiplier.toFixed(1)}x
+                </span>
                 {unreadGossipCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 rounded-full bg-gradient-to-r from-pink-500 to-amber-400 border border-[#111116] text-[8px] font-black text-slate-950 shadow animate-bounce">
-                    +{unreadGossipCount} TEA
+                  <span className="px-1 rounded-full bg-gradient-to-r from-pink-500 to-amber-400 text-[8px] font-black text-slate-950">
+                    +{unreadGossipCount}
                   </span>
                 )}
-                <span className="text-sm sm:text-base shrink-0">📱</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[8px] sm:text-[9px] font-mono uppercase tracking-wider text-pink-300 font-black">
-                      CLUB GOSSIP
-                    </span>
-                    <span className="px-1 py-0.1 rounded bg-pink-500/25 border border-pink-400/40 text-[7px] sm:text-[8px] font-mono font-black text-amber-300">
-                      🔥 {gossipHypeMultiplier.toFixed(1)}x
-                    </span>
-                  </div>
-                  <div className="text-[9px] sm:text-[11px] font-bold text-white truncate mt-0.5">
-                    {gossipFeed[0]
-                      ? `${gossipFeed[0].authorEmoji} ${gossipFeed[0].authorName}: "${gossipFeed[0].message}"`
-                      : 'Tap to read overheard guest thoughts!'}
-                  </div>
-                </div>
               </button>
             ) : (
               <div
@@ -5142,93 +4892,49 @@ export default function App() {
             </div>
           )}
 
-          {/* ==================== FAR-RIGHT EDGE: TALL VERTICAL PURPLE VIBE/HYPE THERMOMETER METER + ZOOM/CAMERA CONTROLS ==================== */}
-          <div className="ml-auto flex flex-col items-center gap-1.5 sm:gap-2 pointer-events-auto z-30">
-            {/* Tall Vertical Purple Vibe/Hype Thermometer with Cocktail Icon at Top (Hidden on small phone screen only when a bottom drawer is open) */}
-            <button
-              type="button"
-              onClick={() => {
-                soundEngine.playUpgradeFanfare();
-                setHypeSurgeBonus((prev) => (prev >= 120 ? 45 : 140));
-                triggerHypeBlast(40, clubMetrics.totalHype + 40, clubMetrics.tipBonus);
-              }}
-              title="Vibe/Hype Thermometer (Tap to Surge Club Vibe!)"
-              className={`${
-                activeDockTab ? 'hidden sm:flex' : 'flex'
-              } flex-col items-center p-1 sm:p-1.5 rounded-full bg-[#130d24]/92 border-2 sm:border-[2.5px] border-[#111116] shadow-[0_3px_0_#111116,0_0_16px_rgba(168,85,247,0.45)] cursor-pointer group`}
-            >
-              {/* Cocktail Icon Circle at Top */}
-              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-b from-fuchsia-400 via-purple-600 to-indigo-900 border-2 border-[#111116] flex items-center justify-center shadow mb-1 group-hover:scale-110 transition-transform">
-                <svg viewBox="0 0 28 28" className="w-4 h-4 sm:w-5 sm:h-5">
-                  <polygon
-                    points="6,7 22,7 14,16"
-                    fill="#22d3ee"
-                    stroke="#111116"
-                    strokeWidth="2"
-                    strokeLinejoin="round"
-                  />
-                  <line x1="14" y1="16" x2="14" y2="23" stroke="#f8fafc" strokeWidth="2.2" />
-                  <line x1="9" y1="23" x2="19" y2="23" stroke="#f8fafc" strokeWidth="2.2" strokeLinecap="round" />
-                  <circle cx="18" cy="6" r="2.2" fill="#f43f5e" />
-                </svg>
-              </div>
+          {/* ==================== FAR-RIGHT EDGE: COMPACT FLOATING CAMERA & BAR UTILITY PILL ==================== */}
+          <div className="ml-auto flex flex-col items-center gap-1 pointer-events-auto z-30">
+            <div className="flex flex-col items-center gap-1 p-1 rounded-xl bg-[#110b20]/88 backdrop-blur-md border border-white/15 shadow-lg">
+              {/* Compact Bar Restock & Vibe Surge Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDrinkServingsRemaining((s) => Math.min(120, s + 36));
+                  setCash((c) => c + activeDrink.sellPrice * 3);
+                  addXp(25);
+                  setHypeSurgeBonus((prev) => (prev >= 120 ? 45 : 140));
+                  soundEngine.playCashRegister();
+                  floatingTextsRef.current.push({
+                    id: `restock_${performance.now()}`,
+                    text: `🍸 BAR RESTOCKED! +36 SERVINGS`,
+                    floor: activeFloor,
+                    gridX: 7,
+                    gridY: 3.5,
+                    color: '#4ade80',
+                    age: 0,
+                  });
+                }}
+                title={`Restock Bar & Surge Vibe (${drinkServingsRemaining} drinks left)`}
+                className="relative w-7 h-7 rounded-lg bg-gradient-to-b from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 text-slate-950 flex flex-col items-center justify-center cursor-pointer active:scale-95"
+              >
+                <span className="text-[11px] leading-none">🍸</span>
+                <span className="text-[7px] font-mono font-black leading-none">{drinkServingsRemaining}</span>
+              </button>
 
-              {/* Vertical Purple Thermometer Tube */}
-              <div className="relative w-3.5 sm:w-4 h-20 sm:h-36 rounded-full bg-[#090514] border-2 border-[#111116] overflow-hidden flex flex-col justify-end p-0.5">
-                <div
-                  className="w-full rounded-full bg-gradient-to-t from-[#7e22ce] via-[#d946ef] to-[#22d3ee] shadow-[0_0_10px_#e879f9] transition-all duration-500"
-                  style={{ height: `${vibeThermometerPercent}%` }}
-                />
-                {/* Graduation tick marks */}
-                <div className="absolute inset-x-0 top-1/4 border-t border-white/25" />
-                <div className="absolute inset-x-0 top-2/4 border-t border-white/25" />
-                <div className="absolute inset-x-0 top-3/4 border-t border-white/25" />
-              </div>
-
-              <span className="text-[9px] font-black uppercase tracking-wider text-fuchsia-300 mt-1 px-1">
-                VIBE
-              </span>
-            </button>
-
-            {/* Quick Bar Supply Restock Pill */}
-            <button
-              type="button"
-              onClick={() => {
-                setDrinkServingsRemaining((s) => Math.min(120, s + 36));
-                setCash((c) => c + activeDrink.sellPrice * 3);
-                addXp(25);
-                soundEngine.playCashRegister();
-                floatingTextsRef.current.push({
-                  id: `restock_${performance.now()}`,
-                  text: `🍸 BAR RESTOCKED! +36 SERVINGS`,
-                  floor: activeFloor,
-                  gridX: 7,
-                  gridY: 3.5,
-                  color: '#4ade80',
-                  age: 0,
-                });
-              }}
-              title="Restock Bar Drink Servings (+36 Drinks)"
-              className={`${
-                activeDockTab ? 'hidden sm:inline-flex' : 'inline-flex'
-              } px-2 py-1 rounded-xl bg-gradient-to-b from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 border-2 border-[#111116] shadow-[0_3px_0_#111116] text-slate-950 font-black text-[9px] uppercase tracking-wider cursor-pointer active:translate-y-0.5`}
-            >
-              RESTOCK ({drinkServingsRemaining})
-            </button>
-
-            {/* Always-Accessible Zoom In / Zoom Out (45% - 225%) & Cool Eco Mode Controls (Works with iPad/Phone Pinch & Mouse Wheel) */}
-            <div className="flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-[#130d24]/95 border-[2.5px] border-[#111116] shadow-[0_4px_0_#111116]">
+              {/* Zoom In (+) */}
               <button
                 type="button"
                 onClick={() => {
                   soundEngine.playClick();
                   setCameraZoom((z) => Math.min(2.25, +(z + 0.18).toFixed(2)));
                 }}
-                className="w-8 h-8 rounded-lg bg-[#241842] hover:bg-purple-700 border border-[#111116] text-white flex items-center justify-center cursor-pointer active:scale-95"
+                className="w-7 h-6 rounded-md bg-[#241842] hover:bg-purple-700 text-white flex items-center justify-center cursor-pointer active:scale-95"
                 title="Zoom In (+)"
               >
-                <ZoomIn className="w-4 h-4" />
+                <ZoomIn className="w-3.5 h-3.5" />
               </button>
+
+              {/* Reset Camera Zoom (100%) */}
               <button
                 type="button"
                 onClick={() => {
@@ -5236,141 +4942,63 @@ export default function App() {
                   setCameraZoom(1.0);
                   setCameraResetTick((t) => t + 1);
                 }}
-                className="w-8 h-6 rounded bg-[#18102e] hover:bg-purple-900 text-[9px] font-mono font-black text-cyan-300 cursor-pointer"
+                className="w-7 h-5 rounded bg-[#18102e] hover:bg-purple-900 text-[8px] font-mono font-black text-cyan-300 cursor-pointer"
                 title="Reset Camera Zoom & Center (100%)"
               >
                 {Math.round(cameraZoom * 100)}%
               </button>
+
+              {/* Zoom Out (-) */}
               <button
                 type="button"
                 onClick={() => {
                   soundEngine.playClick();
                   setCameraZoom((z) => Math.max(0.45, +(z - 0.18).toFixed(2)));
                 }}
-                className="w-8 h-8 rounded-lg bg-[#241842] hover:bg-purple-700 border border-[#111116] text-white flex items-center justify-center cursor-pointer active:scale-95"
+                className="w-7 h-6 rounded-md bg-[#241842] hover:bg-purple-700 text-white flex items-center justify-center cursor-pointer active:scale-95"
                 title="Zoom Out (-)"
               >
-                <ZoomOut className="w-4 h-4" />
+                <ZoomOut className="w-3.5 h-3.5" />
               </button>
+
+              {/* Floor Switch (F1 / F2) */}
               <button
                 type="button"
                 onClick={handleFloor2Action}
-                className="w-8 h-7 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-400/60 text-cyan-300 flex items-center justify-center text-[10px] font-black cursor-pointer"
+                className="w-7 h-6 rounded-md bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-400/50 text-cyan-300 flex items-center justify-center text-[9px] font-black cursor-pointer"
                 title={unlockedFloors === 1 ? 'Unlock Floor 2 ($2,500)' : `Switch Floor (Currently F${activeFloor})`}
               >
                 F{activeFloor}
               </button>
+
+              {/* Eco Thermal Mode & Audio Mute Row */}
               <button
                 type="button"
                 onClick={() => {
                   soundEngine.playClick();
                   setIsEcoThermalMode((e) => !e);
                 }}
-                className={`w-8 h-7 rounded-lg border flex items-center justify-center text-[9px] font-black cursor-pointer ${
+                className={`w-7 h-6 rounded-md border flex items-center justify-center text-[9px] font-black cursor-pointer ${
                   isEcoThermalMode
                     ? 'bg-emerald-400 text-slate-950 border-white'
-                    : 'bg-[#241842] hover:bg-purple-700 border-[#111116] text-emerald-300'
+                    : 'bg-[#241842] hover:bg-purple-700 border-white/10 text-emerald-300'
                 }`}
                 title="Toggle Cool / Eco Mode (Prevents iPad & Phone Heating)"
               >
                 ❄️
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleMuteMusic}
-                className="w-8 h-7 rounded-lg bg-[#241842] hover:bg-purple-700 border border-[#111116] text-purple-200 flex items-center justify-center cursor-pointer"
-                title="Toggle Club Audio"
-              >
-                {isMuted ? (
-                  <VolumeX className="w-3.5 h-3.5 text-rose-400" />
-                ) : (
-                  <Volume2 className="w-3.5 h-3.5 text-cyan-300" />
-                )}
               </button>
             </div>
           </div>
         </div>
 
         {/* -------------------------------------------------------------------
-            BOTTOM DOCK: SLEEK DARK TRANSLUCENT BAR
-            - Friend Avatar Carousel (Noel, Zoe, Roxy)
-            - Club Star Rating Card
-            - 8 Square Icon Tabs (TONIGHT, DRESSING, STAFF, DECORATE, CELEBS, PARTIES, TROPHIES, SETTINGS)
+            BOTTOM DOCK: COMPACT CENTERED FLOATING GLASS BAR
            ------------------------------------------------------------------- */}
-        <div className="pointer-events-auto flex items-center justify-between gap-1.5 sm:gap-2 px-1.5 py-1.5 sm:px-2.5 sm:py-2 rounded-2xl bg-[#110b20]/95 backdrop-blur-md border-2 sm:border-[2.5px] border-[#111116] shadow-[0_6px_0_#111116,0_0_24px_rgba(0,0,0,0.8)]">
-          {/* Left: Friend Avatar Carousel (Noel, Zoe, etc.) + Club Star Rating Card */}
-          <div className="hidden lg:flex items-center gap-2 shrink-0 pr-2 border-r border-purple-500/30">
-            {/* Friend Avatar Carousel (Noel, Zoe, Jax) */}
-            <div className="flex items-center gap-1.5">
-              {[
-                { name: 'Noel', lvl: 18, hair: '#f8fafc', top: '#38bdf8', bg: 'from-cyan-500 to-blue-900' },
-                { name: 'Zoe', lvl: 22, hair: '#facc15', top: '#ec4899', bg: 'from-pink-500 to-purple-900' },
-                { name: 'Roxy', lvl: 15, hair: '#22d3ee', top: '#a855f7', bg: 'from-purple-500 to-indigo-950' },
-              ].map((fr) => (
-                <button
-                  key={fr.name}
-                  onClick={() => {
-                    soundEngine.playClick();
-                    floatingTextsRef.current.push({
-                      id: `visit_${performance.now()}`,
-                      text: `${fr.name.toUpperCase()} SENT +$150 VIP GIFT!`,
-                      floor: activeFloor,
-                      gridX: 4,
-                      gridY: 4,
-                      color: '#38bdf8',
-                      age: 0,
-                    });
-                    setCash((c) => c + 150);
-                  }}
-                  title={`Collect VIP Gift from ${fr.name} (Lvl ${fr.lvl})`}
-                  className="group relative flex flex-col items-center w-12 p-1 rounded-xl bg-[#1c1333] hover:bg-[#2a1c4d] border-2 border-[#111116] cursor-pointer transition-transform active:scale-95"
-                >
-                  <span className="absolute -top-1.5 -left-1 px-1 rounded bg-amber-400 border border-[#111116] text-[8px] font-black text-slate-950">
-                    {fr.lvl}
-                  </span>
-                  <div
-                    className={`w-8 h-8 rounded-full bg-gradient-to-b ${fr.bg} border-2 border-[#111116] flex items-center justify-center overflow-hidden`}
-                  >
-                    <svg viewBox="0 0 36 36" className="w-7 h-7">
-                      <circle cx="18" cy="20" r="9.5" fill="#f3c69f" stroke="#111116" strokeWidth="2.2" />
-                      <path d="M8,18 C8,8 28,8 28,18 Z" fill={fr.hair} stroke="#111116" strokeWidth="2" />
-                      <circle cx="14.5" cy="20" r="1.8" fill="#111116" />
-                      <circle cx="21.5" cy="20" r="1.8" fill="#111116" />
-                    </svg>
-                  </div>
-                  <span className="text-[9px] font-black text-white truncate max-w-full mt-0.5">
-                    {fr.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Club Star Rating Card */}
-            <div className="px-3 py-1.5 rounded-xl bg-gradient-to-b from-[#261945] to-[#170e2c] border-2 border-[#111116] flex flex-col items-center justify-center">
-              <span className="text-[8px] font-mono uppercase tracking-wider text-purple-300">
-                CLUB RATING
-              </span>
-              <div className="flex items-center gap-1 mt-0.5">
-                <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                <span className="text-sm font-black text-yellow-300">{starRating}</span>
-              </div>
-              <span className="text-[8px] font-bold text-cyan-300">
-                {(1 + clubMetrics.tipBonus).toFixed(2)}x Tips
-              </span>
-            </div>
-          </div>
-
-          {/* Right: 8 Square Icon Tabs (TONIGHT, DRESSING, STAFF, DECORATE, CELEBS, PARTIES, TROPHIES, SETTINGS) */}
-          <div className="flex-1 grid grid-cols-8 gap-1 sm:gap-1.5">
+        <div className="pointer-events-auto w-full max-w-[540px] sm:max-w-[660px] mx-auto flex items-center justify-between gap-1 px-1.5 py-1 rounded-2xl bg-[#110b20]/88 backdrop-blur-md border border-white/15 shadow-[0_6px_20px_rgba(0,0,0,0.75)]">
+          <div className="flex-1 grid grid-cols-8 gap-1">
             {(
               [
-                {
-                  id: 'TONIGHT',
-                  label: 'TONIGHT',
-                  icon: '🍸',
-                  grad: 'from-cyan-500 to-blue-700',
-                  upgradeTag: 'MIX',
-                },
+                { id: 'TONIGHT', label: 'TONIGHT', icon: '🍸', grad: 'from-cyan-500 to-blue-700' },
                 { id: 'DRESSING', label: 'DRESSING', icon: '👕', grad: 'from-pink-500 to-rose-700' },
                 {
                   id: 'STAFF',
@@ -5378,15 +5006,8 @@ export default function App() {
                   icon: '🧑‍🍳',
                   grad: 'from-purple-500 to-indigo-800',
                   badge: staffMembers.length,
-                  upgradeTag: 'UPGRADE',
                 },
-                {
-                  id: 'DECORATE',
-                  label: 'DECORATE',
-                  icon: '🛋️',
-                  grad: 'from-emerald-400 to-teal-700',
-                  upgradeTag: 'UPGRADE',
-                },
+                { id: 'DECORATE', label: 'DECORATE', icon: '🛋️', grad: 'from-emerald-400 to-teal-700' },
                 { id: 'CELEBS', label: 'CELEBS', icon: '👑', grad: 'from-amber-400 to-orange-600' },
                 { id: 'PARTIES', label: 'PARTIES', icon: '🎉', grad: 'from-fuchsia-500 to-purple-800' },
                 {
@@ -5396,13 +5017,7 @@ export default function App() {
                   grad: 'from-yellow-400 to-amber-700',
                   badge: unclaimedQuestCount > 0 ? unclaimedQuestCount : undefined,
                 },
-                {
-                  id: 'SETTINGS',
-                  label: 'SETTINGS',
-                  icon: '⚙️',
-                  grad: 'from-slate-500 to-slate-800',
-                  upgradeTag: 'PNG',
-                },
+                { id: 'SETTINGS', label: 'SETTINGS', icon: '⚙️', grad: 'from-slate-500 to-slate-800' },
               ] as const
             ).map((tab) => {
               const isSelected = activeDockTab === tab.id;
@@ -5424,28 +5039,23 @@ export default function App() {
                       return next;
                     });
                   }}
-                  className={`relative py-1 px-0.5 sm:py-1.5 sm:px-1 rounded-xl border-2 transition-all flex flex-col items-center justify-center cursor-pointer ${
+                  className={`relative py-1 px-0.5 rounded-xl border transition-all flex flex-col items-center justify-center cursor-pointer ${
                     isSelected
-                      ? 'bg-gradient-to-b from-purple-600 to-indigo-900 border-cyan-300 -translate-y-0.5 shadow-[0_0_12px_rgba(34,211,238,0.5)]'
-                      : 'bg-[#1c1333] hover:bg-[#281b47] border-[#0D0D14] shadow-[0_2px_0_#0D0D14] sm:shadow-[0_3px_0_#0D0D14]'
+                      ? 'bg-gradient-to-b from-purple-600 to-indigo-900 border-cyan-300 -translate-y-0.5 shadow-[0_0_10px_rgba(34,211,238,0.45)]'
+                      : 'bg-[#1a1130]/90 hover:bg-[#261945] border-white/10'
                   }`}
                 >
-                  {'upgradeTag' in tab && tab.upgradeTag && (
-                    <span className="hidden sm:inline-block absolute -top-1.5 -left-1 px-1 py-0.2 rounded bg-emerald-400 border border-[#0D0D14] text-[7px] font-black text-slate-950 uppercase tracking-tight">
-                      {tab.upgradeTag}
-                    </span>
-                  )}
                   {'badge' in tab && tab.badge !== undefined && (
-                    <span className="absolute -top-1 -right-0.5 sm:-top-1.5 sm:-right-1 px-1 sm:px-1.5 py-0.2 rounded-full bg-rose-500 border border-[#0D0D14] text-[7px] sm:text-[8px] font-black text-white">
+                    <span className="absolute -top-1 -right-0.5 px-1 rounded-full bg-rose-500 border border-[#0D0D14] text-[7px] font-black text-white leading-tight">
                       {tab.badge}
                     </span>
                   )}
                   <div
-                    className={`w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-b ${tab.grad} border-[1.5px] sm:border-[1.8px] border-[#0D0D14] flex items-center justify-center text-xs sm:text-base shadow-inner`}
+                    className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-b ${tab.grad} border border-black/40 flex items-center justify-center text-xs sm:text-sm shadow-inner`}
                   >
                     {tab.icon}
                   </div>
-                  <span className="text-[6.5px] sm:text-[9px] font-black tracking-tight sm:tracking-wider text-white mt-0.5 sm:mt-1 truncate max-w-full drop-shadow-[0_1px_0_#0D0D14]">
+                  <span className="text-[6.5px] sm:text-[8px] font-black tracking-tight text-white mt-0.5 truncate max-w-full">
                     {tab.label}
                   </span>
                 </button>
