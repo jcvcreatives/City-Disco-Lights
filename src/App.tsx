@@ -1290,15 +1290,17 @@ export default function App() {
     soundEngine.setMuted(isMuted);
   }, [isMuted]);
 
-  // 16-Step Multi-Track Club Drum & Synth Sequencer when not muted and not paused
+  // 16-Step Multi-Track Club Drum & Synth Sequencer + Dynamic Crowd Ambience Layer when not muted and not paused
   useEffect(() => {
     if (isMuted || isMusicPaused) return;
     const msPerStep = Math.max(70, Math.round((60 / selectedBpm / 4) * 1000));
     const id = setInterval(() => {
+      const insideGuests = guestsRef.current.filter((g) => g.state !== 'QUEUEING').length;
+      soundEngine.updateCrowdAmbience(insideGuests, clubMetrics.maxGuests, clubMetrics.hypeSegments);
       soundEngine.playBeatStep(clubMetrics.hypeSegments);
     }, msPerStep);
     return () => clearInterval(id);
-  }, [isMuted, isMusicPaused, selectedBpm, clubMetrics.hypeSegments]);
+  }, [isMuted, isMusicPaused, selectedBpm, clubMetrics.hypeSegments, clubMetrics.maxGuests]);
 
   const handleSelectSong = useCallback(
     (song: ClubSongTrack) => {
@@ -1639,6 +1641,8 @@ export default function App() {
 
   const handleThrowParty = () => {
     soundEngine.playUpgradeFanfare();
+    soundEngine.playAmbientLaughter(1.15);
+    soundEngine.playAmbientGlassClink(1.1);
     setHypeSurgeBonus(140);
     setPartyCount((p) => p + 1);
     setCash((c) => c + 550);
@@ -2169,6 +2173,8 @@ export default function App() {
     setHypeSurgeBonus((h) => Math.min(240, h + Math.round(tray.hypeBoost * 0.45)));
     soundEngine.playCashRegister();
     soundEngine.playUpgradeFanfare();
+    soundEngine.playAmbientGlassClink(1.2);
+    soundEngine.playAmbientLaughter(1.1);
     showVipBottleConfirmationToast(
       `🍾 Served ${tray.name}! +$${totalPayout.toLocaleString()} Cash & +${tray.hypeBoost}⚡ Hype!`
     );
@@ -2271,6 +2277,8 @@ export default function App() {
     setHypeSurgeBonus((h) => Math.min(240, h + Math.round(tray.hypeBoost * 0.5)));
     soundEngine.playCashRegister();
     soundEngine.playUpgradeFanfare();
+    soundEngine.playAmbientGlassClink(1.2);
+    soundEngine.playAmbientLaughter(1.1);
     triggerHypeBlast(tray.hypeBoost, clubMetrics.totalHype + tray.hypeBoost, clubMetrics.tipBonus + 0.2);
     showVipBottleConfirmationToast(
       `🍾 Dance Floor Sparkler Parade (${tray.name})! +$${totalPayout.toLocaleString()} & +${tray.hypeBoost}⚡ Hype!`

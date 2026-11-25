@@ -474,6 +474,20 @@ class SoundEngine {
   private externalStreamActive: boolean = false;
   private volumeLevel: number = 0.88;
 
+  // Dynamic Ambient Crowd Layer (Crowd Murmur, Laughter & Glass Clinking scaled by guest count)
+  private crowdGuestCount: number = 8;
+  private crowdMaxGuests: number = 18;
+  private crowdHypeTier: number = 2;
+  private ambientMurmurBuffer: AudioBuffer | null = null;
+  private ambientMurmurSource: AudioBufferSourceNode | null = null;
+  private ambientMurmurGain: GainNode | null = null;
+  private ambientLowFilter: BiquadFilterType | null = null;
+  private ambientFormantFilterA: BiquadFilterNode | null = null;
+  private ambientFormantFilterB: BiquadFilterNode | null = null;
+  private ambientLfoOsc: OscillatorNode | null = null;
+  private lastAmbientClinkTime: number = 0;
+  private lastAmbientLaughTime: number = 0;
+
   constructor() {
     if (typeof window !== 'undefined') {
       const handleUserGesture = () => {
@@ -513,13 +527,284 @@ class SoundEngine {
           data[i] = Math.random() * 2 - 1;
         }
 
+        // Pre-build 3-second pink-filtered warm room murmur loop buffer with natural envelope undulations
+        const murmurLen = this.ctx.sampleRate * 3;
+        this.ambientMurmurBuffer = this.ctx.createBuffer(1, murmurLen, this.ctx.sampleRate);
+        const murmurData = this.ambientMurmurBuffer.getChannelData(0);
+        let b0 = 0;
+        let b1 = 0;
+        let b2 = 0;
+        for (let i = 0; i < murmurLen; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99765 * b0 + white * 0.099046;
+          b1 = 0.963 * b1 + white * 0.2965164;
+          b2 = 0.57 * b2 + white * 1.0526913;
+          const pink = (b0 + b1 + b2 + white * 0.1848) * 0.14;
+          // Smooth conversational syllables modulation so the loop sounds like overlapping voices
+          const phase = (i / murmurLen) * Math.PI * 2;
+          const envMod =
+            0.72 +
+            0.16 * Math.sin(phase * 5) +
+            0.12 * Math.cos(phase * 11 + 0.8);
+          murmurData[i] = pink * envMod;
+        }
+
         this.ctx.onstatechange = () => {
           const running = this.ctx?.state === 'running';
           this.stateListeners.forEach((cb) => cb(Boolean(running)));
+          if (running) {
+            this.syncAmbientMurmurGraph();
+          }
         };
       }
     }
     return this.ctx;
+  }
+
+  /**
+   * Ensures the continuous dual-formant crowd murmur bed is running and blends its gain/filter
+   * dynamically based on the current number of guests inside the club.
+   */
+  private syncAmbientMurmurGraph() {
+    if (!this.ctx || !this.ambientMurmurBuffer) return;
+
+    if (!this.ambientMurmurSource) {
+      try {
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.ambientMurmurBuffer;
+        src.loop = true;
+
+        // Formant A: Warm lower vocal chest murmur (340 Hz - 520 Hz)
+        const filterA = this.ctx.createBiquadFilter();
+        filterA.type = 'bandpass';
+        filterA.frequency.value = 420;
+        filterA.Q.value = 1.6;
+
+        // Formant B: Upper conversational chatter presence (950 Hz - 1650 Hz)
+        const filterB = this.ctx.createBiquadFilter();
+        filterB.type = 'bandpass';
+        filterB.frequency.value = 1180;
+        filterB.Q.value = 2.1;
+
+        // Slow LFO modulating Formant B so the crowd chatter breathes organically
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.37;
+        lfoGain.gain.value = 240;
+        lfo.connect(lfoGain);
+        lfoGain.connect(filterB.frequency);
+
+        const murmurGain = this.ctx.createGain();
+        murmurGain.gain.value = 0.0001;
+
+        src.connect(filterA);
+        src.connect(filterB);
+        filterA.connect(murmurGain);
+        filterB.connect(murmurGain);
+        murmurGain.connect(this.getOutNode(this.ctx));
+
+        src.start(0);
+        lfo.start(0);
+
+        this.ambientMurmurSource = src;
+        this.ambientFormantFilterA = filterA;
+        this.ambientFormantFilterB = filterB;
+        this.ambientMurmurGain = murmurGain;
+        this.ambientLfoOsc = lfo;
+        this.ambientLowFilter = 'bandpass';
+      } catch {
+        // Ignore if context is not ready yet
+      }
+    }
+
+    if (this.ambientMurmurGain && this.ctx.state === 'running') {
+      const now = this.ctx.currentTime;
+      if (this.isMuted || this.isPaused || this.crowdGuestCount <= 0) {
+        this.ambientMurmurGain.gain.setTargetAtTime(0.0001, now, 0.25);
+        return;
+      }
+
+      const density = Math.max(0, Math.min(1.25, this.crowdGuestCount / Math.max(1, this.crowdMaxGuests)));
+      // Smooth non-linear curve: a few guests create a subtle lounge murmur; a packed floor creates a rich club buzz
+      const hypeBoost = 1 + (this.crowdHypeTier - 1) * 0.14;
+      const targetGain = Math.min(0.11, (0.012 + Math.pow(density, 0.85) * 0.068) * hypeBoost);
+      this.ambientMurmurGain.gain.setTargetAtTime(targetGain, now, 0.35);
+
+      if (this.ambientFormantFilterA && this.ambientFormantFilterB) {
+        // Brighten vocal formant frequencies as the crowd grows and gets more hyped
+        this.ambientFormantFilterA.frequency.setTargetAtTime(360 + density * 140, now, 0.4);
+        this.ambientFormantFilterB.frequency.setTargetAtTime(1020 + density * 460, now, 0.4);
+      }
+    }
+  }
+
+  /**
+   * Updates the live club guest count & capacity to dynamically blend ambient crowd noise,
+   * laughter frequency, and glass clinking density.
+   */
+  public updateCrowdAmbience(guestCount: number, maxGuests: number = 18, hypeTier: number = 2) {
+    this.crowdGuestCount = Math.max(0, guestCount);
+    this.crowdMaxGuests = Math.max(1, maxGuests);
+    this.crowdHypeTier = Math.max(1, Math.min(3, hypeTier));
+    this.syncAmbientMurmurGraph();
+  }
+
+  /**
+   * Synthesizes a crystal cocktail/champagne glass clink using high-Q inharmonic bell partials
+   * and optional stereo panning.
+   */
+  public playAmbientGlassClink(intensityScale: number = 1) {
+    const ctx = this.getContext();
+    if (!ctx || ctx.state !== 'running' || this.isPaused) return;
+
+    const now = ctx.currentTime;
+    const out = this.getOutNode(ctx);
+
+    // Optional stereo placement across the bar & VIP tables
+    let destNode: AudioNode = out;
+    if (typeof ctx.createStereoPanner === 'function') {
+      const panner = ctx.createStereoPanner();
+      panner.pan.setValueAtTime((Math.random() - 0.5) * 1.3, now);
+      panner.connect(out);
+      destNode = panner;
+    }
+
+    // Two crystal glasses clinking (primary tap + subtle secondary contact 55-85ms later)
+    const baseFreq = 2200 + Math.random() * 780;
+    const taps = Math.random() < 0.65 ? [0, 0.055 + Math.random() * 0.035] : [0];
+    const partials = [1, 1.58, 2.41];
+
+    taps.forEach((tapOffset, tapIdx) => {
+      const tapTime = now + tapOffset;
+      const tapVel = (tapIdx === 0 ? 1 : 0.62) * Math.min(1.3, Math.max(0.35, intensityScale));
+      partials.forEach((ratio, pIdx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = pIdx === 0 ? 'sine' : 'triangle';
+        // Slight pitch shift on second tap for two distinct glasses
+        const glassShift = tapIdx === 1 ? 1.045 : 1.0;
+        osc.frequency.setValueAtTime(baseFreq * ratio * glassShift, tapTime);
+
+        const peak = (0.042 / (pIdx + 1)) * tapVel;
+        const decay = (0.16 / (pIdx * 0.7 + 1)) * (tapIdx === 0 ? 1 : 0.85);
+        this.env(gain, tapTime, 0.0015, decay, peak);
+
+        osc.connect(gain);
+        gain.connect(destNode);
+        osc.start(tapTime);
+        osc.stop(tapTime + decay + 0.02);
+      });
+    });
+  }
+
+  /**
+   * Synthesizes an organic burst of patron laughter or cheerful club chatter using rhythmic
+   * pitch-inflected vocal formant syllables (F1 + F2 bandpass filters).
+   */
+  public playAmbientLaughter(intensityScale: number = 1) {
+    const ctx = this.getContext();
+    if (!ctx || ctx.state !== 'running' || this.isPaused || !this.noiseBuffer) return;
+
+    const now = ctx.currentTime;
+    const out = this.getOutNode(ctx);
+
+    let destNode: AudioNode = out;
+    if (typeof ctx.createStereoPanner === 'function') {
+      const panner = ctx.createStereoPanner();
+      panner.pan.setValueAtTime((Math.random() - 0.5) * 1.4, now);
+      panner.connect(out);
+      destNode = panner;
+    }
+
+    // Choose vocal register (higher soprano/alto laugh or warm tenor chuckle)
+    const isHighVoice = Math.random() < 0.58;
+    const basePitch = isHighVoice ? 310 + Math.random() * 95 : 185 + Math.random() * 65;
+    const syllableCount = 3 + Math.floor(Math.random() * 3); // 3 to 5 "ha-ha-ha" syllables
+    const syllableGap = 0.095 + Math.random() * 0.025;
+
+    // Formant filters for human vowel "ah / eh" laugh timbre
+    const formant1 = ctx.createBiquadFilter();
+    formant1.type = 'bandpass';
+    formant1.frequency.setValueAtTime(isHighVoice ? 780 : 640, now);
+    formant1.Q.setValueAtTime(3.2, now);
+
+    const formant2 = ctx.createBiquadFilter();
+    formant2.type = 'bandpass';
+    formant2.frequency.setValueAtTime(isHighVoice ? 1620 : 1320, now);
+    formant2.Q.setValueAtTime(3.8, now);
+
+    formant1.connect(destNode);
+    formant2.connect(destNode);
+
+    for (let i = 0; i < syllableCount; i++) {
+      const t = now + i * syllableGap;
+      const sylDur = 0.072;
+      // Natural descending pitch contour across laughter syllables
+      const sylPitch = basePitch * Math.pow(0.95, i) * (i === 0 ? 1.06 : 1.0);
+      const sylPeak =
+        0.048 *
+        Math.min(1.25, Math.max(0.4, intensityScale)) *
+        (1 - i * 0.14);
+
+      // Glottal vocal cord pulse
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(sylPitch * 1.08, t);
+      osc.frequency.exponentialRampToValueAtTime(sylPitch * 0.86, t + sylDur);
+      this.env(oscGain, t, 0.008, sylDur, sylPeak);
+
+      osc.connect(oscGain);
+      oscGain.connect(formant1);
+      oscGain.connect(formant2);
+      osc.start(t);
+      osc.stop(t + sylDur + 0.015);
+
+      // Breathy aspiration layer ("h-ha")
+      const breathSrc = ctx.createBufferSource();
+      breathSrc.buffer = this.noiseBuffer;
+      const breathGain = ctx.createGain();
+      this.env(breathGain, t, 0.004, sylDur * 0.75, sylPeak * 0.55);
+      breathSrc.connect(breathGain);
+      breathGain.connect(formant2);
+      breathSrc.start(t);
+      breathSrc.stop(t + sylDur);
+    }
+  }
+
+  /**
+   * Triggers subtle procedural glass clinks and laughter bursts on beat steps
+   * with probability and volume proportional to the live number of guests in the club.
+   */
+  private tickAmbientCrowdEvents(stepIdx: number) {
+    if (this.isMuted || this.isPaused || this.crowdGuestCount <= 0) return;
+    const ctx = this.getContext();
+    if (!ctx || ctx.state !== 'running') return;
+
+    this.syncAmbientMurmurGraph();
+
+    const now = ctx.currentTime;
+    const density = Math.max(0.05, Math.min(1.25, this.crowdGuestCount / Math.max(1, this.crowdMaxGuests)));
+
+    // 1. Glass Clinking at the Bar & VIP Tables: scales with guest count (minimum 1.1s cooldown)
+    if (now - this.lastAmbientClinkTime > 1.1) {
+      const clinkChance = 0.018 + density * 0.075;
+      if (Math.random() < clinkChance) {
+        this.lastAmbientClinkTime = now;
+        this.playAmbientGlassClink(0.55 + density * 0.55);
+      }
+    }
+
+    // 2. Patron Laughter & Cheer Bursts: scales with guest count & hype tier (minimum 2.0s cooldown)
+    if (stepIdx % 2 === 0 && now - this.lastAmbientLaughTime > 2.0) {
+      const hypeFactor = 0.85 + this.crowdHypeTier * 0.22;
+      const laughChance = (0.014 + density * 0.065) * hypeFactor;
+      if (Math.random() < laughChance) {
+        this.lastAmbientLaughTime = now;
+        this.playAmbientLaughter(0.55 + density * 0.55);
+      }
+    }
   }
 
   /**
@@ -532,6 +817,7 @@ class SoundEngine {
     if (ctx.state === 'suspended') {
       ctx.resume().then(() => {
         this.stateListeners.forEach((cb) => cb(ctx.state === 'running'));
+        this.syncAmbientMurmurGraph();
       }).catch(() => {});
     }
 
@@ -549,6 +835,8 @@ class SoundEngine {
         // Ignore
       }
     }
+
+    this.syncAmbientMurmurGraph();
 
     if (this.customAudioEl && this.activeCustomAudioUrl && !this.isPaused && !this.isMuted) {
       if (this.customAudioEl.paused) {
@@ -636,6 +924,7 @@ class SoundEngine {
 
   public setPaused(paused: boolean) {
     this.isPaused = paused;
+    this.syncAmbientMurmurGraph();
     if (this.customAudioEl && this.activeCustomAudioUrl) {
       if (paused || this.isMuted) {
         this.customAudioEl.pause();
@@ -650,6 +939,7 @@ class SoundEngine {
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setValueAtTime(muted ? 0 : this.volumeLevel, this.ctx.currentTime);
     }
+    this.syncAmbientMurmurGraph();
     if (this.customAudioEl) {
       this.customAudioEl.volume = muted ? 0 : Math.min(1, this.volumeLevel);
     }
@@ -793,6 +1083,10 @@ class SoundEngine {
 
     // Notify UI step sequencer LED playhead
     this.stepListeners.forEach((cb) => cb(stepIdx));
+
+    // Dynamic Ambient Crowd Layer (murmur, laughter, and glass clinking) stays active across all music sources
+    this.crowdHypeTier = Math.max(1, Math.min(3, hypeTier));
+    this.tickAmbientCrowdEvents(stepIdx);
 
     // If an external streaming service (YouTube / Spotify / Apple Music) or uploaded song is actively playing,
     // keep the 16-step beat clock running for dance floor lights & chibi dancers while muting internal synth notes

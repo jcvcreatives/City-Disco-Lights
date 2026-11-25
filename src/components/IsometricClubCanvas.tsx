@@ -2542,15 +2542,18 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         });
       }
 
-      // Active Floor Interior Guests
+      // Active Floor Interior Guests (Compute live average spend to identify High-Hype VIP Whales)
       const allGuests = guestsRef.current;
-      const insideCountNow = allGuests.filter((g) => g.state !== 'QUEUEING').length;
+      const insideGuestsNow = allGuests.filter((g) => g.state !== 'QUEUEING');
+      const insideCountNow = insideGuestsNow.length;
       const isClubFullNow = insideCountNow >= props.clubMetrics.maxGuests;
+      const avgClubGuestSpend = computeAverageClubGuestSpend(allGuests);
 
       for (let i = 0; i < allGuests.length; i++) {
         const guest = allGuests[i];
         if (guest.floor !== props.activeFloor || guest.state === 'QUEUEING') continue;
         const depth = guest.gridX + guest.gridY + 0.6;
+        const isWhale = isGuestVipWhale(guest, avgClubGuestSpend);
         drawables.push({
           zIndex: 0,
           depth,
@@ -2566,13 +2569,18 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               tileH,
               scale,
               t,
-              activeBpm
+              activeBpm,
+              isWhale
             );
             if (props.selectedSpriteId === guest.id) {
               const info = computeGuestMoodInfo(
                 guest,
                 props.activeGenre || 'Pop',
-                isClubFullNow
+                isClubFullNow,
+                0,
+                props.placedItems,
+                props.activeBottleServices,
+                isWhale
               );
               drawSelectedSpriteMoodOverlay(
                 ctx,
@@ -7999,6 +8007,28 @@ function drawHiredStaffAgent(
  * - Crisp circular white/gold/purple overhead bubbles with black outlines (music notes, drink glasses, $, crowns)
  *   plus the signature dark floating quote tooltip ("MIA H. — I think I'm in love.")
  */
+/**
+ * Computes the average cash spent by all guests currently inside the club.
+ */
+function computeAverageClubGuestSpend(guests: GuestAgent[]): number {
+  const inside = guests.filter((g) => g.state !== 'QUEUEING');
+  if (inside.length === 0) return 75;
+  let totalSpent = 0;
+  for (let i = 0; i < inside.length; i++) {
+    totalSpent += inside[i].cashSpent;
+  }
+  return Math.max(35, totalSpent / inside.length);
+}
+
+/**
+ * Identifies 'Whale' guests who have reached a high hype threshold (hype >= 86)
+ * and are currently spending more than the club average.
+ */
+function isGuestVipWhale(guest: GuestAgent, avgGuestSpend: number): boolean {
+  if (guest.state === 'QUEUEING') return false;
+  return guest.hype >= 86 && guest.cashSpent > avgGuestSpend;
+}
+
 function drawCharacter(
   ctx: CanvasRenderingContext2D,
   guest: GuestAgent,
@@ -8010,7 +8040,8 @@ function drawCharacter(
   tileH: number,
   scale: number,
   t: number,
-  clubBpm: number = 124
+  clubBpm: number = 124,
+  isVipWhale: boolean = false
 ) {
   const px = originX + (gx - gy) * (tileW / 2);
   const py = originY + (gx + gy) * (tileH / 2);
@@ -8265,6 +8296,54 @@ function drawCharacter(
       Math.PI * 2
     );
     ctx.fill();
+    ctx.restore();
+  }
+
+  // Persistent Golden VIP Whale Glow for high-hype guests spending above the club average
+  if (isVipWhale) {
+    const whalePulse = 0.88 + 0.14 * Math.sin(t * 4.5 + seed);
+    ctx.save();
+    // Soft ambient golden aura behind the sprite body
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.16)';
+    ctx.beginPath();
+    ctx.ellipse(
+      px + swayX,
+      py - 19 * scale - bounce,
+      11.5 * scale * whalePulse,
+      16.5 * scale * whalePulse,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Glowing golden floor ring under the whale's feet
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(
+      px + swayX * 0.5,
+      shadowY,
+      11.2 * scale * whalePulse,
+      5.6 * scale * whalePulse,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = Math.max(1, 1.35 * scale);
+    ctx.beginPath();
+    ctx.ellipse(
+      px + swayX * 0.5,
+      shadowY,
+      9.6 * scale * whalePulse,
+      4.8 * scale * whalePulse,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -8665,9 +8744,39 @@ function drawCharacter(
     ctx.fill();
   }
 
-  // 7. Clean Event-Driven Speech / Thought Bubbles (Only shown when guest has an active event bubble)
-  if (guest.bubble && (guest.bubbleTimer ?? 0) > 0) {
-    drawIllustratedSpeechBubble(ctx, headX, headY - 19 * scale, scale * 0.88, guest.bubble);
+  // 7. Small, Persistent '★ VIP' Badge for High-Hype Above-Average Spending Whales
+  const hasActiveBubble = Boolean(guest.bubble && (guest.bubbleTimer ?? 0) > 0);
+  if (isVipWhale) {
+    const badgeW = 23.5 * scale;
+    const badgeH = 9.2 * scale;
+    const badgeX = headX - badgeW * 0.5;
+    // Place neatly above the head; if a temporary event bubble is active, position the bubble slightly higher so both are crystal clear
+    const badgeY = headY - headR - 11.2 * scale;
+
+    ctx.save();
+    fillStrokeRoundedRect(
+      ctx,
+      badgeX,
+      badgeY,
+      badgeW,
+      badgeH,
+      4.5 * scale,
+      'rgba(19, 13, 36, 0.94)',
+      '#facc15',
+      Math.max(1, 1.2 * scale)
+    );
+    ctx.fillStyle = '#fde047';
+    ctx.font = `900 ${Math.max(6, Math.round(6.2 * scale))}px "Outfit", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('★ VIP', headX, badgeY + badgeH * 0.52);
+    ctx.restore();
+  }
+
+  // 8. Clean Event-Driven Speech / Thought Bubbles (Only shown when guest has an active event bubble)
+  if (hasActiveBubble && guest.bubble) {
+    const bubbleOffsetY = isVipWhale ? headY - 27 * scale : headY - 19 * scale;
+    drawIllustratedSpeechBubble(ctx, headX, bubbleOffsetY, scale * 0.88, guest.bubble);
   }
 }
 
@@ -10100,7 +10209,8 @@ function computeGuestMoodInfo(
   isClubFull: boolean,
   queueIndex: number = 0,
   items: PlacedItem[] = [],
-  activeBottleServices?: Record<string, ActiveBoothBottleService>
+  activeBottleServices?: Record<string, ActiveBoothBottleService>,
+  isVipWhale: boolean = false
 ): SpriteMoodInfo {
   const nameIdx = hashIdToIndex(guest.id, GUEST_NAMES.length);
   const favIdx = hashIdToIndex(guest.id + '_genre', FAVORITE_GENRES.length);
@@ -10218,15 +10328,17 @@ function computeGuestMoodInfo(
     thought = guest.chatText || 'Checking out the neon decorations!';
   }
 
+  const isVipOrWhale = Boolean(guest.isCelebrity || isVipWhale);
+
   return {
     id: guest.id,
-    name: `${guest.name || GUEST_NAMES[nameIdx]}${guest.isCelebrity ? ' ★ VIP' : ''}`,
-    role: guest.isCelebrity ? 'VIP_GUEST' : 'GUEST',
+    name: `${guest.name || GUEST_NAMES[nameIdx]}${isVipOrWhale ? ' ★ VIP' : ''}`,
+    role: isVipOrWhale ? 'VIP_GUEST' : 'GUEST',
     moodLabel,
     moodEmoji,
     moodColor,
     moodScore,
-    activity,
+    activity: isVipWhale ? `${activity} · Whale ($${guest.cashSpent} Spent)` : activity,
     thought,
     favoriteGenre: favGenre,
     shirtColor: guest.shirtColor,
@@ -10365,12 +10477,14 @@ function buildAllSpritesMoodSnapshot(
   });
 
   // Inside club patrons on active floor
+  const avgSpend = computeAverageClubGuestSpend(guests);
   const inside = guests.filter(
     (g) => g.state !== 'QUEUEING' && g.floor === activeFloor
   );
   inside.forEach((g) => {
+    const isWhale = isGuestVipWhale(g, avgSpend);
     list.push(
-      computeGuestMoodInfo(g, activeGenre, isClubFull, 0, items, activeBottleServices)
+      computeGuestMoodInfo(g, activeGenre, isClubFull, 0, items, activeBottleServices, isWhale)
     );
   });
 
@@ -10495,18 +10609,21 @@ function findTappedSpriteMoodAtScreenPoint(
   };
 
   // 1. Check interior guests on active floor + red carpet queued guests
+  const avgSpend = computeAverageClubGuestSpend(guests);
   const queuedList = guests.filter((g) => g.state === 'QUEUEING');
   for (const g of guests) {
     if (g.state !== 'QUEUEING' && g.floor !== activeFloor) continue;
     const refOriginY = g.state === 'QUEUEING' ? streetOriginY : originY;
     const qIdx = g.state === 'QUEUEING' ? Math.max(0, queuedList.indexOf(g)) : 0;
+    const isWhale = isGuestVipWhale(g, avgSpend);
     const info = computeGuestMoodInfo(
       g,
       activeGenre,
       isClubFull,
       qIdx,
       items,
-      activeBottleServices
+      activeBottleServices,
+      isWhale
     );
     checkCandidate(g.gridX, g.gridY, refOriginY, 18 * scale, info);
   }
