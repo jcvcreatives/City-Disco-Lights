@@ -211,13 +211,18 @@ const PARKING_LOT_STALLS: ParkingLotStall[] = [
   { idx: 4, label: 'P4', gx: 8.15, gy: 12.12, isTaxiDrop: false },
 ];
 
+// Right-Side Road "Leading Man / Ride Home" Waiting Sign & Curb Pickup Bay Coordinates (along the vacant right-side road gx = 11.4..12.9)
+const RIGHT_RIDE_HOME_SIGN_COORD = { x: 11.12, y: 5.25 };
+const RIGHT_RIDE_HOME_WAIT_SPOT = { x: 10.82, y: 6.18 };
+const RIGHT_RIDE_HOME_BAY_COORD = { x: 12.15, y: 6.25 };
+
 function isExteriorGuestState(state: GuestState): boolean {
   return state === 'QUEUEING' || state === 'ARRIVING_FROM_CAR' || state === 'WALKING_TO_CAR';
 }
 
 interface TrafficCarAgent {
   id: string;
-  lane: 'FRONT_EAST' | 'FRONT_WEST' | 'LEFT_SOUTH';
+  lane: 'FRONT_EAST' | 'FRONT_WEST' | 'RIGHT_SOUTH';
   gridX: number;
   gridY: number;
   speed: number;
@@ -226,7 +231,14 @@ interface TrafficCarAgent {
   shadeColor: string;
   isTaxi: boolean;
   stopCooldown: number;
-  carState?: 'CRUISING' | 'PARKING_IN' | 'PARKED' | 'WAITING_PICKUP' | 'PULLING_OUT';
+  carState?:
+    | 'CRUISING'
+    | 'PARKING_IN'
+    | 'PARKED'
+    | 'WAITING_PICKUP'
+    | 'PULLING_OUT'
+    | 'RIGHT_PICKUP_IN'
+    | 'RIGHT_PICKUP_WAIT';
   stallIndex?: number;
   parkTimer?: number;
   headlightFlashTimer?: number;
@@ -346,6 +358,7 @@ interface IsometricClubCanvasProps {
   clubMetrics: ClubSimulationMetrics;
   clubBpm?: number;
   activeGenre?: string;
+  partyTriggerTick?: number;
   isRemoveMode: boolean;
   isEditDecorMode?: boolean;
   editingPlacedItemUid?: string | null;
@@ -442,51 +455,235 @@ const ALL_DANCER_MOVES: DancerMoveVariant[] = [
   'SPIN_TWIRL',
   'BREAKDANCE_WAVE',
   'CYBER_JUMP',
+  'TWO_STEP_GROOVE',
+  'HIP_HOP_BOUNCE',
+  'LATIN_SALSA_SWAY',
+  'DISCO_POINT',
+  'CHILL_DRINK_VIBE',
+  'HOUSE_JACK',
+  'HANDS_UP_EUPHORIA',
 ];
 
+const GENRE_DANCE_AFFINITY: Record<string, DancerMoveVariant[]> = {
+  Pop: ['TWO_STEP_GROOVE', 'DISCO_POINT', 'SPIN_TWIRL', 'CHILL_DRINK_VIBE', 'HANDS_UP_EUPHORIA'],
+  Dance: ['HOUSE_JACK', 'SHUFFLE_STEP', 'HANDS_UP_EUPHORIA', 'FIST_PUMP', 'TWO_STEP_GROOVE'],
+  'Hip Hop': ['HIP_HOP_BOUNCE', 'TWO_STEP_GROOVE', 'CHILL_DRINK_VIBE', 'BREAKDANCE_WAVE'],
+  Latin: ['LATIN_SALSA_SWAY', 'TWO_STEP_GROOVE', 'SPIN_TWIRL', 'DISCO_POINT', 'CHILL_DRINK_VIBE'],
+  Electro: ['SHUFFLE_STEP', 'HOUSE_JACK', 'BREAKDANCE_WAVE', 'CYBER_JUMP', 'HANDS_UP_EUPHORIA'],
+  Rock: ['FIST_PUMP', 'CYBER_JUMP', 'HANDS_UP_EUPHORIA', 'TWO_STEP_GROOVE'],
+};
+
 /**
- * Selects a randomized dance move weighted by the club's current music BPM:
- * - Lower BPM (<= 118): favors groove-heavy SHUFFLE_STEP & BREAKDANCE_WAVE
- * - Mid BPM (119 - 129): favors FIST_PUMP, SPIN_TWIRL & SHUFFLE_STEP
- * - High BPM (>= 130): favors high-energy CYBER_JUMP, SPIN_TWIRL & FIST_PUMP
+ * AI Club Dance Choreographer:
+ * Scores all 12 natural nightclub dance styles using utility weights for:
+ * 1. Anti-duplication against nearby dancers (so neighbors never perform identical steps)
+ * 2. Live music genre affinity (Pop, Dance, Hip Hop, Latin, Electro, Rock)
+ * 3. Current BPM tempo & individual guest hype / energy
+ * 4. Smooth transition variety (never repeats the current move back-to-back)
  */
 function pickRandomDancerMoveForBpm(
   bpm: number,
-  currentMove?: DancerMoveVariant
+  currentMove?: DancerMoveVariant,
+  activeGenre?: string,
+  nearbyMoves?: DancerMoveVariant[],
+  guestHype = 85
 ): DancerMoveVariant {
-  const pool: DancerMoveVariant[] =
-    bpm >= 130
-      ? [
-          'CYBER_JUMP',
-          'CYBER_JUMP',
-          'SPIN_TWIRL',
-          'SPIN_TWIRL',
-          'FIST_PUMP',
-          'FIST_PUMP',
-          'BREAKDANCE_WAVE',
-          'SHUFFLE_STEP',
-        ]
-      : bpm >= 120
-      ? [
-          'FIST_PUMP',
-          'FIST_PUMP',
-          'SPIN_TWIRL',
-          'SHUFFLE_STEP',
-          'SHUFFLE_STEP',
-          'BREAKDANCE_WAVE',
-          'CYBER_JUMP',
-        ]
-      : [
-          'SHUFFLE_STEP',
-          'SHUFFLE_STEP',
-          'BREAKDANCE_WAVE',
-          'BREAKDANCE_WAVE',
-          'FIST_PUMP',
-          'SPIN_TWIRL',
-        ];
-  const filtered = currentMove ? pool.filter((m) => m !== currentMove) : pool;
-  const candidates = filtered.length > 0 ? filtered : ALL_DANCER_MOVES;
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  const genrePref = GENRE_DANCE_AFFINITY[activeGenre || 'Dance'] || GENRE_DANCE_AFFINITY.Dance;
+  const highEnergyMoves: DancerMoveVariant[] = [
+    'HOUSE_JACK',
+    'SHUFFLE_STEP',
+    'HANDS_UP_EUPHORIA',
+    'CYBER_JUMP',
+    'FIST_PUMP',
+    'SPIN_TWIRL',
+  ];
+  const grooveMoves: DancerMoveVariant[] = [
+    'TWO_STEP_GROOVE',
+    'HIP_HOP_BOUNCE',
+    'LATIN_SALSA_SWAY',
+    'DISCO_POINT',
+    'CHILL_DRINK_VIBE',
+    'BREAKDANCE_WAVE',
+  ];
+
+  const scored: Array<{ move: DancerMoveVariant; weight: number }> = [];
+
+  for (const move of ALL_DANCER_MOVES) {
+    if (move === currentMove) continue;
+
+    let weight = 10;
+
+    // 1. Genre suitability boost
+    if (genrePref.includes(move)) {
+      weight += 9;
+    }
+
+    // 2. BPM & Hype suitability
+    if (bpm >= 128 || guestHype >= 92) {
+      if (highEnergyMoves.includes(move)) weight += 7;
+      if (grooveMoves.includes(move)) weight += 4;
+    } else if (bpm <= 116 || guestHype < 75) {
+      if (grooveMoves.includes(move)) weight += 8;
+    } else {
+      weight += 5;
+    }
+
+    // 3. Strong anti-duplication penalty if nearby dancers are already doing this move
+    if (nearbyMoves && nearbyMoves.length > 0) {
+      let duplicateCount = 0;
+      for (let i = 0; i < nearbyMoves.length; i++) {
+        if (nearbyMoves[i] === move) duplicateCount++;
+      }
+      if (duplicateCount > 0) {
+        weight = Math.max(0.6, weight / (1 + duplicateCount * 4.5));
+      } else {
+        weight += 8; // Bonus for bringing a fresh move to the local dance circle!
+      }
+    }
+
+    // 4. Organic stochastic jitter
+    weight *= 0.75 + Math.random() * 0.55;
+    scored.push({ move, weight });
+  }
+
+  let totalWeight = 0;
+  for (let i = 0; i < scored.length; i++) {
+    totalWeight += scored[i].weight;
+  }
+
+  let roll = Math.random() * totalWeight;
+  for (let i = 0; i < scored.length; i++) {
+    roll -= scored[i].weight;
+    if (roll <= 0) {
+      return scored[i].move;
+    }
+  }
+  return scored[0]?.move || 'TWO_STEP_GROOVE';
+}
+
+/**
+ * Assigns or refreshes a dancer's individualized AI groove parameters (tempo subdivision,
+ * phase offset, personal energy, left/right asymmetry, and social facing direction toward
+ * a nearby dance partner or the DJ booth) so every patron dances naturally and uniquely.
+ */
+function ensureAiDancerProfile(
+  guest: GuestAgent,
+  allGuests: GuestAgent[],
+  currentBpm: number,
+  activeGenre?: string
+) {
+  const seed =
+    guest.name.charCodeAt(0) * 17 +
+    (guest.name.charCodeAt(1) || 5) * 11 +
+    (guest.id.charCodeAt(guest.id.length - 1) || 3) * 7;
+
+  if (guest.dancePhaseOffset === undefined) {
+    guest.dancePhaseOffset = ((seed % 37) / 37) * Math.PI * 2 + Math.random() * 0.85;
+  }
+
+  if (guest.danceTempoMul === undefined) {
+    // Natural club tempo subdivisions: chill half-time, pocket groove, on-beat, or upbeat footwork
+    const subdivisions = [0.68, 0.84, 0.94, 1.0, 1.06, 1.15, 1.24];
+    const baseSub = subdivisions[seed % subdivisions.length];
+    guest.danceTempoMul = baseSub + ((seed % 13) - 6) * 0.008;
+  }
+
+  if (guest.danceEnergy === undefined) {
+    const baseEnergy = 0.78 + ((seed % 11) / 10) * 0.42;
+    guest.danceEnergy = Math.min(1.35, Math.max(0.7, baseEnergy * (0.85 + (guest.hype / 100) * 0.3)));
+  }
+
+  if (guest.danceAsymmetry === undefined) {
+    guest.danceAsymmetry = (seed % 2 === 0 ? 1 : -1) * (0.65 + ((seed % 7) / 7) * 0.55);
+  }
+
+  // Gather moves currently performed by nearby dancers within 2.8 tiles so we pick a distinct move
+  const nearbyDancers = allGuests.filter(
+    (other) =>
+      other.id !== guest.id &&
+      other.floor === guest.floor &&
+      (other.state === 'DANCING' || other.state === 'DANCER_MOVES') &&
+      Math.hypot(other.gridX - guest.gridX, other.gridY - guest.gridY) <= 2.8
+  );
+
+  if (!guest.danceMove) {
+    const nearbyMoves = nearbyDancers
+      .map((d) => d.danceMove)
+      .filter((m): m is DancerMoveVariant => Boolean(m));
+    guest.danceMove = pickRandomDancerMoveForBpm(
+      currentBpm,
+      undefined,
+      activeGenre,
+      nearbyMoves,
+      guest.hype
+    );
+    guest.prevDanceMove = guest.danceMove;
+    guest.danceTransitionProgress = 1;
+  }
+
+  // Social orientation AI: face a nearby dance partner or orient naturally toward the DJ booth / dance circle
+  if (nearbyDancers.length > 0) {
+    let closest = nearbyDancers[0];
+    let closestDist = Math.hypot(closest.gridX - guest.gridX, closest.gridY - guest.gridY);
+    for (let i = 1; i < nearbyDancers.length; i++) {
+      const d = Math.hypot(
+        nearbyDancers[i].gridX - guest.gridX,
+        nearbyDancers[i].gridY - guest.gridY
+      );
+      if (d < closestDist) {
+        closest = nearbyDancers[i];
+        closestDist = d;
+      }
+    }
+    if (closestDist <= 2.1) {
+      guest.dancePartnerId = closest.id;
+      const dx = closest.gridX - guest.gridX;
+      const dy = closest.gridY - guest.gridY;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        guest.facingDir = dx >= 0 ? 'SE' : 'NW';
+      } else {
+        guest.facingDir = dy >= 0 ? 'SW' : 'NE';
+      }
+    }
+  } else if (!guest.facingDir) {
+    const dirs: Array<'NE' | 'NW' | 'SE' | 'SW'> = ['NE', 'NW', 'SE', 'SW'];
+    guest.facingDir = dirs[seed % dirs.length];
+  }
+}
+
+function transitionDancerToNewAiMove(
+  guest: GuestAgent,
+  allGuests: GuestAgent[],
+  currentBpm: number,
+  activeGenre?: string
+) {
+  ensureAiDancerProfile(guest, allGuests, currentBpm, activeGenre);
+  const nearbyMoves = allGuests
+    .filter(
+      (other) =>
+        other.id !== guest.id &&
+        other.floor === guest.floor &&
+        (other.state === 'DANCING' || other.state === 'DANCER_MOVES') &&
+        Math.hypot(other.gridX - guest.gridX, other.gridY - guest.gridY) <= 2.85
+    )
+    .map((d) => d.danceMove)
+    .filter((m): m is DancerMoveVariant => Boolean(m));
+
+  const nextMove = pickRandomDancerMoveForBpm(
+    currentBpm,
+    guest.danceMove,
+    activeGenre,
+    nearbyMoves,
+    guest.hype
+  );
+  guest.prevDanceMove = guest.danceMove || nextMove;
+  guest.danceMove = nextMove;
+  guest.danceTransitionProgress = 0;
+  // Slightly refresh personal energy & social facing on phrase changes
+  guest.danceEnergy = Math.min(
+    1.35,
+    Math.max(0.72, (guest.danceEnergy ?? 1.0) + (Math.random() - 0.48) * 0.14)
+  );
 }
 
 interface DancerHypeParticle {
@@ -506,6 +703,216 @@ interface DancerHypeParticle {
   swaySpeed: number;
   age: number;
   maxAge: number;
+}
+
+interface PartyCelebrationParticle {
+  floor: FloorLevel;
+  gridX: number;
+  gridY: number;
+  z: number; // Height above club floor (0 = landed on floor tiles)
+  vx: number; // Lateral screen X drift velocity
+  vy: number; // Lateral screen Y drift velocity
+  vz: number; // Vertical velocity (positive = rising from cannon, negative = fluttering down)
+  offsetX: number;
+  offsetY: number;
+  kind: 'FOIL_CONFETTI' | 'DIAMOND_GLITTER' | 'RIBBON_STREAMER' | 'FLOOR_SPARKLE';
+  color: string;
+  secondaryColor: string;
+  size: number;
+  rotation: number;
+  rotationSpeed: number;
+  tiltPhase: number;
+  tiltSpeed: number;
+  swayPhase: number;
+  swaySpeed: number;
+  twinklePhase: number;
+  twinkleSpeed: number;
+  age: number;
+  maxAge: number;
+}
+
+const PARTY_CONFETTI_PALETTE = [
+  '#facc15', // 24K Gold
+  '#f472b6', // Hot Neon Pink
+  '#22d3ee', // Electric Cyan
+  '#a855f7', // Vivid Purple
+  '#4ade80', // Emerald Neon
+  '#fb7185', // Coral Rose
+  '#fef08a', // Champagne Sparkle
+  '#38bdf8', // Sky Blue
+  '#ffffff', // Diamond White
+];
+
+/**
+ * Draws a crisp 4-point diamond starburst sparkle with a glowing outer flare and bright white core
+ * (used for both Celebrity sparkles and Party glitter bursts!).
+ */
+function drawFourPointSparkleStar(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  outerRadius: number,
+  innerRadius: number,
+  color: string,
+  rotation: number = 0,
+  alpha: number = 1
+) {
+  if (outerRadius <= 0.3 || alpha <= 0.02) return;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.globalAlpha = alpha;
+
+  // Soft outer star glow
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const r = i % 2 === 0 ? outerRadius : innerRadius;
+    const ang = (i * Math.PI) / 4;
+    const px = Math.cos(ang) * r;
+    const py = Math.sin(ang) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Bright diamond white inner core
+  ctx.fillStyle = '#ffffff';
+  const coreOuter = outerRadius * 0.52;
+  const coreInner = innerRadius * 0.45;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const r = i % 2 === 0 ? coreOuter : coreInner;
+    const ang = (i * Math.PI) / 4;
+    const px = Math.cos(ang) * r;
+    const py = Math.sin(ang) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+const PARTY_CELEBRATION_BUBBLES: BubbleType[] = ['SPARKLE', 'MUSIC', 'VIP_CROWN', 'COCKTAIL', 'CASH'];
+function kPartyBubble(idx: number): BubbleType {
+  return PARTY_CELEBRATION_BUBBLES[idx % PARTY_CELEBRATION_BUBBLES.length];
+}
+
+/**
+ * Renders the Party Celebration Confetti, Glitter & Streamer Particle System in two passes:
+ * - 'FLOOR': Ground-settled confetti squares, twinkling diamond floor sparkles, and celebration floor sheen
+ * - 'AIR': Airborne tumbling 3D foil confetti, 4-point diamond glitter bursts, and curling party ribbons
+ */
+function drawPartyFloorConfettiAndGlitterPass(
+  ctx: CanvasRenderingContext2D,
+  particles: PartyCelebrationParticle[],
+  partyTimer: number,
+  activeFloor: FloorLevel,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number,
+  pass: 'FLOOR' | 'AIR'
+) {
+  ctx.save();
+
+  // On the FLOOR pass while a Party is active, add a festive shimmering golden-magenta disco spotlight sweep across the club floor
+  if (pass === 'FLOOR' && partyTimer > 0) {
+    const partyFade = Math.min(1, partyTimer / 1.5);
+    const centerSx = originX + (4.5 - 4.5) * (tileW / 2);
+    const centerSy = originY + (4.5 + 4.5) * (tileH / 2);
+    const pulse = 0.75 + 0.25 * Math.sin(t * 7.5);
+    const rx = 205 * scale * pulse;
+    const ry = 102 * scale * pulse;
+    const sheenGrad = ctx.createRadialGradient(centerSx, centerSy, 8 * scale, centerSx, centerSy, rx);
+    sheenGrad.addColorStop(0, `rgba(250, 204, 21, ${(0.18 * partyFade).toFixed(3)})`);
+    sheenGrad.addColorStop(0.5, `rgba(244, 114, 182, ${(0.12 * partyFade).toFixed(3)})`);
+    sheenGrad.addColorStop(0.85, `rgba(34, 211, 238, ${(0.07 * partyFade).toFixed(3)})`);
+    sheenGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = sheenGrad;
+    ctx.beginPath();
+    ctx.ellipse(centerSx, centerSy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    if (p.floor !== activeFloor) continue;
+
+    const isGroundParticle = p.kind === 'FLOOR_SPARKLE' || p.z <= 8;
+    if (pass === 'FLOOR' && !isGroundParticle) continue;
+    if (pass === 'AIR' && isGroundParticle) continue;
+
+    const lifeRatio = p.age / p.maxAge;
+    const fadeAlpha =
+      lifeRatio < 0.1
+        ? lifeRatio / 0.1
+        : lifeRatio > 0.76
+        ? Math.max(0, (1 - lifeRatio) / 0.24)
+        : 1;
+    if (fadeAlpha <= 0.02) continue;
+
+    const basePx = originX + (p.gridX - p.gridY) * (tileW / 2);
+    const basePy = originY + (p.gridX + p.gridY) * (tileH / 2);
+    const sx = basePx + p.offsetX * scale;
+    const sy = basePy + (p.offsetY - p.z) * scale;
+
+    if (p.kind === 'DIAMOND_GLITTER' || p.kind === 'FLOOR_SPARKLE') {
+      const twinkle = 0.25 + 0.75 * Math.pow(0.5 + 0.5 * Math.sin(p.twinklePhase), 1.6);
+      const outerR = p.size * (0.6 + twinkle * 0.65) * scale;
+      drawFourPointSparkleStar(
+        ctx,
+        sx,
+        sy,
+        outerR,
+        outerR * 0.26,
+        twinkle > 0.7 ? p.color : p.secondaryColor,
+        p.rotation * 0.35,
+        fadeAlpha * (0.45 + twinkle * 0.55)
+      );
+    } else if (p.kind === 'RIBBON_STREAMER') {
+      ctx.save();
+      ctx.globalAlpha = fadeAlpha * 0.92;
+      ctx.translate(sx, sy);
+      ctx.rotate(p.rotation * 0.45);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 2.2 * scale;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      const ribbonLen = p.size * 2.3 * scale;
+      for (let seg = 0; seg <= 6; seg++) {
+        const u = seg / 6;
+        const rx = Math.sin(p.swayPhase + u * 4.2) * 3.8 * scale;
+        const ry = (u - 0.5) * ribbonLen;
+        if (seg === 0) ctx.moveTo(rx, ry);
+        else ctx.lineTo(rx, ry);
+      }
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // FOIL_CONFETTI: 3D tumbling metallic & neon confetti rectangles with specular flash
+      ctx.save();
+      const tiltCos = Math.cos(p.tiltPhase);
+      const isSpecularFlash = Math.abs(tiltCos) > 0.86;
+      const w = p.size * 1.55 * scale;
+      const h =
+        p.size *
+        (p.z <= 1 ? 0.65 : Math.max(0.24, Math.abs(tiltCos))) *
+        scale;
+      ctx.globalAlpha = fadeAlpha * (p.z <= 1 ? 0.78 : 0.95);
+      ctx.translate(sx, sy);
+      ctx.rotate(p.rotation);
+      ctx.fillStyle = isSpecularFlash ? '#ffffff' : tiltCos >= 0 ? p.color : p.secondaryColor;
+      ctx.fillRect(-w * 0.5, -h * 0.5, w, h);
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();
 }
 
 /**
@@ -563,6 +970,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   clubMetrics,
   clubBpm = 124,
   activeGenre = 'Pop',
+  partyTriggerTick = 0,
   isRemoveMode,
   isEditDecorMode = false,
   editingPlacedItemUid = null,
@@ -655,26 +1063,47 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   };
 
   const dancerParticlesRef = useRef<DancerHypeParticle[]>([]);
+  const partyParticlesRef = useRef<PartyCelebrationParticle[]>([]);
+  const partyCelebrationTimerRef = useRef<number>(0);
+  const partyRainEmitAccRef = useRef<number>(0);
+  const prevPartyTickRef = useRef<number>(partyTriggerTick);
   const bassDropRipplesRef = useRef<BassDropRippleWave[]>([]);
   const prevHypeSegmentsRef = useRef<number>(clubMetrics.hypeSegments);
+  const itemSnapAnimRef = useRef<
+    Map<
+      string,
+      {
+        currX: number;
+        currY: number;
+        fromX: number;
+        fromY: number;
+        targetX: number;
+        targetY: number;
+        progress: number;
+        liftZ: number;
+        snapPulse: number;
+        floor: FloorLevel;
+      }
+    >
+  >(new Map());
 
   // Moving & Park-and-Go Road Traffic Vehicles (Eastbound front avenue, Westbound front avenue, and Real-World Parking Bays P1-P4 + Taxi Drop)
   const trafficCarsRef = useRef<TrafficCarAgent[]>([
     {
       id: 'car_parked_p1',
       lane: 'FRONT_EAST',
-      gridX: -0.65,
-      gridY: 12.12,
+      gridX: -1.15,
+      gridY: 12.95,
       speed: 2.35,
-      currentSpeed: 0,
+      currentSpeed: 1.7,
       bodyColor: '#2dd4bf',
       shadeColor: '#0f766e',
       isTaxi: false,
       stopCooldown: 0,
-      carState: 'PARKED',
+      carState: 'PARKING_IN',
       stallIndex: 0,
-      parkTimer: 16,
-      headlightFlashTimer: 0,
+      parkTimer: 12,
+      headlightFlashTimer: 0.7,
     },
     {
       id: 'car_parked_p2',
@@ -689,7 +1118,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       stopCooldown: 0,
       carState: 'PARKED',
       stallIndex: 2,
-      parkTimer: 22,
+      parkTimer: 5.5,
       headlightFlashTimer: 0,
     },
     {
@@ -705,13 +1134,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       stopCooldown: 0,
       carState: 'PARKED',
       stallIndex: 3,
-      parkTimer: 28,
+      parkTimer: 11,
       headlightFlashTimer: 0,
     },
     {
       id: 'car_taxi_east_1',
       lane: 'FRONT_EAST',
-      gridX: -6.2,
+      gridX: -4.4,
       gridY: 13.55,
       speed: 2.35,
       currentSpeed: 2.35,
@@ -778,6 +1207,36 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       bodyColor: '#facc15',
       shadeColor: '#ca8a04',
       isTaxi: true,
+      stopCooldown: 0,
+      carState: 'CRUISING',
+      parkTimer: 0,
+      headlightFlashTimer: 0,
+    },
+    {
+      id: 'car_pickup_right_1',
+      lane: 'RIGHT_SOUTH',
+      gridX: 12.35,
+      gridY: 1.8,
+      speed: 2.35,
+      currentSpeed: 2.35,
+      bodyColor: '#facc15',
+      shadeColor: '#ca8a04',
+      isTaxi: true,
+      stopCooldown: 0,
+      carState: 'CRUISING',
+      parkTimer: 0,
+      headlightFlashTimer: 0,
+    },
+    {
+      id: 'car_pickup_right_2',
+      lane: 'RIGHT_SOUTH',
+      gridX: 12.35,
+      gridY: -4.5,
+      speed: 2.4,
+      currentSpeed: 2.4,
+      bodyColor: '#22d3ee',
+      shadeColor: '#0284c7',
+      isTaxi: false,
       stopCooldown: 0,
       carState: 'CRUISING',
       parkTimer: 0,
@@ -1013,6 +1472,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     clubMetrics,
     clubBpm,
     activeGenre,
+    partyTriggerTick,
     isRemoveMode,
     isEditDecorMode,
     editingPlacedItemUid,
@@ -1051,6 +1511,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     clubMetrics,
     clubBpm,
     activeGenre,
+    partyTriggerTick,
     isRemoveMode,
     isEditDecorMode,
     editingPlacedItemUid,
@@ -1218,14 +1679,62 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       const MIN_SAFE_CAR_GAP = 3.45; // Strict minimum grid distance between car centers so vehicles NEVER overlap
       const SLOW_APPROACH_GAP = 5.1;
 
-      const spawnCustomerFromParkedCar = (car: TrafficCarAgent, stall: ParkingLotStall) => {
-        const currentExteriorQueue = guests.filter(
-          (g) => g.state === 'QUEUEING' || g.state === 'ARRIVING_FROM_CAR'
-        ).length;
-        if (currentExteriorQueue >= 8) return;
+      // Ensure there is always an orderly line of departing club patrons waiting outside at the Right-Side Taxi Stand!
+      const rightTaxiStandWaiters = guests.filter(
+        (g) =>
+          g.carId === 'WAIT_RIGHT_RIDE_SIGN' ||
+          (g.carId !== undefined && g.carId.startsWith('RIGHT_PICKUP_'))
+      );
+      if (rightTaxiStandWaiters.length < 2) {
+        const slotIdx = rightTaxiStandWaiters.length;
+        const targetSlotY = RIGHT_RIDE_HOME_WAIT_SPOT.y + slotIdx * 0.72;
+        guests.push({
+          id: `guest_taxi_stand_${performance.now()}_${Math.random()}`,
+          name: GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)],
+          isCelebrity: false,
+          floor: 1,
+          targetFloor: 1,
+          gridX: 2.15,
+          gridY: 11.02,
+          path: [
+            { x: 10.85, y: 11.02 },
+            { x: RIGHT_RIDE_HOME_WAIT_SPOT.x, y: targetSlotY },
+          ],
+          state: 'WALKING_TO_CAR',
+          stateTimer: 1.5,
+          patience: 100,
+          hype: 88,
+          bubble: 'CHAT',
+          bubbleTimer: 6.0,
+          shirtColor: SHIRT_COLORS[Math.floor(Math.random() * SHIRT_COLORS.length)],
+          hairColor: HAIR_COLORS[Math.floor(Math.random() * HAIR_COLORS.length)],
+          pantsColor: PANTS_COLORS[Math.floor(Math.random() * PANTS_COLORS.length)],
+          cashSpent: 120,
+          facingDir: 'SE',
+          carId: 'WAIT_RIGHT_RIDE_SIGN',
+          targetCarCoord: { x: RIGHT_RIDE_HOME_WAIT_SPOT.x, y: targetSlotY },
+          chatText: 'Walking outside to line up at the Taxi Stand! 🚶‍♂️🚕',
+          chatTimer: 5.5,
+        });
+      }
 
-        const insideCountNow = guests.filter((g) => !isExteriorGuestState(g.state)).length;
-        if (insideCountNow >= metrics.maxGuests && currentExteriorQueue >= 6) return;
+      const spawnCustomerFromParkedCar = (car: TrafficCarAgent, stall: ParkingLotStall) => {
+        // If the exterior queue is already very long (>= 7), let the longest-waiting tail guest walk outside to the Right-Side Taxi Stand line so the newly parked car ALWAYS disembarks its passenger!
+        const queuedNow = guests.filter((g) => g.state === 'QUEUEING');
+        if (queuedNow.length >= 7) {
+          const tailGuest = queuedNow[queuedNow.length - 1];
+          if (tailGuest) {
+            const standCount = guests.filter((g) => g.carId === 'WAIT_RIGHT_RIDE_SIGN').length;
+            const slotY = RIGHT_RIDE_HOME_WAIT_SPOT.y + Math.min(3, standCount) * 0.72;
+            tailGuest.state = 'WALKING_TO_CAR';
+            tailGuest.carId = 'WAIT_RIGHT_RIDE_SIGN';
+            tailGuest.path = [
+              { x: 10.85, y: 11.02 },
+              { x: RIGHT_RIDE_HOME_WAIT_SPOT.x, y: slotY },
+            ];
+            tailGuest.chatText = 'Heading outside to the Taxi Stand line! 🚕';
+          }
+        }
 
         const isCeleb = metrics.totalHype >= 130 && Math.random() < 0.24;
         const namePool = isCeleb ? CELEBRITY_NAMES : GUEST_NAMES;
@@ -1240,10 +1749,14 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           isCelebrity: isCeleb,
           floor: 1,
           targetFloor: 1,
-          gridX: stall.gx + 0.32,
-          gridY: stall.gy - 0.35,
-          path: [],
-          state: 'QUEUEING',
+          gridX: stall.gx + 0.26,
+          gridY: stall.gy - 0.14,
+          path: [
+            { x: stall.gx + 0.34, y: stall.gy - 0.62 },
+            { x: stall.gx + 0.34, y: 11.22 },
+            { x: 2.15, y: 10.65 },
+          ],
+          state: 'ARRIVING_FROM_CAR',
           stateTimer: queueWait,
           patience: 100,
           hype: isCeleb ? 97 : 80 + Math.floor(Math.random() * 18),
@@ -1259,9 +1772,21 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           carId: car.id,
           chatText: car.isTaxi
             ? 'Just hopped out of the taxi! Time to hit the neon floor! 🚕✨'
-            : `Parked in Bay ${stall.label}! Let’s get inside! 🚗🔥`,
+            : `Parked in Bay ${stall.label}! Stepping out to the club! 🚗🔥`,
           chatTimer: 4.5,
         });
+
+        if (fts.length < 18) {
+          fts.push({
+            id: `ft_park_exit_${performance.now()}_${Math.random()}`,
+            text: car.isTaxi ? '🚕 Passenger Out!' : `🚗 Parked ${stall.label}!`,
+            floor: 1,
+            gridX: stall.gx,
+            gridY: stall.gy - 0.4,
+            color: car.isTaxi ? '#facc15' : '#38bdf8',
+            age: 0,
+          });
+        }
       };
 
       for (let cIdx = 0; cIdx < trafficCars.length; cIdx++) {
@@ -1270,6 +1795,60 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         if (car.stopCooldown > 0) car.stopCooldown -= dt;
         if ((car.headlightFlashTimer ?? 0) > 0) {
           car.headlightFlashTimer = Math.max(0, (car.headlightFlashTimer ?? 0) - dt);
+        }
+
+        // 0. STATE: RIGHT_PICKUP_IN & RIGHT_PICKUP_WAIT (Pulling up to the Right-Side Road "Leading Man" Ride Home Sign to pick up a waiting passenger!)
+        if (car.carState === 'RIGHT_PICKUP_IN') {
+          const dx = RIGHT_RIDE_HOME_BAY_COORD.x - car.gridX;
+          const dy = RIGHT_RIDE_HOME_BAY_COORD.y - car.gridY;
+          const dist = Math.hypot(dx, dy);
+          const pullSpeed = 1.95 * dt;
+          if (dist <= pullSpeed + 0.04) {
+            car.gridX = RIGHT_RIDE_HOME_BAY_COORD.x;
+            car.gridY = RIGHT_RIDE_HOME_BAY_COORD.y;
+            car.carState = 'RIGHT_PICKUP_WAIT';
+            car.currentSpeed = 0;
+            car.headlightFlashTimer = 1.25;
+            car.parkTimer = 3.6;
+
+            // Command the front waiting passenger in the outside Right-Side Taxi Stand line to walk to the car door and hop in!
+            const waitingGuest = guests.find(
+              (g) =>
+                g.carId === 'WAIT_RIGHT_RIDE_SIGN' &&
+                g.path.length === 0 &&
+                g.gridX >= 10.35
+            );
+            if (waitingGuest) {
+              waitingGuest.carId = `RIGHT_PICKUP_${car.id}`;
+              waitingGuest.path = [
+                {
+                  x: RIGHT_RIDE_HOME_BAY_COORD.x - 0.25,
+                  y: RIGHT_RIDE_HOME_BAY_COORD.y - 0.05,
+                },
+              ];
+              waitingGuest.bubble = 'SPARKLE';
+              waitingGuest.bubbleTimer = 3.5;
+              waitingGuest.chatText = 'My ride pulled into the Taxi Stand pickup zone! Hopping in! 🚕✨';
+              waitingGuest.chatTimer = 3.5;
+            }
+          } else {
+            car.gridX += (dx / dist) * pullSpeed;
+            car.gridY += (dy / dist) * pullSpeed;
+            car.currentSpeed = 1.6;
+          }
+          continue;
+        }
+
+        if (car.carState === 'RIGHT_PICKUP_WAIT') {
+          car.currentSpeed = 0;
+          car.parkTimer = (car.parkTimer ?? 3.0) - dt;
+          const boardingGuest = guests.find((g) => g.carId === `RIGHT_PICKUP_${car.id}`);
+          if (!boardingGuest || (car.parkTimer ?? 0) <= 0) {
+            car.carState = 'CRUISING';
+            car.stopCooldown = 5.5;
+            car.headlightFlashTimer = 0.8;
+          }
+          continue;
         }
 
         // 1. STATE: PARKING_IN (Smoothly pulling from FRONT_EAST avenue gy=13.55 into assigned parking stall gy=12.12)
@@ -1285,7 +1864,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             car.carState = 'PARKED';
             car.currentSpeed = 0;
             car.headlightFlashTimer = 0.85;
-            car.parkTimer = car.isTaxi ? 4.5 : 15 + Math.random() * 12;
+            car.parkTimer = car.isTaxi ? 4.5 : 11 + Math.random() * 9;
             // Customer exits the car door and walks to the Red Carpet entrance!
             spawnCustomerFromParkedCar(car, stall);
           } else {
@@ -1341,7 +1920,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           const targetGx =
             car.stallIndex !== undefined
               ? PARKING_LOT_STALLS[car.stallIndex].gx + 0.85
-              : car.gridX + 0.5;
+              : car.gridX + 0.75;
           // Hold yield if an Eastbound car suddenly approached while pulling out
           const closeTraffic = trafficCars.some(
             (other) =>
@@ -1364,7 +1943,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             car.gridY = 13.55;
             car.carState = 'CRUISING';
             car.stallIndex = undefined;
-            car.stopCooldown = 7.5;
+            car.stopCooldown = 6.0;
             car.currentSpeed = car.speed * 0.75;
           } else {
             car.gridX += (dx / dist) * mergeStep;
@@ -1374,11 +1953,68 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           continue;
         }
 
-        // 4. STATE: CRUISING along the avenue with intelligent car-following distance & automatic parking lot entry
-        if (car.lane === 'FRONT_EAST') {
+        // 4. STATE: CRUISING along the avenue with intelligent car-following distance, Right-Side Ride Home Pickup, & automatic parking lot entry
+        if (car.lane === 'RIGHT_SOUTH') {
+          car.gridX = 12.35;
+
+          // Check if a passenger is waiting outside in line at the Right-Side Taxi Stand!
+          const waitingAtRightSign = guests.find(
+            (g) =>
+              g.carId === 'WAIT_RIGHT_RIDE_SIGN' &&
+              g.path.length === 0 &&
+              g.gridX >= 10.35
+          );
+          const rightBayBusy = trafficCars.some(
+            (other) =>
+              other.carState === 'RIGHT_PICKUP_IN' || other.carState === 'RIGHT_PICKUP_WAIT'
+          );
+          const frontWaitProgress = waitingAtRightSign
+            ? (waitingAtRightSign.taxiWaitElapsed ?? 0) /
+              Math.max(2.5, waitingAtRightSign.taxiWaitTarget ?? 5.2)
+            : 0;
+          const canTriggerPickup =
+            waitingAtRightSign &&
+            !rightBayBusy &&
+            (car.stopCooldown <= 0 || frontWaitProgress >= 0.82) &&
+            car.gridY >= (frontWaitProgress >= 0.75 ? 3.5 : 4.2) &&
+            car.gridY <= 6.15;
+          if (canTriggerPickup) {
+            car.carState = 'RIGHT_PICKUP_IN';
+            car.headlightFlashTimer = 0.75;
+            waitingAtRightSign.taxiWaitElapsed = waitingAtRightSign.taxiWaitTarget ?? 5.2;
+            continue;
+          }
+
+          // Car-following headway check on the Right-Side Road (+Y direction)
+          let minAheadGap = Infinity;
+          for (let j = 0; j < trafficCars.length; j++) {
+            if (j === cIdx) continue;
+            const other = trafficCars[j];
+            if (other.lane !== 'RIGHT_SOUTH') continue;
+            const gap = other.gridY - car.gridY;
+            if (gap > 0 && gap < minAheadGap) {
+              minAheadGap = gap;
+            }
+          }
+
+          const desiredSpeed = minAheadGap < MIN_SAFE_CAR_GAP ? 0 : car.speed;
+          const prevSpeed = car.currentSpeed ?? car.speed;
+          car.currentSpeed = prevSpeed + (desiredSpeed - prevSpeed) * Math.min(1, dt * 7.5);
+          car.gridY += car.currentSpeed * dt;
+
+          if (car.gridY > 13.8) {
+            let minRightY = -4.5;
+            for (let j = 0; j < trafficCars.length; j++) {
+              if (j !== cIdx && trafficCars[j].lane === 'RIGHT_SOUTH') {
+                minRightY = Math.min(minRightY, trafficCars[j].gridY - MIN_SAFE_CAR_GAP - 0.8);
+              }
+            }
+            car.gridY = Math.min(-4.5 - Math.random() * 1.4, minRightY);
+          }
+        } else if (car.lane === 'FRONT_EAST') {
           car.gridY = 13.55;
 
-          // Check if this cruising Eastbound car should pull into an open parking stall to park & let a customer out!
+          // 4B. Check if this cruising Eastbound car should pull into an open parking stall to park & let a customer out!
           if (car.stopCooldown <= 0) {
             const occupiedStalls = new Set<number>();
             for (let k = 0; k < trafficCars.length; k++) {
@@ -1559,6 +2195,194 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
+      // Helper to spawn Confetti, Glitter & Streamers across the club floor when a Party is thrown
+      const spawnPartyFloorParticles = (
+        targetFloor: FloorLevel,
+        count: number,
+        isInitialCannonBlast: boolean
+      ) => {
+        const list = partyParticlesRef.current;
+        const maxPartyParticles =
+          props.isEcoMode || isCoarsePointerDevice ? 120 : 220;
+
+        for (let k = 0; k < count; k++) {
+          if (list.length >= maxPartyParticles) {
+            list.shift();
+          }
+          const roll = Math.random();
+          const kind: PartyCelebrationParticle['kind'] =
+            roll < 0.44
+              ? 'FOIL_CONFETTI'
+              : roll < 0.76
+              ? 'DIAMOND_GLITTER'
+              : roll < 0.9
+              ? 'RIBBON_STREAMER'
+              : 'FLOOR_SPARKLE';
+
+          // Distribute across the entire 10x10 club floor (0.55 .. 8.85), with cannon bursts focused around stage & dance floor
+          let gx = 0.6 + Math.random() * 8.2;
+          let gy = 0.6 + Math.random() * 8.2;
+          let startZ = 72 + Math.random() * 68;
+          let vx = (Math.random() - 0.5) * 26;
+          let vy = (Math.random() - 0.5) * 14;
+          let vz = -24 - Math.random() * 22;
+
+          if (kind === 'FLOOR_SPARKLE') {
+            startZ = Math.random() * 4;
+            vx = 0;
+            vy = 0;
+            vz = 0;
+          } else if (isInitialCannonBlast && k < count * 0.55) {
+            // Dual stage & disco ball confetti cannons launching outward across the floor!
+            const cannonIdx = k % 3;
+            const cannonOrigin =
+              cannonIdx === 0
+                ? { x: 2.2, y: 1.5 }
+                : cannonIdx === 1
+                ? { x: 6.2, y: 1.5 }
+                : { x: 4.4, y: 4.4 };
+            gx = cannonOrigin.x + (Math.random() - 0.5) * 2.4;
+            gy = cannonOrigin.y + (Math.random() - 0.5) * 2.4;
+            startZ = cannonIdx === 2 ? 98 + Math.random() * 35 : 32 + Math.random() * 36;
+            const burstAngle = Math.random() * Math.PI * 2;
+            const burstSpeed = 18 + Math.random() * 48;
+            vx = Math.cos(burstAngle) * burstSpeed;
+            vy = Math.sin(burstAngle) * burstSpeed * 0.55;
+            vz = cannonIdx === 2 ? -18 - Math.random() * 24 : 38 + Math.random() * 52;
+          }
+
+          const color =
+            PARTY_CONFETTI_PALETTE[Math.floor(Math.random() * PARTY_CONFETTI_PALETTE.length)];
+          const secondaryColor =
+            PARTY_CONFETTI_PALETTE[Math.floor(Math.random() * PARTY_CONFETTI_PALETTE.length)];
+
+          list.push({
+            floor: targetFloor,
+            gridX: Math.max(0.45, Math.min(8.95, gx)),
+            gridY: Math.max(0.45, Math.min(8.95, gy)),
+            z: startZ,
+            vx,
+            vy,
+            vz,
+            offsetX: (Math.random() - 0.5) * 14,
+            offsetY: (Math.random() - 0.5) * 8,
+            kind,
+            color,
+            secondaryColor,
+            size:
+              kind === 'DIAMOND_GLITTER'
+                ? 4.2 + Math.random() * 3.8
+                : kind === 'RIBBON_STREAMER'
+                ? 5.5 + Math.random() * 3.5
+                : kind === 'FLOOR_SPARKLE'
+                ? 3.8 + Math.random() * 3.2
+                : 3.4 + Math.random() * 2.8,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 12,
+            tiltPhase: Math.random() * Math.PI * 2,
+            tiltSpeed: 5 + Math.random() * 7,
+            swayPhase: Math.random() * Math.PI * 2,
+            swaySpeed: 3.5 + Math.random() * 4.5,
+            twinklePhase: Math.random() * Math.PI * 2,
+            twinkleSpeed: 8 + Math.random() * 10,
+            age: 0,
+            maxAge:
+              kind === 'FLOOR_SPARKLE'
+                ? 0.9 + Math.random() * 0.8
+                : 2.4 + Math.random() * 1.9,
+          });
+        }
+      };
+
+      // Check if a 'Party' was just thrown (partyTriggerTick incremented)
+      if ((props.partyTriggerTick ?? 0) > prevPartyTickRef.current) {
+        prevPartyTickRef.current = props.partyTriggerTick ?? 0;
+        partyCelebrationTimerRef.current = 7.2; // 7.2 seconds of club-wide confetti & glitter celebration!
+        partyRainEmitAccRef.current = 0;
+
+        // Fire massive opening Confetti & Glitter Cannon Blast across the active club floor
+        const burstCount = props.isEcoMode || isCoarsePointerDevice ? 58 : 110;
+        spawnPartyFloorParticles(props.activeFloor, burstCount, true);
+
+        // Also trigger a Golden-Magenta Party Shockwave Ripple across the dance floor
+        const ripples = bassDropRipplesRef.current;
+        if (ripples.length >= 4) ripples.shift();
+        ripples.push({
+          id: `party_ripple_${performance.now()}`,
+          floor: props.activeFloor,
+          originGx: 4.3,
+          originGy: 4.3,
+          age: 0,
+          maxAge: 2.35,
+          radius: 0.2,
+          maxRadius: 12.2,
+          primaryColor: '#facc15',
+          secondaryColor: '#f472b6',
+          reactedGuestIds: new Set<string>(),
+        });
+
+        // Excite all interior guests on the floor when the Party is thrown!
+        for (let gIdx = 0; gIdx < guests.length; gIdx++) {
+          const g = guests[gIdx];
+          if (g.floor !== props.activeFloor || isExteriorGuestState(g.state)) continue;
+          g.hype = 100;
+          g.bubble = g.isCelebrity ? 'VIP_CROWN' : kPartyBubble(gIdx);
+          g.bubbleTimer = 5.0;
+          if (g.state === 'DANCING' || g.state === 'DANCER_MOVES') {
+            g.state = 'DANCER_MOVES';
+            spawnParticlesAboveDancer(g, 4);
+          }
+        }
+      }
+
+      // While the Party Celebration is active, continuously rain confetti & glitter across the club floor
+      if (partyCelebrationTimerRef.current > 0) {
+        partyCelebrationTimerRef.current = Math.max(0, partyCelebrationTimerRef.current - dt);
+        partyRainEmitAccRef.current += dt;
+        if (partyRainEmitAccRef.current >= 0.075) {
+          partyRainEmitAccRef.current = 0;
+          const rainBatch = props.isEcoMode || isCoarsePointerDevice ? 5 : 9;
+          spawnPartyFloorParticles(props.activeFloor, rainBatch, false);
+        }
+      }
+
+      // Update 60fps 3D Physics for all Party Confetti, Glitter & Streamers across the club floor
+      const partyParticles = partyParticlesRef.current;
+      for (let i = partyParticles.length - 1; i >= 0; i--) {
+        const pp = partyParticles[i];
+        pp.age += dt;
+        if (pp.age >= pp.maxAge) {
+          partyParticles.splice(i, 1);
+          continue;
+        }
+        pp.twinklePhase += pp.twinkleSpeed * dt;
+        if (pp.kind === 'FLOOR_SPARKLE') {
+          continue;
+        }
+        if (pp.z > 0) {
+          pp.swayPhase += pp.swaySpeed * dt;
+          pp.tiltPhase += pp.tiltSpeed * dt;
+          pp.rotation += pp.rotationSpeed * dt;
+          const flutterX = Math.sin(pp.swayPhase) * (pp.kind === 'RIBBON_STREAMER' ? 24 : 18);
+          const flutterY = Math.cos(pp.swayPhase * 0.8) * 7;
+          pp.offsetX += (pp.vx + flutterX) * dt;
+          pp.offsetY += (pp.vy + flutterY) * dt;
+          // Air drag slows initial cannon horizontal burst into a gentle flutter
+          pp.vx *= Math.max(0, 1 - dt * 2.1);
+          pp.vy *= Math.max(0, 1 - dt * 2.1);
+          // Gravity pulls rising cannon confetti into a terminal floating descent
+          pp.vz = Math.max(-34, pp.vz - 68 * dt);
+          pp.z += pp.vz * dt;
+          if (pp.z <= 0) {
+            // Landed on the isometric club floor tiles! Shimmer on the floor before fading out
+            pp.z = 0;
+            pp.vz = 0;
+            pp.vx = 0;
+            pp.vy = 0;
+          }
+        }
+      }
+
       // Update Dynamic Bass Drop Dance Floor Ripple Waves & Trigger Wave-Synced Crowd Reactions as the Wavefront Reaches Each Guest!
       const activeRipples = bassDropRipplesRef.current;
       for (let rIdx = activeRipples.length - 1; rIdx >= 0; rIdx--) {
@@ -1596,15 +2420,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             g.bubbleTimer = Math.max(g.bubbleTimer, 4.2);
 
             if (g.state === 'DANCING' || g.state === 'DANCER_MOVES') {
-              const highEnergyMoves: DancerMoveVariant[] = [
-                'CYBER_JUMP',
-                'FIST_PUMP',
-                'SPIN_TWIRL',
-                'BREAKDANCE_WAVE',
-              ];
               g.state = 'DANCER_MOVES';
-              g.danceMove =
-                highEnergyMoves[Math.floor(Math.random() * highEnergyMoves.length)];
+              transitionDancerToNewAiMove(
+                g,
+                guests,
+                Math.max(128, props.clubBpm || 128),
+                props.activeGenre
+              );
               g.stateTimer = Math.max(g.stateTimer, 7.2);
               spawnParticlesAboveDancer(g, 5);
 
@@ -1683,6 +2505,82 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
+      // Smoothly organize departing patrons waiting at the Right-Side Taxi Stand into an orderly single-file line OUTSIDE on the right sidewalk (gx=10.85, gy=6.18 + idx*0.72)
+      const rightTaxiLineList = guests.filter(
+        (g) => g.state === 'WALKING_TO_CAR' && g.carId === 'WAIT_RIGHT_RIDE_SIGN'
+      );
+      const activePickupCar = trafficCars.find(
+        (c) => c.carState === 'RIGHT_PICKUP_IN' || c.carState === 'RIGHT_PICKUP_WAIT'
+      );
+      let nearestApproachingRightCar: TrafficCarAgent | undefined;
+      for (const c of trafficCars) {
+        if (c.lane === 'RIGHT_SOUTH' && c.carState === 'CRUISING' && c.gridY <= 6.15) {
+          if (!nearestApproachingRightCar || c.gridY > nearestApproachingRightCar.gridY) {
+            nearestApproachingRightCar = c;
+          }
+        }
+      }
+
+      for (let tIdx = 0; tIdx < rightTaxiLineList.length; tIdx++) {
+        const tg = rightTaxiLineList[tIdx];
+        const slotX = RIGHT_RIDE_HOME_WAIT_SPOT.x;
+        const slotY = RIGHT_RIDE_HOME_WAIT_SPOT.y + tIdx * 0.72;
+        tg.targetCarCoord = { x: slotX, y: slotY };
+        tg.taxiLineIndex = tIdx;
+
+        const desiredTarget = 5.2 + tIdx * 2.8;
+        if (!tg.taxiWaitTarget || tg.taxiWaitTarget > desiredTarget + 1.5) {
+          tg.taxiWaitTarget = desiredTarget;
+        }
+
+        // If any guest waiting for the Taxi Stand was ever inside the club bounds, route them straight outside onto the sidewalk
+        if (tg.gridX < 10.2 && tg.gridY < 10.2 && tg.path.length === 0) {
+          tg.gridX = slotX;
+          tg.gridY = slotY;
+        }
+
+        if (tg.path.length > 0) {
+          // Keep their final path destination aligned with their current single-file line slot on the right sidewalk
+          tg.path[tg.path.length - 1] = { x: slotX, y: slotY };
+        } else {
+          // Advance visual wait timer while standing in the outside Taxi Stand queue
+          const curTarget = tg.taxiWaitTarget ?? desiredTarget;
+          let nextElapsed = (tg.taxiWaitElapsed ?? 0) + dt;
+
+          // Sync front passenger's wait timer with the actual approaching right-side car ETA so the gauge hits 100% right as the car arrives!
+          if (tIdx === 0) {
+            if (activePickupCar) {
+              nextElapsed = curTarget * 0.96;
+            } else if (nearestApproachingRightCar) {
+              const distToPickup = Math.max(0, 5.4 - nearestApproachingRightCar.gridY);
+              const carEta = distToPickup / Math.max(1.35, nearestApproachingRightCar.speed);
+              const syncedElapsed = Math.max(0.4, curTarget - carEta);
+              nextElapsed = nextElapsed * 0.82 + syncedElapsed * 0.18;
+              // If the front passenger's timer is nearly full (>82%), gently draw the approaching car into the pickup zone
+              if (nextElapsed / curTarget >= 0.82 && nearestApproachingRightCar.gridY < 4.3) {
+                nearestApproachingRightCar.gridY += dt * 1.15;
+                nearestApproachingRightCar.stopCooldown = 0;
+              }
+            }
+          }
+          tg.taxiWaitElapsed = Math.min(curTarget * 0.98, nextElapsed);
+
+          const tdx = slotX - tg.gridX;
+          const tdy = slotY - tg.gridY;
+          const tDist = Math.hypot(tdx, tdy);
+          if (tDist > 0.03) {
+            const step = Math.min(tDist, 1.35 * dt);
+            tg.gridX += (tdx / tDist) * step;
+            tg.gridY += (tdy / tDist) * step;
+            tg.facingDir = 'SE';
+          } else {
+            tg.gridX = slotX;
+            tg.gridY = slotY;
+            tg.facingDir = 'SE';
+          }
+        }
+      }
+
       for (let i = guests.length - 1; i >= 0; i--) {
         const guest = guests[i];
 
@@ -1723,18 +2621,24 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           }
         }
 
-        // BPM-driven DANCER_MOVES & Dynamic 10-15s Synchronized Group Dancing AI
+        // Autonomous AI Club Dance Choreographer (individualized moves, smooth crossfade blending, social partner facing & anti-duplication)
         if (guest.state === 'DANCER_MOVES' || guest.state === 'DANCING') {
-          if (!guest.danceMove) {
-            guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
-            guest.dancePhaseOffset = Math.random() * Math.PI * 2;
+          ensureAiDancerProfile(guest, guests, currentBpm, props.activeGenre);
+
+          if (
+            guest.danceTransitionProgress !== undefined &&
+            guest.danceTransitionProgress < 1
+          ) {
+            guest.danceTransitionProgress = Math.min(
+              1,
+              guest.danceTransitionProgress + dt * 2.4
+            );
           }
 
-          // Active Synchronized Group Dance Session (10-15 seconds)
+          // If an explicit mini-game group dance session was triggered, count it down while keeping individualized groove phases
           if (guest.groupDanceId && (guest.groupDanceTimer ?? 0) > 0) {
             guest.groupDanceTimer = (guest.groupDanceTimer ?? 0) - dt;
             guest.state = 'DANCER_MOVES';
-            // Keep stateTimer alive while group dance is active so members finish the routine together
             guest.stateTimer = Math.max(guest.stateTimer, guest.groupDanceTimer + 1.0);
 
             if (guest.groupDanceTimer <= 0) {
@@ -1744,75 +2648,19 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               guest.groupDanceSlotIndex = undefined;
               guest.groupDanceSize = undefined;
               guest.groupDancePattern = undefined;
-              guest.dancePhaseOffset = Math.random() * Math.PI * 2;
             }
-          } else {
-            // Check for nearby dancing guests within 2.5 tiles on the same floor to initiate a 10-15s Synchronized Group Dance!
-            if (guest.path.length === 0 && Math.random() < dt * 0.42) {
-              const nearbyDancers = guests.filter(
-                (other) =>
-                  other.floor === guest.floor &&
-                  other.path.length === 0 &&
-                  (other.state === 'DANCING' || other.state === 'DANCER_MOVES') &&
-                  !other.groupDanceId &&
-                  Math.hypot(other.gridX - guest.gridX, other.gridY - guest.gridY) <= 2.65
-              );
+          }
 
-              if (nearbyDancers.length >= 2) {
-                const crew = nearbyDancers.slice(0, 5);
-                const groupId = `grp_${Date.now()}_${Math.floor(Math.random() * 999)}`;
-                const syncDuration = 10.0 + Math.random() * 5.0; // 10-15 seconds
-                const sharedMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-                const patterns: Array<'CIRCLE_GROOVE' | 'LINE_SHUFFLE' | 'BOUNCE_WAVE'> = [
-                  'CIRCLE_GROOVE',
-                  'LINE_SHUFFLE',
-                  'BOUNCE_WAVE',
-                ];
-                const chosenPattern = patterns[Math.floor(Math.random() * patterns.length)];
-
-                let sumX = 0;
-                let sumY = 0;
-                for (const m of crew) {
-                  sumX += m.gridX;
-                  sumY += m.gridY;
-                }
-                const centerX = sumX / crew.length;
-                const centerY = sumY / crew.length;
-
-                crew.forEach((member, slotIdx) => {
-                  member.state = 'DANCER_MOVES';
-                  member.groupDanceId = groupId;
-                  member.groupDanceTimer = syncDuration;
-                  member.groupDanceCenter = { x: centerX, y: centerY };
-                  member.groupDanceSlotIndex = slotIdx;
-                  member.groupDanceSize = crew.length;
-                  member.groupDancePattern = chosenPattern;
-                  member.danceMove = sharedMove;
-                  member.danceMoveTimer = syncDuration;
-                  // Locked phase (or tight wave ripple for BOUNCE_WAVE) so animations synchronize
-                  member.dancePhaseOffset =
-                    chosenPattern === 'BOUNCE_WAVE' ? slotIdx * 0.28 : 0;
-                  member.stateTimer = Math.max(member.stateTimer, syncDuration + 1.5);
-                  member.hype = Math.min(100, member.hype + 12);
-                  member.bubble = slotIdx % 2 === 0 ? 'MUSIC' : 'SPARKLE';
-                  member.bubbleTimer = 5.5;
-                  member.chatText = `Synced ${chosenPattern.replace('_', ' ')} crew dance! 🕺💃🔥`;
-                  member.chatTimer = 6.0;
-                });
-              }
-            }
-
-            if (guest.state === 'DANCING' && guest.stateTimer < 6.5) {
-              guest.state = 'DANCER_MOVES';
-              guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-              guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 4));
-            }
-            if (guest.state === 'DANCER_MOVES' && !guest.groupDanceId) {
-              guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 8) - dt;
-              if (guest.danceMoveTimer <= 0) {
-                guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-                guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
-              }
+          if (guest.state === 'DANCING' && guest.stateTimer < 6.5) {
+            guest.state = 'DANCER_MOVES';
+            transitionDancerToNewAiMove(guest, guests, currentBpm, props.activeGenre);
+            guest.danceMoveTimer = beatDurationSec * (5 + Math.floor(Math.random() * 5));
+          }
+          if (guest.state === 'DANCER_MOVES') {
+            guest.danceMoveTimer = (guest.danceMoveTimer ?? beatDurationSec * 7) - dt;
+            if (guest.danceMoveTimer <= 0) {
+              transitionDancerToNewAiMove(guest, guests, currentBpm, props.activeGenre);
+              guest.danceMoveTimer = beatDurationSec * (5 + Math.floor(Math.random() * 6));
             }
           }
         }
@@ -1873,7 +2721,12 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
 
         if (guest.stateTimer <= 0) {
-          if (guest.state === 'QUEUEING') {
+          if (guest.state === 'ARRIVING_FROM_CAR') {
+            guest.state = 'QUEUEING';
+            guest.facingDir = 'NW';
+            guest.stateTimer = 0.9;
+            continue;
+          } else if (guest.state === 'QUEUEING') {
             if (insideGuestsCount >= metrics.maxGuests) {
               guest.stateTimer = 0.5;
               continue;
@@ -2060,9 +2913,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             guest.state = 'DANCER_MOVES';
             guest.seatPosture = undefined;
             guest.assignedSlotId = undefined;
-            guest.danceMove = pickRandomDancerMoveForBpm(currentBpm);
-            guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
-            guest.dancePhaseOffset = Math.random() * Math.PI * 2;
+            transitionDancerToNewAiMove(guest, guests, currentBpm, props.activeGenre);
+            guest.danceMoveTimer = beatDurationSec * (5 + Math.floor(Math.random() * 6));
             guest.stateTimer = 8.0 + Math.random() * 4.5;
             guest.bubble =
               metrics.lightingCount < 2 && Math.random() < 0.25
@@ -2099,8 +2951,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             }
             if (guest.state === 'DANCING' || (danceTiles.length > 0 && Math.random() < 0.25)) {
               guest.state = 'DANCER_MOVES';
-              guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
-              guest.danceMoveTimer = beatDurationSec * (6 + Math.floor(Math.random() * 5));
+              transitionDancerToNewAiMove(guest, guests, currentBpm, props.activeGenre);
+              guest.danceMoveTimer = beatDurationSec * (5 + Math.floor(Math.random() * 6));
               guest.stateTimer = 6.5 + Math.random() * 4.0;
               guest.bubble = Math.random() < 0.5 ? 'MUSIC' : 'SPARKLE';
               guest.bubbleTimer = 4.0;
@@ -2281,43 +3133,93 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             );
             guest.stateTimer = 1.2;
           } else if (guest.state === 'LEAVING') {
-            // Instead of disappearing at the club door, the customer walks outside across the sidewalk back to a parked car in the parking lot!
-            const parkedCars = trafficCarsRef.current.filter(
-              (c) => c.carState === 'PARKED' && c.stallIndex !== undefined
-            );
-            const targetCar =
-              parkedCars.find((c) => c.id === guest.carId) ||
-              parkedCars[Math.floor(Math.random() * parkedCars.length)];
+            // Check how many patrons are lined up outside at the Right-Side Taxi Stand; if under 4 (or 45% chance), walk outside along the sidewalk to join the Taxi Stand line!
+            const rightStandLineCount = guests.filter(
+              (g) =>
+                g.id !== guest.id &&
+                (g.carId === 'WAIT_RIGHT_RIDE_SIGN' || g.carId?.startsWith('RIGHT_PICKUP_'))
+            ).length;
 
-            const fallbackStall = PARKING_LOT_STALLS[1]; // Taxi pickup bay
-            const targetStall =
-              targetCar && targetCar.stallIndex !== undefined
-                ? PARKING_LOT_STALLS[targetCar.stallIndex]
-                : fallbackStall;
+            if (rightStandLineCount < 3 || (rightStandLineCount < 4 && Math.random() < 0.45)) {
+              const slotY = RIGHT_RIDE_HOME_WAIT_SPOT.y + rightStandLineCount * 0.72;
+              guest.state = 'WALKING_TO_CAR';
+              guest.floor = 1;
+              guest.gridX = 2.15;
+              guest.gridY = 10.85;
+              guest.carId = 'WAIT_RIGHT_RIDE_SIGN';
+              guest.targetCarCoord = {
+                x: RIGHT_RIDE_HOME_WAIT_SPOT.x,
+                y: slotY,
+              };
+              guest.path = [
+                { x: 2.15, y: 11.05 },
+                { x: 10.85, y: 11.05 },
+                { x: RIGHT_RIDE_HOME_WAIT_SPOT.x, y: slotY },
+              ];
+              guest.bubble = 'SPARKLE';
+              guest.bubbleTimer = 5.5;
+              guest.chatText = 'Heading outside to line up at the Taxi Stand! 🚕👋';
+              guest.chatTimer = 5.5;
+              guest.stateTimer = 0.6;
+            } else {
+              // Otherwise walk across the sidewalk back to a parked car in the parking lot!
+              const parkedCars = trafficCarsRef.current.filter(
+                (c) => c.carState === 'PARKED' && c.stallIndex !== undefined
+              );
+              const targetCar =
+                parkedCars.find((c) => c.id === guest.carId) ||
+                parkedCars[Math.floor(Math.random() * parkedCars.length)];
 
-            if (targetCar) {
-              targetCar.carState = 'WAITING_PICKUP';
-              targetCar.parkTimer = 6.0;
-              guest.carId = targetCar.id;
+              const fallbackStall = PARKING_LOT_STALLS[1]; // Taxi pickup bay
+              const targetStall =
+                targetCar && targetCar.stallIndex !== undefined
+                  ? PARKING_LOT_STALLS[targetCar.stallIndex]
+                  : fallbackStall;
+
+              if (targetCar) {
+                targetCar.carState = 'WAITING_PICKUP';
+                targetCar.parkTimer = 6.0;
+                guest.carId = targetCar.id;
+              }
+
+              const carDoorX = targetStall.gx + 0.28;
+              const carDoorY = targetStall.gy - 0.35;
+              guest.state = 'WALKING_TO_CAR';
+              guest.floor = 1;
+              guest.gridX = 2.15;
+              guest.gridY = 10.25;
+              guest.targetCarCoord = { x: carDoorX, y: carDoorY };
+              guest.path = [
+                { x: 2.05, y: 11.2 },
+                { x: carDoorX, y: carDoorY },
+              ];
+              guest.bubble = 'SPARKLE';
+              guest.bubbleTimer = 4.0;
+              guest.chatText = `What an epic night! Walking back to my car in Bay ${targetStall.label}! 🚗✨`;
+              guest.chatTimer = 4.0;
+              guest.stateTimer = 0.25;
             }
-
-            const carDoorX = targetStall.gx + 0.28;
-            const carDoorY = targetStall.gy - 0.35;
-            guest.state = 'WALKING_TO_CAR';
-            guest.floor = 1;
-            guest.gridX = 2.15;
-            guest.gridY = 10.25;
-            guest.targetCarCoord = { x: carDoorX, y: carDoorY };
-            guest.path = [
-              { x: 2.05, y: 11.2 },
-              { x: carDoorX, y: carDoorY },
-            ];
-            guest.bubble = 'SPARKLE';
-            guest.bubbleTimer = 4.0;
-            guest.chatText = `What an epic night! Walking back to my car in Bay ${targetStall.label}! 🚗✨`;
-            guest.chatTimer = 4.0;
-            guest.stateTimer = 0.25;
           } else if (guest.state === 'WALKING_TO_CAR') {
+            if (guest.carId === 'WAIT_RIGHT_RIDE_SIGN') {
+              // Keep waiting at the Right-Side Leading Man Sign facing the right road & waving until a car pulls into the pickup bay!
+              guest.facingDir = 'SE';
+              guest.stateTimer = 0.6;
+              if (guest.bubbleTimer <= 0) {
+                guest.bubble = 'SPARKLE';
+                guest.bubbleTimer = 3.5;
+              }
+              continue;
+            }
+            if (guest.carId?.startsWith('RIGHT_PICKUP_')) {
+              const pickupCarId = guest.carId.replace('RIGHT_PICKUP_', '');
+              const pickupCar = trafficCarsRef.current.find((c) => c.id === pickupCarId);
+              if (pickupCar) {
+                pickupCar.headlightFlashTimer = 0.95;
+                pickupCar.parkTimer = 0; // Car departs with passenger on board!
+              }
+              guests.splice(i, 1);
+              continue;
+            }
             // Customer reached their parked car door — they hop inside and the car pulls out of the parking bay and merges into traffic!
             if (guest.carId) {
               const boardingCar = trafficCarsRef.current.find((c) => c.id === guest.carId);
@@ -2871,18 +3773,101 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         moodProfile
       );
 
-      // 4. SUNKEN BEVELED DANCE FLOOR GRID + AUTOMATIC GENRE MOOD COLOR FILTER OVERLAY + BASS DROP RIPPLE WAVE
-      const floorItems = props.placedItems.filter((p) => p.floor === props.activeFloor);
+      // 4. SMOOTH DECORATION GLIDE-AND-SNAP INTERPOLATION + SUNKEN BEVELED DANCE FLOOR GRID
+      const snapMap = itemSnapAnimRef.current;
+      const validUids = new Set<string>();
+      for (let i = 0; i < props.placedItems.length; i++) {
+        const p = props.placedItems[i];
+        validUids.add(p.uid);
+        let anim = snapMap.get(p.uid);
+        if (!anim) {
+          const isJustBought =
+            props.newlyPlacedItemHighlight?.uid === p.uid &&
+            performance.now() - props.newlyPlacedItemHighlight.placedAtMs < 400;
+          anim = {
+            currX: p.gridX,
+            currY: p.gridY,
+            fromX: p.gridX,
+            fromY: p.gridY,
+            targetX: p.gridX,
+            targetY: p.gridY,
+            progress: 1,
+            liftZ: 0,
+            snapPulse: isJustBought ? 1.0 : 0,
+            floor: p.floor,
+          };
+          snapMap.set(p.uid, anim);
+        } else if (anim.floor !== p.floor) {
+          anim.currX = p.gridX;
+          anim.currY = p.gridY;
+          anim.fromX = p.gridX;
+          anim.fromY = p.gridY;
+          anim.targetX = p.gridX;
+          anim.targetY = p.gridY;
+          anim.progress = 1;
+          anim.liftZ = 0;
+          anim.floor = p.floor;
+        } else if (anim.targetX !== p.gridX || anim.targetY !== p.gridY) {
+          // Decoration moved! Trigger smooth glide-and-snap animation from current visual position to target grid tile
+          anim.fromX = anim.currX;
+          anim.fromY = anim.currY;
+          anim.targetX = p.gridX;
+          anim.targetY = p.gridY;
+          anim.progress = 0;
+          anim.snapPulse = 1.0;
+        }
+
+        if (anim.progress < 1) {
+          const dist = Math.max(1, Math.hypot(anim.targetX - anim.fromX, anim.targetY - anim.fromY));
+          const duration = Math.min(0.36, 0.22 + dist * 0.025);
+          anim.progress = Math.min(1, anim.progress + dt / duration);
+          const u = anim.progress;
+          // Smooth cubic ease-out with subtle magnetic snap lock at the end
+          const c1 = 1.05;
+          const c3 = c1 + 1;
+          const eased = 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2);
+          anim.currX = anim.fromX + (anim.targetX - anim.fromX) * eased;
+          anim.currY = anim.fromY + (anim.targetY - anim.fromY) * eased;
+          anim.liftZ = Math.sin(u * Math.PI) * Math.min(12, 6.2 + dist * 1.15);
+          if (anim.progress >= 1) {
+            anim.currX = anim.targetX;
+            anim.currY = anim.targetY;
+            anim.liftZ = 0;
+            anim.snapPulse = 1.0;
+          }
+        } else if (anim.snapPulse > 0) {
+          anim.snapPulse = Math.max(0, anim.snapPulse - dt * 2.5);
+        }
+      }
+      snapMap.forEach((_, uid) => {
+        if (!validUids.has(uid)) {
+          snapMap.delete(uid);
+        }
+      });
+
+      const rawFloorItems = props.placedItems.filter((p) => p.floor === props.activeFloor);
+      const floorItems: PlacedItem[] = rawFloorItems.map((p) => {
+        const anim = snapMap.get(p.uid);
+        if (!anim) return p;
+        return {
+          ...p,
+          gridX: anim.currX,
+          gridY: anim.currY,
+        };
+      });
+
       const activeFloorRipples = bassDropRipplesRef.current;
       for (const item of floorItems) {
         const cat = getCatalogItem(item.catalogId);
         if (!cat || cat.category !== 'DANCE_TILE') continue;
+        const anim = snapMap.get(item.uid);
+        const itemOriginY = originY - (anim?.liftZ ?? 0) * scale;
         drawIllustratedDanceTile(
           ctx,
           item,
           cat,
           originX,
-          originY,
+          itemOriginY,
           tileW,
           tileH,
           scale,
@@ -2896,7 +3881,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           item,
           cat,
           originX,
-          originY,
+          itemOriginY,
           tileW,
           tileH,
           scale,
@@ -2918,6 +3903,52 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           tileH,
           scale
         );
+      }
+
+      // 4A-PARTY: CLUB FLOOR SETTLED CONFETTI, FLOOR GLITTER SPARKLES & CELEBRATION SHIMMER PASS
+      if (partyCelebrationTimerRef.current > 0 || partyParticlesRef.current.length > 0) {
+        drawPartyFloorConfettiAndGlitterPass(
+          ctx,
+          partyParticlesRef.current,
+          partyCelebrationTimerRef.current,
+          props.activeFloor,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale,
+          t,
+          'FLOOR'
+        );
+      }
+
+      // 4A-SNAP: GLOWING MAGNETIC TARGET TILE LOCK & LANDING PULSE FOR GLIDING DECORATIONS
+      for (const rawItem of rawFloorItems) {
+        const anim = snapMap.get(rawItem.uid);
+        if (!anim || (anim.progress >= 1 && anim.snapPulse <= 0.02)) continue;
+        const itemCat = getCatalogItem(rawItem.catalogId);
+        if (!itemCat) continue;
+        const itemFp = getRotatedFootprint(itemCat, rawItem.rotation);
+        const isGliding = anim.progress < 1;
+        const pulseAlpha = isGliding ? 0.45 : anim.snapPulse * 0.42;
+        for (let dx = 0; dx < itemFp.width; dx++) {
+          for (let dy = 0; dy < itemFp.depth; dy++) {
+            // Target landing tile magnetic lock highlight
+            drawIsoTilePolygon(
+              ctx,
+              anim.targetX + dx,
+              anim.targetY + dy,
+              (1.2 + anim.snapPulse * 2.2) * scale,
+              originX,
+              originY,
+              tileW,
+              tileH,
+              `rgba(34, 211, 238, ${(pulseAlpha * 0.65).toFixed(2)})`,
+              '#22d3ee',
+              (1.8 + anim.snapPulse * 1.6) * scale
+            );
+          }
+        }
       }
 
       // 4B. HIGHLIGHT CURRENTLY SELECTED PLACED DECORATION IN EDIT POSITION MODE (OR ALL MOVABLE ITEMS WHEN EDIT MODE IS ACTIVE)
@@ -3097,6 +4128,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         const cat = getCatalogItem(item.catalogId);
         if (!cat || cat.category === 'DANCE_TILE') continue;
         const fp = getRotatedFootprint(cat, item.rotation);
+        const anim = snapMap.get(item.uid);
+        const itemOriginY = originY - (anim?.liftZ ?? 0) * scale;
 
         if (cat.category === 'BAR_UNIT') {
           const barDepth = item.gridX + item.gridY + (fp.width + fp.depth) * 0.35;
@@ -3110,7 +4143,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 cat,
                 fp,
                 originX,
-                originY,
+                itemOriginY,
                 tileW,
                 tileH,
                 scale,
@@ -3125,7 +4158,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 zIndex: 0,
                 depth: st.gx + st.gy + 0.3,
                 draw: () =>
-                  drawBarStool(ctx, st.gx, st.gy, originX, originY, tileW, tileH, scale),
+                  drawBarStool(ctx, st.gx, st.gy, originX, itemOriginY, tileW, tileH, scale),
               });
             }
           }
@@ -3146,7 +4179,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                     chairBackGx,
                     chairBackGy,
                     originX,
-                    originY,
+                    itemOriginY,
                     tileW,
                     tileH,
                     scale,
@@ -3160,7 +4193,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               zIndex: 0,
               depth: item.gridX + item.gridY + 1.38,
               draw: () =>
-                drawTable(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t),
+                drawTable(ctx, item, cat, fp, originX, itemOriginY, tileW, tileH, scale, t),
             });
 
             if (!assetManager.hasSprite('cocktail_table')) {
@@ -3173,7 +4206,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                     chairFrontGx,
                     chairFrontGy,
                     originX,
-                    originY,
+                    itemOriginY,
                     tileW,
                     tileH,
                     scale,
@@ -3187,7 +4220,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               zIndex: 0,
               depth: item.gridX + item.gridY + 0.35,
               draw: () =>
-                drawTable(ctx, item, cat, fp, originX, originY, tileW, tileH, scale, t),
+                drawTable(ctx, item, cat, fp, originX, itemOriginY, tileW, tileH, scale, t),
             });
             if (!assetManager.hasSprite('vip_couch')) {
               const boothService = props.activeBottleServices?.[item.uid];
@@ -3200,7 +4233,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                     item,
                     fp,
                     originX,
-                    originY,
+                    itemOriginY,
                     tileW,
                     tileH,
                     scale,
@@ -3222,7 +4255,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 cat,
                 fp,
                 originX,
-                originY,
+                itemOriginY,
                 tileW,
                 tileH,
                 scale,
@@ -3496,6 +4529,51 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           props.activeFloor,
           trafficCarsRef.current
         );
+
+        // Render customers actively stepping out of a parked car door, waiting by the Right-Side Leading Man Sign, or boarding their ride so they stay clearly visible beside the car!
+        for (let qIdx = 0; qIdx < queueGuests.length; qIdx++) {
+          const qg = queueGuests[qIdx];
+          if (
+            qg.gridY >= 11.22 ||
+            qg.gridX >= 10.6 ||
+            qg.state === 'ARRIVING_FROM_CAR' ||
+            qg.carId === 'WAIT_RIGHT_RIDE_SIGN' ||
+            qg.carId?.startsWith('RIGHT_PICKUP_')
+          ) {
+            drawIllustratedCharacter(
+              ctx,
+              qg,
+              qg.gridX,
+              qg.gridY,
+              originX,
+              streetOriginY,
+              tileW,
+              tileH,
+              scale,
+              t,
+              activeBpm
+            );
+            if (props.selectedSpriteId === qg.id) {
+              const info = computeGuestMoodInfo(
+                qg,
+                props.activeGenre || 'Pop',
+                isClubFullNow
+              );
+              drawSelectedSpriteMoodOverlay(
+                ctx,
+                qg.gridX,
+                qg.gridY,
+                originX,
+                streetOriginY,
+                tileW,
+                tileH,
+                scale,
+                t,
+                info
+              );
+            }
+          }
+        }
       }
 
       // 7. GLOBAL DAY/NIGHT CYCLE SCENE DARKENING OVERLAY
@@ -3581,6 +4659,23 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           ctx.restore();
         }
         ctx.restore();
+      }
+
+      // 8C. PARTY CELEBRATION AIRBORNE CONFETTI CANNONS, TUMBLING METALLIC FOIL, STREAMERS & DIAMOND GLITTER BURSTS ACROSS THE CLUB FLOOR
+      if (partyParticlesRef.current.length > 0 || partyCelebrationTimerRef.current > 0) {
+        drawPartyFloorConfettiAndGlitterPass(
+          ctx,
+          partyParticlesRef.current,
+          partyCelebrationTimerRef.current,
+          props.activeFloor,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale,
+          t,
+          'AIR'
+        );
       }
 
       // 9. FLOATING CASH & HYPE TEXTS
@@ -5033,6 +6128,169 @@ function drawIllustratedParkingAndStreet(
   ctx.textAlign = 'center';
   ctx.fillText('P', pSignX, pSignY - 27 * scale);
 
+  // 4B. Right-Side Road Ride-Home Pickup Zone & Illustrated "Leading Man" Hailing Passenger Sign (gx = 11.12, gy = 5.25)
+  const pickupBayPts = [
+    { gx: 11.42, gy: 5.15 },
+    { gx: 12.88, gy: 5.15 },
+    { gx: 12.88, gy: 7.45 },
+    { gx: 11.42, gy: 7.45 },
+  ];
+  ctx.beginPath();
+  pickupBayPts.forEach((pt, idx) => {
+    const sx = originX + (pt.gx - pt.gy) * halfW;
+    const sy = originY + (pt.gx + pt.gy) * halfH;
+    if (idx === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  });
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(250, 204, 21, 0.16)';
+  ctx.fill();
+  ctx.save();
+  ctx.setLineDash([4 * scale, 3 * scale]);
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 2.0 * scale;
+  ctx.stroke();
+  ctx.restore();
+
+  // Stenciled "TAXI / PICKUP" road marking on the Right-Side Pickup Bay
+  const rideLabelX = originX + (RIGHT_RIDE_HOME_BAY_COORD.x + 0.25 - RIGHT_RIDE_HOME_BAY_COORD.y) * halfW;
+  const rideLabelY = originY + (RIGHT_RIDE_HOME_BAY_COORD.x + 0.25 + RIGHT_RIDE_HOME_BAY_COORD.y) * halfH;
+  ctx.fillStyle = 'rgba(250, 204, 21, 0.86)';
+  ctx.font = `800 ${Math.max(7, Math.round(7.0 * scale))}px "JetBrains Mono", monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('TAXI / PICKUP', rideLabelX, rideLabelY);
+
+  // Yellow Curb Strip along the Right-Side Sidewalk beside the Taxi Stand Line
+  const curbT_X = originX + (11.36 - 5.2) * halfW;
+  const curbT_Y = originY + (11.36 + 5.2) * halfH;
+  const curbB_X = originX + (11.36 - 8.15) * halfW;
+  const curbB_Y = originY + (11.36 + 8.15) * halfH;
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 3.8 * scale;
+  ctx.beginPath();
+  ctx.moveTo(curbT_X, curbT_Y);
+  ctx.lineTo(curbB_X, curbB_Y);
+  ctx.stroke();
+
+  // Glowing Sidewalk Queue Line Markers under the outside Right-Side Taxi Stand waiting line (3 line spots)
+  for (let qSlot = 0; qSlot < 3; qSlot++) {
+    const slotGy = RIGHT_RIDE_HOME_WAIT_SPOT.y + qSlot * 0.72;
+    const waitSpotX = originX + (RIGHT_RIDE_HOME_WAIT_SPOT.x - slotGy) * halfW;
+    const waitSpotY = originY + (RIGHT_RIDE_HOME_WAIT_SPOT.x + slotGy) * halfH;
+    ctx.fillStyle = qSlot === 0 ? 'rgba(56, 189, 248, 0.30)' : 'rgba(56, 189, 248, 0.16)';
+    ctx.beginPath();
+    ctx.ellipse(waitSpotX, waitSpotY, (qSlot === 0 ? 11 : 8.5) * scale, (qSlot === 0 ? 5.5 : 4.2) * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = qSlot === 0 ? '#38bdf8' : 'rgba(56, 189, 248, 0.55)';
+    ctx.lineWidth = 1.4 * scale;
+    ctx.stroke();
+  }
+
+  // Illustrated "Leading Man" (Walking / Hailing Man Figure) Street Sign at RIGHT_RIDE_HOME_SIGN_COORD
+  const lmSignX = originX + (RIGHT_RIDE_HOME_SIGN_COORD.x - RIGHT_RIDE_HOME_SIGN_COORD.y) * halfW;
+  const lmSignY = originY + (RIGHT_RIDE_HOME_SIGN_COORD.x + RIGHT_RIDE_HOME_SIGN_COORD.y) * halfH;
+
+  // Cast shadow & steel sign post base
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+  ctx.beginPath();
+  ctx.ellipse(lmSignX, lmSignY, 7.5 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Metallic post
+  ctx.strokeStyle = '#111116';
+  ctx.lineWidth = 4.6 * scale;
+  ctx.beginPath();
+  ctx.moveTo(lmSignX, lmSignY);
+  ctx.lineTo(lmSignX, lmSignY - 34 * scale);
+  ctx.stroke();
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 2.4 * scale;
+  ctx.beginPath();
+  ctx.moveTo(lmSignX, lmSignY);
+  ctx.lineTo(lmSignX, lmSignY - 34 * scale);
+  ctx.stroke();
+
+  // Main Illustrated "Leading Man / Pedestrian Pickup" Sign Board
+  const boardW = 24 * scale;
+  const boardH = 26 * scale;
+  const boardX = lmSignX - boardW / 2;
+  const boardY = lmSignY - 59 * scale;
+  fillStrokeRoundedRect(
+    ctx,
+    boardX,
+    boardY,
+    boardW,
+    boardH,
+    4.5 * scale,
+    '#0284c7',
+    '#facc15',
+    2.2 * scale
+  );
+
+  // Inner white reflector border
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.88)';
+  ctx.lineWidth = 1.1 * scale;
+  ctx.strokeRect(
+    boardX + 2.2 * scale,
+    boardY + 2.2 * scale,
+    boardW - 4.4 * scale,
+    boardH - 4.4 * scale
+  );
+
+  // Iconic White "Leading Man" Walking & Hailing Figure Silhouette inside the Sign
+  const figCx = lmSignX - 1.5 * scale;
+  const figCy = boardY + 13 * scale;
+  // Head
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(figCx, figCy - 6.2 * scale, 2.5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  // Torso, striding legs, and raised hailing arm
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.1 * scale;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  // Torso
+  ctx.moveTo(figCx, figCy - 3.2 * scale);
+  ctx.lineTo(figCx - 0.5 * scale, figCy + 2.6 * scale);
+  // Front striding leg
+  ctx.moveTo(figCx - 0.5 * scale, figCy + 2.6 * scale);
+  ctx.lineTo(figCx + 3.2 * scale, figCy + 7.5 * scale);
+  // Back striding leg
+  ctx.moveTo(figCx - 0.5 * scale, figCy + 2.6 * scale);
+  ctx.lineTo(figCx - 3.6 * scale, figCy + 7.2 * scale);
+  // Raised Hailing Arm (waving toward the street)
+  ctx.moveTo(figCx, figCy - 2.2 * scale);
+  ctx.lineTo(figCx + 4.8 * scale, figCy - 6.0 * scale);
+  // Back arm
+  ctx.moveTo(figCx, figCy - 2.0 * scale);
+  ctx.lineTo(figCx - 3.8 * scale, figCy + 0.8 * scale);
+  ctx.stroke();
+
+  // Mini Gold Taxi/Car Icon on the right side of the Leading Man Sign
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.arc(lmSignX + 6.2 * scale, figCy + 3.5 * scale, 2.4 * scale, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Lower Yellow Sub-Plate ("TAXI STAND") attached below the Taxi Hailing sign board
+  fillStrokeRoundedRect(
+    ctx,
+    lmSignX - 16 * scale,
+    boardY + boardH + 1.5 * scale,
+    32 * scale,
+    9.5 * scale,
+    2.5 * scale,
+    '#facc15',
+    '#111116',
+    1.5 * scale
+  );
+  ctx.fillStyle = '#111116';
+  ctx.font = `900 ${Math.max(5, Math.round(5.5 * scale))}px "Outfit", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('TAXI STAND', lmSignX, boardY + boardH + 8.0 * scale);
+
   // 5. Red Carpet Runner leading to the Front VIP Entry
   const drawRedCarpet = (gx0: number, gy0: number, gx1: number, gy1: number) => {
     const carpetPts = [
@@ -5334,21 +6592,24 @@ function drawMovingTrafficCar(
   const cy = originY + (gx + gy) * (tileH / 2) - zOffset;
   const isParked = car.carState === 'PARKED' || car.carState === 'WAITING_PICKUP';
   const carScale = (zIndex < 0 ? scale * 0.92 : scale) * (isParked ? 0.98 : 0.96);
-  const isFacingWest = car.lane === 'FRONT_WEST';
+  // Cars in FRONT_WEST (-gx, moving up-left) and RIGHT_SOUTH (+gy, moving down-left) both travel leftwards (-cx) on screen!
+  const isRightSouth = car.lane === 'RIGHT_SOUTH';
+  const isFacingWest = car.lane === 'FRONT_WEST' || isRightSouth;
   const beamDir = isFacingWest ? -1 : 1;
+  const beamDySign = car.lane === 'FRONT_WEST' ? -1 : 1;
 
-  // Draw headlight beam cones on the asphalt road when the car is moving or flashing its lock/unlock lights
+  // Draw headlight beam cones on the asphalt road in the exact forward direction of travel
   if (!isParked || (car.headlightFlashTimer ?? 0) > 0) {
     ctx.save();
     const headX = cx + beamDir * 28 * carScale;
-    const headY = cy - 3 * carScale;
+    const headY = cy + (beamDySign > 0 ? 1 : -4) * carScale;
     const flashBoost = (car.headlightFlashTimer ?? 0) > 0 ? 0.65 : 0.42;
     const beamGrad = ctx.createRadialGradient(
       headX,
       headY,
       2 * carScale,
       headX + beamDir * 24 * carScale,
-      headY + 8 * carScale,
+      headY + beamDySign * 10 * carScale,
       36 * carScale
     );
     beamGrad.addColorStop(0, `rgba(254, 240, 138, ${flashBoost})`);
@@ -5357,27 +6618,29 @@ function drawMovingTrafficCar(
     ctx.beginPath();
     ctx.ellipse(
       headX + beamDir * 16 * carScale,
-      headY + 6 * carScale,
+      headY + beamDySign * 7 * carScale,
       28 * carScale,
       12 * carScale,
-      !isFacingWest ? 0.25 : -0.25,
+      beamDir * beamDySign * 0.28,
       0,
       Math.PI * 2
     );
     ctx.fill();
 
-    // Red taillight glow (brighter when braking/stopped in traffic or backing out)
+    // Red taillight glow at the rear of the vehicle (brighter when braking/stopped in traffic or backing out)
     const isBraking =
       (car.currentSpeed !== undefined && car.currentSpeed < 0.8) ||
       car.carState === 'PULLING_OUT' ||
-      car.carState === 'PARKING_IN';
+      car.carState === 'PARKING_IN' ||
+      car.carState === 'RIGHT_PICKUP_IN' ||
+      car.carState === 'RIGHT_PICKUP_WAIT';
     const tailX = cx - beamDir * 28 * carScale;
     const tailY = cy - 3 * carScale;
     ctx.fillStyle = isBraking ? 'rgba(244, 63, 94, 0.62)' : 'rgba(244, 63, 94, 0.35)';
     ctx.beginPath();
     ctx.ellipse(
       tailX - beamDir * 7 * carScale,
-      tailY + 2 * carScale,
+      tailY - beamDySign * 2 * carScale,
       11 * carScale,
       4.5 * carScale,
       0,
@@ -5621,10 +6884,12 @@ function drawCar(
     2.3 * carScale
   );
 
-  // Cel-shaded Windshield & Side Glass with hard white specular highlight
+  // Cel-shaded Front Windshield & Rear Side Glass oriented to vehicle travel direction (facingWest vs facingEast)
+  const frontGlassX = facingWest ? cx - 14 * carScale : cx + 1 * carScale;
+  const rearGlassX = facingWest ? cx + 2 * carScale : cx - 14 * carScale;
   fillStrokeRoundedRect(
     ctx,
-    cx - 14 * carScale,
+    frontGlassX,
     cy - 23.5 * carScale,
     13 * carScale,
     10 * carScale,
@@ -5636,13 +6901,13 @@ function drawCar(
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
   ctx.lineWidth = 1.7 * carScale;
   ctx.beginPath();
-  ctx.moveTo(cx - 11 * carScale, cy - 21.5 * carScale);
-  ctx.lineTo(cx - 6 * carScale, cy - 16 * carScale);
+  ctx.moveTo(frontGlassX + 3 * carScale, cy - 21.5 * carScale);
+  ctx.lineTo(frontGlassX + 8 * carScale, cy - 16 * carScale);
   ctx.stroke();
 
   fillStrokeRoundedRect(
     ctx,
-    cx + 2 * carScale,
+    rearGlassX,
     cy - 23.5 * carScale,
     12 * carScale,
     10 * carScale,
@@ -6578,62 +7843,7 @@ function drawIllustratedClubShell(
   drawIsometricPottedPlant(ctx, 0.55, 9.25, originX, originY, tileW, tileH, scale, true);
   drawIsometricPottedPlant(ctx, 9.25, 0.65, originX, originY, tileW, tileH, scale, false);
 
-  // 8. GOLDEN CYLINDRICAL DANCE CAGES (Matching left and lower-center cages in IMG_1506_5bdf15ca.jpeg)
-  const drawGoldenDanceCage = (gx: number, gy: number) => {
-    const cx = originX + (gx - gy) * halfW;
-    const cy = originY + (gx + gy) * halfH;
-    const rx = 14 * scale;
-    const ry = 7 * scale;
-    const cageH = 38 * scale;
-
-    // Gold circular podium base
-    ctx.fillStyle = '#ca8a04';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.8 * scale;
-    ctx.stroke();
-
-    // Vertical golden cage bars
-    for (let b = -2; b <= 2; b++) {
-      const bx = cx + b * 5.2 * scale;
-      const byOffset = Math.sqrt(Math.max(0, 1 - (b / 2.4) * (b / 2.4))) * ry;
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 3 * scale;
-      ctx.beginPath();
-      ctx.moveTo(bx, cy + byOffset);
-      ctx.lineTo(bx, cy - cageH + byOffset);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#facc15';
-      ctx.lineWidth = 1.6 * scale;
-      ctx.beginPath();
-      ctx.moveTo(bx, cy + byOffset);
-      ctx.lineTo(bx, cy - cageH + byOffset);
-      ctx.stroke();
-    }
-
-    // Mid and top gold rings
-    for (const hFrac of [0.5, 1.0]) {
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 3.2 * scale;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - cageH * hFrac, rx, ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 1.8 * scale;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - cageH * hFrac, rx, ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  };
-
-  drawGoldenDanceCage(0.85, 7.85);
-  drawGoldenDanceCage(5.2, 6.2);
-
-  // 9. OVERHEAD SILVER MIRROR DISCO BALL & GENRE-TINTED LASER PYRAMID RAYS (Centerpiece of IMG_1506_5bdf15ca.jpeg)
+  // 8. OVERHEAD SILVER MIRROR DISCO BALL & GENRE-TINTED LASER PYRAMID RAYS (Centerpiece of IMG_1506_5bdf15ca.jpeg)
   const discoX = originX + (3.2 - 3.6) * halfW;
   const discoY = originY + (3.2 + 3.6) * halfH - 86 * scale;
 
@@ -8554,6 +9764,104 @@ function drawLightingFixture(
   const th = 48 * scale;
   const fixtureAccent = moodProfile?.primaryHex || cat.accentColor;
 
+  // Custom 2.5D Isometric Rendering for WALL_ART sub-category items
+  if (cat.subCategory === 'WALL_ART') {
+    const panelW = 24 * scale;
+    const panelH = 34 * scale;
+    const panelX = tx - panelW / 2;
+    const panelY = ty - panelH - 12 * scale;
+
+    // Pedestal stand & wall display frame
+    fillStrokeRoundedRect(
+      ctx,
+      tx - 6 * scale,
+      ty - 12 * scale,
+      12 * scale,
+      12 * scale,
+      2 * scale,
+      '#1e1b4b',
+      INK,
+      1.6 * scale
+    );
+    fillStrokeRoundedRect(
+      ctx,
+      panelX,
+      panelY,
+      panelW,
+      panelH,
+      4 * scale,
+      cat.primaryColor || '#311042',
+      cat.accentColor || '#f472b6',
+      2.2 * scale
+    );
+
+    if (cat.id === 'wall_neon_wings') {
+      // Glowing Neon Angel Wings
+      ctx.save();
+      ctx.strokeStyle = '#f472b6';
+      ctx.lineWidth = 2.4 * scale;
+      ctx.beginPath();
+      // Left wing
+      ctx.moveTo(tx - 2 * scale, panelY + 18 * scale);
+      ctx.quadraticCurveTo(tx - 11 * scale, panelY + 5 * scale, tx - 8 * scale, panelY + 26 * scale);
+      // Right wing
+      ctx.moveTo(tx + 2 * scale, panelY + 18 * scale);
+      ctx.quadraticCurveTo(tx + 11 * scale, panelY + 5 * scale, tx + 8 * scale, panelY + 26 * scale);
+      ctx.stroke();
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 1.4 * scale;
+      ctx.beginPath();
+      ctx.arc(tx, panelY + 9 * scale, 4.2 * scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else if (cat.id === 'wall_gold_records') {
+      // Twin Framed 24K Gold & Platinum Vinyl LP Records
+      const discs = [
+        { dy: 10 * scale, col: '#facc15', center: '#ef4444' },
+        { dy: 23 * scale, col: '#e2e8f0', center: '#38bdf8' },
+      ];
+      for (const d of discs) {
+        ctx.fillStyle = d.col;
+        ctx.beginPath();
+        ctx.arc(tx, panelY + d.dy, 5.4 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.2 * scale;
+        ctx.stroke();
+        ctx.fillStyle = d.center;
+        ctx.beginPath();
+        ctx.arc(tx, panelY + d.dy, 1.9 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (cat.id === 'wall_equalizer_mural') {
+      // Audio-Reactive Vertical LED Equalizer Spectrum Bars
+      const barColors = ['#22d3ee', '#38bdf8', '#a855f7', '#ec4899', '#facc15'];
+      for (let b = 0; b < 5; b++) {
+        const bx = panelX + (3.2 + b * 3.9) * scale;
+        const pulseH = (8 + Math.abs(Math.sin(t * 5.2 + b * 1.1)) * 18) * scale;
+        ctx.fillStyle = barColors[b];
+        ctx.fillRect(bx, panelY + panelH - 4 * scale - pulseH, 2.6 * scale, pulseH);
+      }
+    } else {
+      // 24K Gold VIP Crown Neon Marquee
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.moveTo(tx - 7.5 * scale, panelY + 23 * scale);
+      ctx.lineTo(tx - 8.5 * scale, panelY + 11 * scale);
+      ctx.lineTo(tx - 3.5 * scale, panelY + 16 * scale);
+      ctx.lineTo(tx, panelY + 9 * scale);
+      ctx.lineTo(tx + 3.5 * scale, panelY + 16 * scale);
+      ctx.lineTo(tx + 8.5 * scale, panelY + 11 * scale);
+      ctx.lineTo(tx + 7.5 * scale, panelY + 23 * scale);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.3 * scale;
+      ctx.stroke();
+    }
+    return;
+  }
+
   // Truss column with thick dark outline
   fillStrokeRoundedRect(
     ctx,
@@ -9354,15 +10662,39 @@ function drawCharacter(
     guest.state === 'QUEUEING' &&
     guest.queueSlotCoord !== undefined &&
     Math.hypot(guest.queueSlotCoord.x - gx, guest.queueSlotCoord.y - gy) > 0.08;
+  const isAtOutsideRightTaxiStand =
+    guest.state === 'WALKING_TO_CAR' &&
+    guest.carId === 'WAIT_RIGHT_RIDE_SIGN' &&
+    guest.path.length === 0 &&
+    gx >= 10.35;
+  const isBoardingRightTaxi =
+    guest.state === 'WALKING_TO_CAR' &&
+    Boolean(guest.carId?.startsWith('RIGHT_PICKUP_')) &&
+    gx >= 10.35;
+  const isWaitingForRideAtRightSign = isAtOutsideRightTaxiStand && gy <= 6.65;
+  const taxiLineIdx =
+    guest.taxiLineIndex ?? Math.max(0, Math.round((gy - RIGHT_RIDE_HOME_WAIT_SPOT.y) / 0.72));
+  const taxiWaitTargetSec = Math.max(2.5, guest.taxiWaitTarget ?? 5.2 + taxiLineIdx * 2.8);
+  const taxiWaitElapsedSec = guest.taxiWaitElapsed ?? 0;
+  const taxiWaitProgress = isBoardingRightTaxi
+    ? 1.0
+    : isAtOutsideRightTaxiStand
+    ? Math.max(0.08, Math.min(0.99, taxiWaitElapsedSec / taxiWaitTargetSec))
+    : 0;
+  const taxiWaitAccentColor =
+    isBoardingRightTaxi || taxiWaitProgress >= 0.85
+      ? '#4ade80'
+      : taxiWaitProgress >= 0.52
+      ? '#facc15'
+      : '#38bdf8';
   const isWalking =
     guest.path.length > 0 ||
-    guest.state === 'WALKING_TO_CAR' ||
-    guest.state === 'ARRIVING_FROM_CAR' ||
+    ((guest.state === 'WALKING_TO_CAR' || guest.state === 'ARRIVING_FROM_CAR') &&
+      !isAtOutsideRightTaxiStand) ||
     isWalkingInQueue;
   const isDancing =
     !isWalking && (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES');
-  const isFreestyleMove = guest.state === 'DANCER_MOVES';
-  const activeMove: DancerMoveVariant = guest.danceMove || 'SHUFFLE_STEP';
+  const activeMove: DancerMoveVariant = guest.danceMove || 'TWO_STEP_GROOVE';
 
   // Deterministic character appearance seed from guest ID & name
   const seed =
@@ -9408,12 +10740,18 @@ function drawCharacter(
       guest.state === 'ORDERING_DRINK' ||
       guest.state === 'RESTING_AT_SEAT');
 
-  // Smooth, relaxed half-tempo musical groove angular frequency (~2.6 rad/sec at 124 BPM -> ~0.83 gentle bobs/sec)
-  const grooveOmega = (Math.max(90, Math.min(160, clubBpm)) / 60) * Math.PI * 0.82;
-  const phase = t * grooveOmega + (guest.dancePhaseOffset ?? (gx * 2.1 + gy * 1.7));
+  // Individualized AI Dance Timing: each dancer feels the music with their own tempo subdivision, phase offset, energy, and asymmetry!
+  const tempoMul = guest.danceTempoMul ?? (0.86 + ((seed % 11) / 10) * 0.34);
+  const energyMul = guest.danceEnergy ?? (0.78 + ((seed % 9) / 8) * 0.48);
+  const asymSign = guest.danceAsymmetry ?? (seed % 2 === 0 ? 1 : -1);
+  const grooveOmega =
+    (Math.max(90, Math.min(160, clubBpm)) / 60) * Math.PI * 0.84 * tempoMul;
+  const phase = t * grooveOmega + (guest.dancePhaseOffset ?? (seed * 0.73 + gx * 2.1 + gy * 1.7));
   const beatSin = Math.sin(phase);
   const beatCos = Math.cos(phase);
   const halfBeatSin = Math.sin(phase * 0.5);
+  const halfBeatCos = Math.cos(phase * 0.5);
+  const doubleBeatSin = Math.sin(phase * 2.0);
 
   // Walking kinematics (calm, natural stride when moving along path)
   const walkPhase = t * 5.6 + seed;
@@ -9421,8 +10759,6 @@ function drawCharacter(
   const walkCos = isWalking ? Math.cos(walkPhase) : 0;
 
   // Vertical hip/torso offset:
-  // - Bar stool cushion is high (-12 * scale), so seatDrop = -1.6 * scale places hips right on the high bar stool cushion!
-  // - Club chair / VIP sofa cushion is lower (-10 * scale), so seatDrop = -5.4 * scale places hips right on the chair/sofa cushion!
   const seatDrop = isSittingOnBarStool
     ? -1.6 * scale
     : isSittingInChair
@@ -9473,7 +10809,46 @@ function drawCharacter(
       ? 1
       : -1;
 
-  if (isSittingOnBarStool) {
+  if (isWaitingForRideAtRightSign) {
+    // Front passenger at the Taxi Stand dynamically alternates between hailing incoming traffic, glancing at their ride-hail phone timer, and tapping their foot!
+    const hailWave = Math.sin(t * (6.2 + taxiWaitProgress * 2.4) + seed);
+    const checkAppCycle = Math.sin(t * 1.65 + seed);
+    const isGlancingAtApp = checkAppCycle < -0.42 && taxiWaitProgress < 0.78;
+    bounce = Math.abs(Math.sin(t * (2.6 + taxiWaitProgress * 1.4) + seed)) * 1.35 * scale;
+    swayX = Math.cos(t * 1.85 + seed) * 1.05 * scale;
+    // Rhythmic impatient sneaker tap that speeds up as the ride gets closer
+    leftLegLift =
+      Math.max(0, Math.sin(t * (6.8 + taxiWaitProgress * 5.2) + seed)) * 1.35 * scale;
+    if (isGlancingAtApp) {
+      // Glancing down at smartphone ride-hail ETA timer in left hand
+      leftHandOffsetX = -5.6 * scale;
+      leftHandOffsetY = -20.2 * scale;
+      rightHandOffsetX = (7.8 + hailWave * 0.9) * scale;
+      rightHandOffsetY = -17.4 * scale;
+      headTiltX = -1.15 * scale;
+    } else {
+      // Hailing wave toward the street with smartphone in left hand
+      leftHandOffsetX = -7.8 * scale;
+      leftHandOffsetY = -18.4 * scale;
+      rightHandOffsetX = (9.8 + hailWave * 2.8) * scale;
+      rightHandOffsetY = (-28.8 - Math.abs(hailWave) * 2.6) * scale;
+      headTiltX = (1.15 + hailWave * 0.55) * scale;
+    }
+    moveRingColor = taxiWaitAccentColor;
+  } else if (isAtOutsideRightTaxiStand) {
+    // Queued passengers waiting in line outside at the Taxi Stand shift weight, tap their foot, and check their ride-hail countdown on their phone
+    const waitSway = Math.sin(t * 1.75 + seed);
+    const tapPulse = Math.max(0, Math.sin(t * (5.4 + taxiWaitProgress * 3.8) + seed));
+    bounce = Math.abs(Math.sin(t * 2.1 + seed)) * 0.82 * scale;
+    swayX = waitSway * 1.15 * scale;
+    rightLegLift = tapPulse * 1.15 * scale;
+    leftHandOffsetX = -8.6 * scale;
+    leftHandOffsetY = -16.2 * scale;
+    rightHandOffsetX = (6.2 + waitSway * 0.45) * scale;
+    rightHandOffsetY = (-20.4 + Math.cos(t * 2.3 + seed) * 0.75) * scale;
+    headTiltX = (0.65 + waitSway * 0.45) * scale;
+    moveRingColor = taxiWaitAccentColor;
+  } else if (isSittingOnBarStool) {
     // Seated on a high cushioned bar stool facing the bar counter: one hand resting on counter/lap, other sipping cocktail
     const sipWave = Math.max(0, Math.sin(t * 1.65 + seed)) * 2.4;
     leftHandOffsetX = (-7.5 + seatDir * 1.5) * scale;
@@ -9495,80 +10870,279 @@ function drawCharacter(
     rightHandOffsetX = 8.4 * scale;
     rightHandOffsetY = (-18.6 + gestureWave) * scale;
   } else if (isDancing) {
-    if (!isFreestyleMove || activeMove === 'SHUFFLE_STEP') {
-      // Smooth side-to-side club shuffle & gentle head bob
-      bounce = Math.abs(beatSin) * 2.4 * scale;
-      swayX = halfBeatSin * 2.2 * scale;
-      leftLegDx = beatSin * 1.8 * scale;
-      rightLegDx = -beatSin * 1.8 * scale;
-      leftLegLift = Math.max(0, beatSin) * 1.8 * scale;
-      rightLegLift = Math.max(0, -beatSin) * 1.8 * scale;
-      leftHandOffsetX = (-10.2 + beatCos * 1.4) * scale;
-      leftHandOffsetY = (-17.5 - beatSin * 2.2) * scale;
-      rightHandOffsetX = (7.0 - beatCos * 1.4) * scale;
-      rightHandOffsetY = (-17.5 + beatSin * 2.2) * scale;
-      headTiltX = beatSin * 1.1 * scale;
-      moveRingColor = '#22d3ee';
-    } else if (activeMove === 'FIST_PUMP') {
-      // Relaxed rhythmic bass fist pump
-      bounce = Math.abs(beatSin) * 2.8 * scale;
-      swayX = beatCos * 1.2 * scale;
-      const pumpUp = Math.max(0, beatSin) * 6.5 * scale;
-      const altPumpUp = Math.max(0, -beatSin) * 4.5 * scale;
-      leftHandOffsetX = -10.0 * scale;
-      leftHandOffsetY = -18.5 * scale - altPumpUp;
-      rightHandOffsetX = 7.6 * scale;
-      rightHandOffsetY = -20.5 * scale - pumpUp;
-      headTiltX = beatCos * 1.2 * scale;
-      moveRingColor = '#f43f5e';
-    } else if (activeMove === 'SPIN_TWIRL') {
-      // Smooth groove turn & arm sway
-      bounce = (1.2 + Math.abs(beatSin) * 2.4) * scale;
-      bodyScaleX = 0.76 + 0.24 * Math.abs(beatCos);
-      swayX = beatSin * 2.0 * scale;
-      const armSpan = beatCos * 4.5 * scale;
-      leftHandOffsetX = -6.5 * scale - armSpan;
-      leftHandOffsetY = (-19.5 + beatSin * 1.8) * scale;
-      rightHandOffsetX = 3.5 * scale + armSpan;
-      rightHandOffsetY = (-19.5 - beatSin * 1.8) * scale;
-      headTiltX = beatSin * 1.4 * scale;
-      moveRingColor = '#e879f9';
-    } else if (activeMove === 'BREAKDANCE_WAVE') {
-      // Smooth electro arm wave
-      bounce = Math.abs(beatCos) * 2.2 * scale;
-      swayX = beatSin * 2.6 * scale;
-      leftHandOffsetX = (-11.0 + beatCos * 1.4) * scale;
-      leftHandOffsetY = (-19.5 + Math.sin(phase - 0.8) * 3.8) * scale;
-      rightHandOffsetX = (8.0 + beatCos * 1.4) * scale;
-      rightHandOffsetY = (-19.5 + Math.sin(phase + 0.8) * 3.8) * scale;
-      headTiltX = Math.sin(phase + 0.5) * 1.5 * scale;
-      moveRingColor = '#a855f7';
-    } else if (activeMove === 'CYBER_JUMP') {
-      // Upbeat two-hand groove bounce
-      const jumpPeak = Math.max(0, beatSin);
-      bounce = (jumpPeak * 3.6 + Math.abs(beatCos) * 1.0) * scale;
-      leftLegLift = jumpPeak * 2.0 * scale;
-      rightLegLift = jumpPeak * 2.0 * scale;
-      leftHandOffsetX = (-10.8 - jumpPeak * 1.2) * scale;
-      leftHandOffsetY = (-22.0 - jumpPeak * 3.8) * scale;
-      rightHandOffsetX = (7.8 + jumpPeak * 1.2) * scale;
-      rightHandOffsetY = (-22.0 - jumpPeak * 3.8) * scale;
-      moveRingColor = '#4ade80';
-    }
+    // 12-Style Natural AI Nightclub Choreography Evaluator (supports smooth crossfade transitions between moves!)
+    const evalMoveKinematics = (moveVariant: DancerMoveVariant) => {
+      let mBounce = 0;
+      let mSwayX = 0;
+      let mBodyScaleX = 1;
+      let mLeftLegDx = 0;
+      let mRightLegDx = 0;
+      let mLeftLegLift = 0;
+      let mRightLegLift = 0;
+      let mLeftHandX = -9.5;
+      let mLeftHandY = -17.5;
+      let mRightHandX = 6.5;
+      let mRightHandY = -17.5;
+      let mHeadTiltX = 0;
+      let mColor = '#22d3ee';
 
-    // Dynamic 10-15s Synchronized Group Dancing movement patterns & cohesive crew formation offset
-    if (guest.groupDanceId && (guest.groupDanceTimer ?? 0) > 0) {
-      const pattern = guest.groupDancePattern || 'CIRCLE_GROOVE';
-      if (pattern === 'CIRCLE_GROOVE') {
-        swayX += Math.cos(phase * 0.5) * 4.4 * scale;
-        bounce += Math.sin(phase * 0.5) * 1.6 * scale;
-      } else if (pattern === 'LINE_SHUFFLE') {
-        swayX += Math.sin(phase * 0.5) * 5.2 * scale;
-        bodyScaleX = Math.cos(phase * 0.5) >= 0 ? Math.abs(bodyScaleX) : -Math.abs(bodyScaleX);
-      } else if (pattern === 'BOUNCE_WAVE') {
-        swayX += Math.sin(phase) * 3.4 * scale;
-        bounce += Math.max(0, Math.sin(phase)) * 2.2 * scale;
+      switch (moveVariant) {
+        case 'TWO_STEP_GROOVE': {
+          // Authentic relaxed club two-step: alternating weight shift left & right with a chill shoulder & head nod
+          mBounce = (0.7 + Math.abs(beatSin) * 1.75) * energyMul;
+          mSwayX = halfBeatSin * 2.85 * asymSign;
+          mLeftLegDx = Math.max(0, halfBeatSin) * 1.9;
+          mRightLegDx = Math.min(0, halfBeatSin) * 1.9;
+          mLeftLegLift = Math.max(0, beatSin * halfBeatSin) * 1.25;
+          mRightLegLift = Math.max(0, -beatSin * halfBeatSin) * 1.25;
+          mLeftHandX = -9.4 + halfBeatCos * 1.2;
+          mLeftHandY = -17.2 - Math.abs(beatSin) * 1.4;
+          mRightHandX = 6.6 + halfBeatSin * 1.2;
+          mRightHandY = -17.6 - Math.abs(beatCos) * 1.6;
+          mHeadTiltX = (halfBeatSin * 0.9 + beatSin * 0.5) * asymSign;
+          mColor = '#38bdf8';
+          break;
+        }
+        case 'HIP_HOP_BOUNCE': {
+          // Deep knee-drop bounce with heavy downbeat head nod & low chest-level hand swagger
+          const downBeat = Math.pow(Math.max(0, beatSin), 1.4);
+          mBounce = (0.4 + downBeat * 3.1) * energyMul;
+          mSwayX = halfBeatCos * 1.65 * asymSign;
+          mLeftLegDx = -0.7 - downBeat * 0.6;
+          mRightLegDx = 0.7 + downBeat * 0.6;
+          mLeftLegLift = Math.max(0, -beatSin) * 1.1;
+          mRightLegLift = Math.max(0, beatCos) * 1.1;
+          mLeftHandX = -10.4 + beatCos * 1.8;
+          mLeftHandY = -16.8 - downBeat * 2.4;
+          mRightHandX = 7.8 - beatSin * 1.9;
+          mRightHandY = -18.8 - Math.max(0, -beatSin) * 2.8;
+          mHeadTiltX = beatSin * 1.65 * asymSign;
+          mColor = '#f59e0b';
+          break;
+        }
+        case 'LATIN_SALSA_SWAY': {
+          // Fluid Latin hip/shoulder figure-eight sway with rhythmic cross-step & expressive hands
+          mBounce = (0.8 + Math.abs(doubleBeatSin) * 1.45) * energyMul;
+          mSwayX = (beatSin * 2.9 + halfBeatCos * 1.1) * asymSign;
+          mBodyScaleX = 0.91 + 0.09 * Math.cos(phase);
+          mLeftLegDx = beatCos * 2.1;
+          mRightLegDx = -beatCos * 2.1;
+          mLeftLegLift = Math.max(0, beatSin) * 1.55;
+          mRightLegLift = Math.max(0, -beatSin) * 1.55;
+          mLeftHandX = -10.8 + beatSin * 2.2;
+          mLeftHandY = -18.6 + beatCos * 1.8;
+          mRightHandX = 7.8 + beatCos * 2.2;
+          mRightHandY = -19.0 - beatSin * 1.8;
+          mHeadTiltX = -beatSin * 1.35 * asymSign;
+          mColor = '#fb7185';
+          break;
+        }
+        case 'DISCO_POINT': {
+          // Classic Saturday Night Fever diagonal sky-point & hip counter-lean
+          const pointHigh = Math.sin(phase * 0.5 + (asymSign > 0 ? 0 : Math.PI));
+          const pointLift = Math.max(0, pointHigh);
+          mBounce = (0.9 + Math.abs(beatSin) * 2.05) * energyMul;
+          mSwayX = -pointHigh * 2.35 * asymSign;
+          mLeftLegDx = -0.85;
+          mRightLegDx = 0.85;
+          mLeftLegLift = Math.max(0, beatSin) * 1.3;
+          mRightLegLift = Math.max(0, -beatSin) * 1.3;
+          if (asymSign >= 0) {
+            mRightHandX = 8.4 + pointLift * 3.8;
+            mRightHandY = -18.5 - pointLift * 10.5;
+            mLeftHandX = -8.8 - pointLift * 1.4;
+            mLeftHandY = -15.2 + pointLift * 1.2;
+          } else {
+            mLeftHandX = -11.2 - pointLift * 3.8;
+            mLeftHandY = -18.5 - pointLift * 10.5;
+            mRightHandX = 6.2 + pointLift * 1.4;
+            mRightHandY = -15.2 + pointLift * 1.2;
+          }
+          mHeadTiltX = pointHigh * 1.45 * asymSign;
+          mColor = '#facc15';
+          break;
+        }
+        case 'CHILL_DRINK_VIBE': {
+          // Casual clubber holding a drink in one hand, gently swaying & vibing without over-dancing
+          const sipLift = Math.max(0, Math.sin(phase * 0.25 + seed));
+          mBounce = (0.45 + Math.abs(beatSin) * 1.15) * energyMul;
+          mSwayX = halfBeatSin * 1.75 * asymSign;
+          mLeftLegDx = halfBeatSin * 0.85;
+          mRightLegDx = -halfBeatSin * 0.85;
+          mLeftLegLift = Math.max(0, halfBeatCos) * 0.65;
+          mRightLegLift = Math.max(0, -halfBeatCos) * 0.65;
+          mLeftHandX = -8.6 + halfBeatCos * 0.8;
+          mLeftHandY = -16.2 - Math.abs(beatSin) * 0.9;
+          mRightHandX = 7.4 - sipLift * 1.5;
+          mRightHandY = -19.2 - sipLift * 3.6;
+          mHeadTiltX = halfBeatSin * 0.95;
+          mColor = '#34d399';
+          break;
+        }
+        case 'HOUSE_JACK': {
+          // Underground house jacking groove: syncopated torso wave, foot heel-toe jack & rolling forearms
+          mBounce = (1.0 + Math.abs(beatSin) * 2.55 + Math.max(0, doubleBeatSin) * 0.75) * energyMul;
+          mSwayX = (beatCos * 2.1 + halfBeatSin * 1.2) * asymSign;
+          mLeftLegDx = beatSin * 1.65;
+          mRightLegDx = -beatCos * 1.65;
+          mLeftLegLift = Math.max(0, beatCos) * 1.9;
+          mRightLegLift = Math.max(0, -beatCos) * 1.9;
+          mLeftHandX = -10.0 + Math.cos(phase * 2) * 1.8;
+          mLeftHandY = -19.2 + Math.sin(phase * 2) * 2.3;
+          mRightHandX = 7.2 - Math.cos(phase * 2) * 1.8;
+          mRightHandY = -19.2 - Math.sin(phase * 2) * 2.3;
+          mHeadTiltX = beatCos * 1.3 * asymSign;
+          mColor = '#818cf8';
+          break;
+        }
+        case 'HANDS_UP_EUPHORIA': {
+          // Mainstage anthem hands-in-the-air wave from side to side with euphoric bounce
+          const waveSway = Math.sin(phase * 0.5) * 3.2 * asymSign;
+          mBounce = (1.1 + Math.abs(beatSin) * 2.75) * energyMul;
+          mSwayX = halfBeatSin * 2.25 * asymSign;
+          mLeftLegLift = Math.max(0, beatSin) * 1.6;
+          mRightLegLift = Math.max(0, -beatSin) * 1.6;
+          mLeftHandX = -11.4 + waveSway;
+          mLeftHandY = -27.2 - Math.abs(beatSin) * 2.4;
+          mRightHandX = 8.4 + waveSway;
+          mRightHandY = -27.2 - Math.abs(beatCos) * 2.4;
+          mHeadTiltX = waveSway * 0.42;
+          mColor = '#c084fc';
+          break;
+        }
+        case 'FIST_PUMP': {
+          // Rhythmic single/alternating bass fist pump
+          mBounce = Math.abs(beatSin) * 2.75 * energyMul;
+          mSwayX = beatCos * 1.35 * asymSign;
+          const pumpUp = Math.max(0, beatSin) * 6.8 * energyMul;
+          const altPumpUp = Math.max(0, -beatSin) * 3.8 * energyMul;
+          if (asymSign >= 0) {
+            mLeftHandX = -9.8;
+            mLeftHandY = -17.8 - altPumpUp;
+            mRightHandX = 8.0;
+            mRightHandY = -20.8 - pumpUp;
+          } else {
+            mLeftHandX = -10.8;
+            mLeftHandY = -20.8 - pumpUp;
+            mRightHandX = 6.8;
+            mRightHandY = -17.8 - altPumpUp;
+          }
+          mHeadTiltX = beatCos * 1.25 * asymSign;
+          mColor = '#f43f5e';
+          break;
+        }
+        case 'SPIN_TWIRL': {
+          // Smooth groove turn & arm flare
+          mBounce = (1.1 + Math.abs(beatSin) * 2.35) * energyMul;
+          mBodyScaleX = 0.78 + 0.22 * Math.abs(beatCos);
+          mSwayX = beatSin * 2.1 * asymSign;
+          const armSpan = beatCos * 4.4;
+          mLeftHandX = -6.8 - armSpan;
+          mLeftHandY = -19.5 + beatSin * 1.8;
+          mRightHandX = 3.8 + armSpan;
+          mRightHandY = -19.5 - beatSin * 1.8;
+          mHeadTiltX = beatSin * 1.4 * asymSign;
+          mColor = '#e879f9';
+          break;
+        }
+        case 'BREAKDANCE_WAVE': {
+          // Smooth liquid electro arm wave
+          mBounce = Math.abs(beatCos) * 2.15 * energyMul;
+          mSwayX = beatSin * 2.55 * asymSign;
+          mLeftHandX = -11.2 + beatCos * 1.5;
+          mLeftHandY = -19.8 + Math.sin(phase - 0.85) * 3.9;
+          mRightHandX = 8.2 + beatCos * 1.5;
+          mRightHandY = -19.8 + Math.sin(phase + 0.85) * 3.9;
+          mHeadTiltX = Math.sin(phase + 0.5) * 1.45;
+          mColor = '#a855f7';
+          break;
+        }
+        case 'CYBER_JUMP': {
+          // High-energy festival jump & knee lift
+          const jumpPeak = Math.max(0, beatSin);
+          mBounce = (jumpPeak * 3.5 + Math.abs(beatCos) * 0.95) * energyMul;
+          mLeftLegLift = jumpPeak * 2.1;
+          mRightLegLift = jumpPeak * 2.1;
+          mLeftHandX = -10.8 - jumpPeak * 1.3;
+          mLeftHandY = -21.8 - jumpPeak * 3.9;
+          mRightHandX = 7.8 + jumpPeak * 1.3;
+          mRightHandY = -21.8 - jumpPeak * 3.9;
+          mHeadTiltX = halfBeatSin * 1.1;
+          mColor = '#4ade80';
+          break;
+        }
+        case 'SHUFFLE_STEP':
+        default: {
+          // Cutting-shapes Melbourne club shuffle with alternating heel-toe glide
+          mBounce = Math.abs(beatSin) * 2.4 * energyMul;
+          mSwayX = halfBeatSin * 2.4 * asymSign;
+          mLeftLegDx = beatSin * 2.15;
+          mRightLegDx = -beatSin * 2.15;
+          mLeftLegLift = Math.max(0, beatSin) * 1.95;
+          mRightLegLift = Math.max(0, -beatSin) * 1.95;
+          mLeftHandX = -10.2 + beatCos * 1.6;
+          mLeftHandY = -17.6 - beatSin * 2.1;
+          mRightHandX = 7.0 - beatCos * 1.6;
+          mRightHandY = -17.6 + beatSin * 2.1;
+          mHeadTiltX = beatSin * 1.15 * asymSign;
+          mColor = '#22d3ee';
+          break;
+        }
       }
+      return {
+        mBounce,
+        mSwayX,
+        mBodyScaleX,
+        mLeftLegDx,
+        mRightLegDx,
+        mLeftLegLift,
+        mRightLegLift,
+        mLeftHandX,
+        mLeftHandY,
+        mRightHandX,
+        mRightHandY,
+        mHeadTiltX,
+        mColor,
+      };
+    };
+
+    const curK = evalMoveKinematics(activeMove);
+    const blendRaw = guest.danceTransitionProgress ?? 1;
+    const blend =
+      blendRaw < 1 && guest.prevDanceMove && guest.prevDanceMove !== activeMove
+        ? blendRaw * blendRaw * (3 - 2 * blendRaw) // Smoothstep crossfade between dance moves!
+        : 1;
+
+    if (blend < 1 && guest.prevDanceMove) {
+      const prevK = evalMoveKinematics(guest.prevDanceMove);
+      const lerp = (a: number, b: number) => a + (b - a) * blend;
+      bounce = lerp(prevK.mBounce, curK.mBounce) * scale;
+      swayX = lerp(prevK.mSwayX, curK.mSwayX) * scale;
+      bodyScaleX = lerp(prevK.mBodyScaleX, curK.mBodyScaleX);
+      leftLegDx = lerp(prevK.mLeftLegDx, curK.mLeftLegDx) * scale;
+      rightLegDx = lerp(prevK.mRightLegDx, curK.mRightLegDx) * scale;
+      leftLegLift = lerp(prevK.mLeftLegLift, curK.mLeftLegLift) * scale;
+      rightLegLift = lerp(prevK.mRightLegLift, curK.mRightLegLift) * scale;
+      leftHandOffsetX = lerp(prevK.mLeftHandX, curK.mLeftHandX) * scale;
+      leftHandOffsetY = lerp(prevK.mLeftHandY, curK.mLeftHandY) * scale;
+      rightHandOffsetX = lerp(prevK.mRightHandX, curK.mRightHandX) * scale;
+      rightHandOffsetY = lerp(prevK.mRightHandY, curK.mRightHandY) * scale;
+      headTiltX = lerp(prevK.mHeadTiltX, curK.mHeadTiltX) * scale;
+      moveRingColor = curK.mColor;
+    } else {
+      bounce = curK.mBounce * scale;
+      swayX = curK.mSwayX * scale;
+      bodyScaleX = curK.mBodyScaleX;
+      leftLegDx = curK.mLeftLegDx * scale;
+      rightLegDx = curK.mRightLegDx * scale;
+      leftLegLift = curK.mLeftLegLift * scale;
+      rightLegLift = curK.mRightLegLift * scale;
+      leftHandOffsetX = curK.mLeftHandX * scale;
+      leftHandOffsetY = curK.mLeftHandY * scale;
+      rightHandOffsetX = curK.mRightHandX * scale;
+      rightHandOffsetY = curK.mRightHandY * scale;
+      headTiltX = curK.mHeadTiltX * scale;
+      moveRingColor = curK.mColor;
     }
   }
 
@@ -9655,6 +11229,54 @@ function drawCharacter(
     ctx.restore();
   }
 
+  // Animated Isometric Ground Wait-Timer Progress Ring & Radar Ping under sprites waiting at the Taxi Stand
+  if (isAtOutsideRightTaxiStand || isBoardingRightTaxi) {
+    ctx.save();
+    const ringCx = px + swayX * 0.5;
+    const ringCy = shadowY;
+    const baseRx = 13.0 * scale;
+
+    // 1. Expanding radar-ping ripple ring showing active ride-hail signal
+    const pingFrac = (t * (0.95 + taxiWaitProgress * 0.85) + (seed % 7) * 0.14) % 1;
+    const pingRx = baseRx * (0.95 + pingFrac * 0.72);
+    ctx.strokeStyle = taxiWaitAccentColor;
+    ctx.globalAlpha = (1 - pingFrac) * 0.55;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.beginPath();
+    ctx.ellipse(ringCx, ringCy, pingRx, pingRx * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 2. Dark translucent isometric circular timer track on the sidewalk
+    ctx.translate(ringCx, ringCy);
+    ctx.scale(1, 0.5);
+    ctx.globalAlpha = 0.75;
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.lineWidth = 3.4 * scale;
+    ctx.beginPath();
+    ctx.arc(0, 0, baseRx, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 3. Filling radial wait-timer arc (-90 deg clockwise to waitProgress * 360 deg)
+    const startAng = -Math.PI / 2;
+    const endAng = startAng + Math.max(0.12, taxiWaitProgress) * Math.PI * 2;
+    ctx.globalAlpha = 0.96;
+    ctx.strokeStyle = taxiWaitAccentColor;
+    ctx.lineWidth = 2.6 * scale;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 0, baseRx, startAng, endAng);
+    ctx.stroke();
+
+    // 4. Glowing leading spark dot at the tip of the ground timer arc
+    const tipX = Math.cos(endAng) * baseRx;
+    const tipY = Math.sin(endAng) * baseRx;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, 2.2 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   // Persistent Golden VIP Whale Glowing Aura for guests whose cumulative cashSpent exceeds the club average
   if (isVipWhale || guest.isWhale) {
     const whalePulse = 0.92 + 0.12 * Math.sin(t * 3.6 + seed);
@@ -9718,6 +11340,62 @@ function drawCharacter(
       Math.PI * 2
     );
     ctx.stroke();
+    ctx.restore();
+  }
+
+  // Persistent Radiant Star-Power Sparkle Aura & Diamond Starlight Floor Ring for CELEBRITY Guests (guest.isCelebrity)
+  if (guest.isCelebrity) {
+    const celebPulse = 0.94 + 0.14 * Math.sin(t * 4.5 + seed);
+    const auraCenterX = px + swayX;
+    const auraCenterY = py - 21 * scale - bounce;
+    const auraRadius = 22.5 * scale * celebPulse;
+
+    ctx.save();
+    // 1. Multi-hued Gold & Magenta Starlight Halo behind the Celebrity
+    const celebGrad = ctx.createRadialGradient(
+      auraCenterX,
+      auraCenterY,
+      2.0 * scale,
+      auraCenterX,
+      auraCenterY,
+      auraRadius
+    );
+    celebGrad.addColorStop(0, 'rgba(255, 255, 255, 0.52)');
+    celebGrad.addColorStop(0.38, 'rgba(250, 204, 21, 0.36)');
+    celebGrad.addColorStop(0.72, 'rgba(244, 114, 182, 0.20)');
+    celebGrad.addColorStop(1, 'rgba(244, 114, 182, 0)');
+    ctx.fillStyle = celebGrad;
+    ctx.beginPath();
+    ctx.arc(auraCenterX, auraCenterY, auraRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Shimmering Golden Celebrity Star Carpet Ring under the Celebrity's feet
+    const ringCx = px + swayX * 0.5;
+    const ringCy = shadowY;
+    const ringRx = 13.5 * scale * celebPulse;
+    const ringRy = 6.8 * scale * celebPulse;
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = 1.65 * scale;
+    ctx.beginPath();
+    ctx.ellipse(ringCx, ringCy, ringRx, ringRy, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Orbiting mini ground sparkles along the celebrity's floor ring
+    for (let gStar = 0; gStar < 4; gStar++) {
+      const ang = t * 2.2 + (gStar * Math.PI) / 2;
+      const gxStar = ringCx + Math.cos(ang) * ringRx;
+      const gyStar = ringCy + Math.sin(ang) * ringRy;
+      drawFourPointSparkleStar(
+        ctx,
+        gxStar,
+        gyStar,
+        3.2 * scale,
+        1.0 * scale,
+        gStar % 2 === 0 ? '#facc15' : '#f472b6',
+        ang * 0.5,
+        0.85
+      );
+    }
     ctx.restore();
   }
 
@@ -9966,6 +11644,33 @@ function drawCharacter(
     );
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(gxGlass - 1.2 * scale, gyGlass - 3.0 * scale, 2.4 * scale, 1.1 * scale);
+  } else if (isAtOutsideRightTaxiStand) {
+    // Glowing Smartphone in hand displaying the live Ride-Hail Wait Timer App
+    const phoneHandX = isWaitingForRideAtRightSign ? leftHandX : rightHandX;
+    const phoneHandY = isWaitingForRideAtRightSign ? leftHandY : rightHandY;
+    const phX = phoneHandX + (isWaitingForRideAtRightSign ? -1.4 : 2.0) * scale;
+    const phY = phoneHandY - 3.2 * scale;
+    fillStrokeRoundedRect(
+      ctx,
+      phX - 2.3 * scale,
+      phY - 3.8 * scale,
+      4.6 * scale,
+      6.4 * scale,
+      1.1 * scale,
+      '#0f172a',
+      taxiWaitAccentColor,
+      1.0 * scale
+    );
+    // Glowing mini app screen & live ETA progress bar inside phone
+    ctx.fillStyle = taxiWaitAccentColor;
+    ctx.fillRect(
+      phX - 1.4 * scale,
+      phY - 2.4 * scale,
+      2.8 * Math.max(0.2, taxiWaitProgress) * scale,
+      1.5 * scale
+    );
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(phX - 1.4 * scale, phY - 0.2 * scale, 2.2 * scale, 0.9 * scale);
   }
 
   // 3. Chibi Streetwear Torso (Clean lineless fill)
@@ -10118,15 +11823,49 @@ function drawCharacter(
     ctx.fill();
   }
 
-  // 7. Small, Persistent '★ VIP' Badge for Above-Average Spending Whales
+  // 6B. Orbiting & Twinkling 4-Point Diamond Sparkle Starbursts Around CELEBRITY Guests so players immediately recognize a Celebrity!
+  if (guest.isCelebrity) {
+    const celebSparkleOffsets = [
+      { dx: -14.5, dy: -36.5, speed: 5.4, phase: 0.0, size: 5.8, col: '#fde047' },
+      { dx: 14.8, dy: -34.0, speed: 6.1, phase: 1.3, size: 5.4, col: '#f472b6' },
+      { dx: -12.8, dy: -19.5, speed: 4.8, phase: 2.5, size: 4.8, col: '#38bdf8' },
+      { dx: 13.2, dy: -21.0, speed: 5.7, phase: 3.7, size: 5.2, col: '#facc15' },
+      { dx: -6.5, dy: -45.5, speed: 6.4, phase: 4.9, size: 4.6, col: '#ffffff' },
+      { dx: 8.0, dy: -44.2, speed: 5.1, phase: 5.8, size: 5.0, col: '#fde047' },
+    ];
+    for (let sIdx = 0; sIdx < celebSparkleOffsets.length; sIdx++) {
+      const sp = celebSparkleOffsets[sIdx];
+      const wave = Math.sin(t * sp.speed + sp.phase + seed * 0.4);
+      const twinkle = Math.pow(Math.max(0, (wave + 0.65) / 1.65), 1.35);
+      if (twinkle > 0.08) {
+        const floatY = Math.sin(t * 2.8 + sp.phase) * 2.4 * scale;
+        const floatX = Math.cos(t * 2.3 + sp.phase) * 1.6 * scale;
+        const starX = cx + sp.dx * scale + floatX;
+        const starY = py + sp.dy * scale - bounce + floatY;
+        const outerR = sp.size * (0.55 + twinkle * 0.65) * scale;
+        drawFourPointSparkleStar(
+          ctx,
+          starX,
+          starY,
+          outerR,
+          outerR * 0.28,
+          sp.col,
+          Math.sin(t * 1.8 + sp.phase) * 0.35,
+          Math.min(1, 0.35 + twinkle * 0.75)
+        );
+      }
+    }
+  }
+
+  // 7. Persistent '✨ CELEB' Crown/Sparkle Badge for Celebrities or '★ VIP' Badge for Above-Average Spending Whales
   const hasActiveBubble = Boolean(guest.bubble && (guest.bubbleTimer ?? 0) > 0);
-  const showWhaleVisuals = Boolean(isVipWhale || guest.isWhale);
+  const showWhaleVisuals = Boolean(guest.isCelebrity || isVipWhale || guest.isWhale);
   if (showWhaleVisuals) {
-    const badgeW = 23.5 * scale;
-    const badgeH = 9.2 * scale;
+    const isCelebBadge = Boolean(guest.isCelebrity);
+    const badgeW = (isCelebBadge ? 31.5 : 23.5) * scale;
+    const badgeH = (isCelebBadge ? 10.2 : 9.2) * scale;
     const badgeX = headX - badgeW * 0.5;
-    // Place neatly above the head; if a temporary event bubble is active, position the bubble slightly higher so both are crystal clear
-    const badgeY = headY - headR - 11.2 * scale;
+    const badgeY = headY - headR - 11.6 * scale;
 
     ctx.save();
     fillStrokeRoundedRect(
@@ -10135,24 +11874,187 @@ function drawCharacter(
       badgeY,
       badgeW,
       badgeH,
-      4.5 * scale,
-      'rgba(19, 13, 36, 0.94)',
-      '#facc15',
-      Math.max(1, 1.2 * scale)
+      4.8 * scale,
+      isCelebBadge ? 'rgba(46, 16, 101, 0.96)' : 'rgba(19, 13, 36, 0.94)',
+      isCelebBadge ? '#f472b6' : '#facc15',
+      Math.max(1, (isCelebBadge ? 1.45 : 1.2) * scale)
     );
     ctx.fillStyle = '#fde047';
-    ctx.font = `900 ${Math.max(6, Math.round(6.2 * scale))}px "Outfit", sans-serif`;
+    ctx.font = `900 ${Math.max(6, Math.round((isCelebBadge ? 6.4 : 6.2) * scale))}px "Outfit", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('★ VIP', headX, badgeY + badgeH * 0.52);
+    ctx.fillText(isCelebBadge ? '✨ CELEB' : '★ VIP', headX, badgeY + badgeH * 0.52);
+
+    if (isCelebBadge) {
+      const cornerPulse = 0.65 + 0.35 * Math.sin(t * 7.5 + seed);
+      drawFourPointSparkleStar(
+        ctx,
+        badgeX + badgeW - 1.2 * scale,
+        badgeY + 1.2 * scale,
+        4.2 * cornerPulse * scale,
+        1.2 * cornerPulse * scale,
+        '#fde047',
+        t * 1.5,
+        0.95
+      );
+    }
     ctx.restore();
   }
 
-  // 8. Clean Event-Driven Speech / Thought Bubbles (Only shown when guest has an active event bubble)
-  if (hasActiveBubble && guest.bubble) {
+  // 8. Dynamic Visual 'Wait' Timer Dial & Countdown HUD for Sprites at the Right-Side Taxi Stand (or Standard Event Bubble)
+  if (isAtOutsideRightTaxiStand || isBoardingRightTaxi) {
+    const timerHudY = showWhaleVisuals ? headY - 28 * scale : headY - 20.5 * scale;
+    drawTaxiStandWaitTimerHud(
+      ctx,
+      headX,
+      timerHudY,
+      scale,
+      t,
+      taxiWaitProgress,
+      Math.max(1, Math.ceil(taxiWaitTargetSec - taxiWaitElapsedSec)),
+      taxiLineIdx,
+      isBoardingRightTaxi,
+      taxiWaitAccentColor
+    );
+  } else if (hasActiveBubble && guest.bubble) {
     const bubbleOffsetY = showWhaleVisuals ? headY - 27 * scale : headY - 19 * scale;
     drawIllustratedSpeechBubble(ctx, headX, bubbleOffsetY, scale * 0.88, guest.bubble);
   }
+}
+
+/**
+ * Draws an animated overhead Taxi Stand 'Wait' Timer HUD featuring a live radial stopwatch dial,
+ * ticking clock hand, queue position/countdown label, and bottom progress bar before a car picks the sprite up.
+ */
+function drawTaxiStandWaitTimerHud(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  t: number,
+  progress: number,
+  remainingSec: number,
+  lineIdx: number,
+  isBoarding: boolean,
+  accentColor: string
+) {
+  ctx.save();
+  const s = Math.max(0.84, scale);
+  const isArriving = isBoarding || progress >= 0.88;
+  const pulse = isArriving ? 1 + Math.sin(t * 9.5) * 0.05 : 1;
+  const pillW = (isArriving ? 52 : 47) * s * pulse;
+  const pillH = 15.5 * s * pulse;
+  const pillX = x - pillW / 2;
+  const pillY = y - pillH / 2;
+
+  // Soft drop shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+  ctx.beginPath();
+  ctx.roundRect(pillX, pillY + 1.5 * s, pillW, pillH, 7.5 * s);
+  ctx.fill();
+
+  // Sleek dark night-club capsule with dynamic progress-colored border
+  fillStrokeRoundedRect(
+    ctx,
+    pillX,
+    pillY,
+    pillW,
+    pillH,
+    7.5 * s,
+    'rgba(15, 23, 42, 0.94)',
+    accentColor,
+    1.5 * s
+  );
+
+  // Small bottom pointer triangle pointing down to the waiting passenger
+  ctx.beginPath();
+  ctx.moveTo(x - 3.2 * s, pillY + pillH - 0.6 * s);
+  ctx.lineTo(x, pillY + pillH + 3.4 * s);
+  ctx.lineTo(x + 3.2 * s, pillY + pillH - 0.6 * s);
+  ctx.closePath();
+  ctx.fillStyle = accentColor;
+  ctx.fill();
+
+  // 1. Animated Circular Radial Wait-Timer Stopwatch Dial on the left side of the capsule
+  const dialCx = pillX + 8.5 * s;
+  const dialCy = y - 0.6 * s;
+  const dialR = 4.8 * s;
+
+  // Inner dark dial face
+  ctx.fillStyle = '#090d16';
+  ctx.beginPath();
+  ctx.arc(dialCx, dialCy, dialR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Radial pie slice filling clockwise with wait progress
+  const startAngle = -Math.PI / 2;
+  const endAngle = startAngle + Math.max(0.1, progress) * Math.PI * 2;
+  ctx.fillStyle = accentColor;
+  ctx.globalAlpha = 0.32;
+  ctx.beginPath();
+  ctx.moveTo(dialCx, dialCy);
+  ctx.arc(dialCx, dialCy, dialR, startAngle, endAngle);
+  ctx.closePath();
+  ctx.fill();
+
+  // Crisp outer radial progress ring around the stopwatch dial
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+  ctx.lineWidth = 1.2 * s;
+  ctx.beginPath();
+  ctx.arc(dialCx, dialCy, dialR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 1.55 * s;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(dialCx, dialCy, dialR, startAngle, endAngle);
+  ctx.stroke();
+
+  // Ticking stopwatch hand rotating inside the dial
+  const handAngle = isArriving ? endAngle : -Math.PI / 2 + t * 4.8;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.15 * s;
+  ctx.beginPath();
+  ctx.moveTo(dialCx, dialCy);
+  ctx.lineTo(
+    dialCx + Math.cos(handAngle) * (dialR * 0.72),
+    dialCy + Math.sin(handAngle) * (dialR * 0.72)
+  );
+  ctx.stroke();
+
+  // 2. Dynamic Status / Countdown Text on the right side of the capsule
+  const textCx = pillX + 15.2 * s + (pillW - 17.5 * s) * 0.5;
+  ctx.fillStyle = isArriving ? '#4ade80' : '#f8fafc';
+  ctx.font = `900 ${Math.max(6, Math.round(6.5 * s))}px "JetBrains Mono", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const labelText = isBoarding
+    ? '🚕 HOP IN!'
+    : isArriving
+    ? '🚕 HERE!'
+    : lineIdx === 0
+    ? `🚕 ${remainingSec}s`
+    : `#${lineIdx + 1}•${remainingSec}s`;
+  ctx.fillText(labelText, textCx, y - 1.4 * s);
+
+  // 3. Smooth horizontal progress bar along the bottom interior of the capsule
+  const barX = pillX + 15.5 * s;
+  const barY = pillY + pillH - 3.3 * s;
+  const barW = pillW - 19.5 * s;
+  const barH = 1.7 * s;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW, barH, 0.8 * s);
+  ctx.fill();
+
+  ctx.fillStyle = accentColor;
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW * Math.max(0.08, Math.min(1, progress)), barH, 0.8 * s);
+  ctx.fill();
+
+  ctx.restore();
 }
 
 const drawIllustratedCharacter = drawCharacter;
@@ -11485,14 +13387,14 @@ function applyGuestPersonalSpaceSeparation(guests: GuestAgent[], dt: number) {
 
   for (let i = 0; i < guests.length; i++) {
     const a = guests[i];
-    if (a.state === 'QUEUEING' || a.path.length > 0) continue;
+    if (isExteriorGuestState(a.state) || a.path.length > 0) continue;
     // Patrons seated on a chair, bar stool, VIP sofa, or standing at an assigned table slot are locked in place
     // so personal-space separation NEVER pushes them off their chair onto a table!
     const aLocked = a.state === 'RESTING_AT_SEAT' || a.state === 'ORDERING_DRINK';
 
     for (let j = i + 1; j < guests.length; j++) {
       const b = guests[j];
-      if (b.floor !== a.floor || b.state === 'QUEUEING' || b.path.length > 0) continue;
+      if (b.floor !== a.floor || isExteriorGuestState(b.state) || b.path.length > 0) continue;
       const bLocked = b.state === 'RESTING_AT_SEAT' || b.state === 'ORDERING_DRINK';
 
       // If both patrons are locked into their respective chair/bar-stool slots, keep them on their exact seats

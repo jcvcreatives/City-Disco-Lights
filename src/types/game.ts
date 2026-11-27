@@ -6,10 +6,19 @@ export type ItemCategory =
   | 'LIGHTING'
   | 'OUTSIDE';
 
+export type DecorSubCategory =
+  | 'FLOORING'
+  | 'WALL_ART'
+  | 'LIGHTING'
+  | 'VIP_FURNITURE'
+  | 'DJ_AUDIO'
+  | 'BAR_LOUNGE';
+
 export interface CatalogItem {
   id: string;
   name: string;
   category: ItemCategory;
+  subCategory: DecorSubCategory;
   tier: 1 | 2 | 3;
   costCash: number;
   costGems: number;
@@ -73,7 +82,14 @@ export type DancerMoveVariant =
   | 'FIST_PUMP'
   | 'SPIN_TWIRL'
   | 'BREAKDANCE_WAVE'
-  | 'CYBER_JUMP';
+  | 'CYBER_JUMP'
+  | 'TWO_STEP_GROOVE'
+  | 'HIP_HOP_BOUNCE'
+  | 'LATIN_SALSA_SWAY'
+  | 'DISCO_POINT'
+  | 'CHILL_DRINK_VIBE'
+  | 'HOUSE_JACK'
+  | 'HANDS_UP_EUPHORIA';
 
 export type BubbleType =
   | 'BEER'
@@ -117,8 +133,14 @@ export interface GuestAgent {
   cashSpent: number;
   isWhale?: boolean;
   danceMove?: DancerMoveVariant;
+  prevDanceMove?: DancerMoveVariant;
+  danceTransitionProgress?: number; // 0..1 smooth kinematic crossfade between moves
   danceMoveTimer?: number;
   dancePhaseOffset?: number;
+  danceTempoMul?: number; // Individual rhythm subdivision & micro-groove multiplier
+  danceEnergy?: number; // 0.65..1.35 personal energy & expressive amplitude
+  danceAsymmetry?: number; // -1..1 left/right lead & shoulder/arm asymmetry
+  dancePartnerId?: string; // Nearby dancer social partner ID
   groupDanceId?: string;
   groupDanceTimer?: number;
   groupDanceCenter?: { x: number; y: number };
@@ -134,6 +156,9 @@ export interface GuestAgent {
   carId?: string;
   targetCarCoord?: { x: number; y: number };
   queueSlotCoord?: { x: number; y: number };
+  taxiWaitElapsed?: number;
+  taxiWaitTarget?: number;
+  taxiLineIndex?: number;
 }
 
 export interface VipBottleServiceTray {
@@ -225,11 +250,12 @@ export interface ParkingUpgradeState {
 }
 
 export const CATALOG_ITEMS: CatalogItem[] = [
-  // DANCE TILES
+  // FLOORING (DANCE TILES)
   {
     id: 'dance_basic',
     name: 'Retro LED Dance Tile',
     category: 'DANCE_TILE',
+    subCategory: 'FLOORING',
     tier: 1,
     costCash: 100,
     costGems: 0,
@@ -250,6 +276,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'dance_gold_disco',
     name: '70s Gold Fever Disco Tile',
     category: 'DANCE_TILE',
+    subCategory: 'FLOORING',
     tier: 1,
     costCash: 180,
     costGems: 0,
@@ -270,6 +297,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'dance_cyber',
     name: 'Cyber Pulse Matrix Tile',
     category: 'DANCE_TILE',
+    subCategory: 'FLOORING',
     tier: 2,
     costCash: 280,
     costGems: 0,
@@ -290,6 +318,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'dance_supernova',
     name: 'VIP Supernova Stage Grid',
     category: 'DANCE_TILE',
+    subCategory: 'FLOORING',
     tier: 3,
     costCash: 750,
     costGems: 0,
@@ -307,11 +336,12 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     accentColor: '#ec4899',
   },
 
-  // BAR UNITS
+  // BAR UNITS (BAR & LOUNGE)
   {
     id: 'bar_dive',
     name: 'Gritty Dive Wood Counter',
     category: 'BAR_UNIT',
+    subCategory: 'BAR_LOUNGE',
     tier: 1,
     costCash: 350,
     costGems: 0,
@@ -332,6 +362,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'bar_neon',
     name: 'Neon Quartz Mixology Bar',
     category: 'BAR_UNIT',
+    subCategory: 'BAR_LOUNGE',
     tier: 2,
     costCash: 1100,
     costGems: 0,
@@ -352,6 +383,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'bar_wraparound',
     name: 'VIP Gold Wraparound Island Bar',
     category: 'BAR_UNIT',
+    subCategory: 'BAR_LOUNGE',
     tier: 3,
     costCash: 2800,
     costGems: 5,
@@ -369,11 +401,12 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     accentColor: '#fbbf24',
   },
 
-  // SEATING & COMFORT
+  // VIP FURNITURE (SEATING & COMFORT)
   {
     id: 'seat_worn_couch',
     name: 'Patched Backroom Couch',
     category: 'SEATING',
+    subCategory: 'VIP_FURNITURE',
     tier: 1,
     costCash: 160,
     costGems: 0,
@@ -394,6 +427,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'seat_bistro',
     name: 'Round Wood Table & Stools',
     category: 'SEATING',
+    subCategory: 'VIP_FURNITURE',
     tier: 1,
     costCash: 220,
     costGems: 0,
@@ -414,6 +448,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'seat_neon_diner',
     name: 'Retro Vinyl Disco Booth',
     category: 'SEATING',
+    subCategory: 'VIP_FURNITURE',
     tier: 1,
     costCash: 340,
     costGems: 0,
@@ -434,6 +469,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'seat_velvet_booth',
     name: 'Magenta Velvet Lounge Booth',
     category: 'SEATING',
+    subCategory: 'VIP_FURNITURE',
     tier: 2,
     costCash: 680,
     costGems: 0,
@@ -454,6 +490,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'seat_vip_pod',
     name: 'Starlight Bottle-Service Sanctuary',
     category: 'SEATING',
+    subCategory: 'VIP_FURNITURE',
     tier: 3,
     costCash: 1850,
     costGems: 4,
@@ -476,6 +513,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'dj_turntable',
     name: 'Basement Dual Turntable Rig',
     category: 'DJ_BOOTH',
+    subCategory: 'DJ_AUDIO',
     tier: 1,
     costCash: 450,
     costGems: 0,
@@ -496,6 +534,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'dj_speaker_stack',
     name: 'Subwoofer Bass Tower',
     category: 'DJ_BOOTH',
+    subCategory: 'DJ_AUDIO',
     tier: 2,
     costCash: 520,
     costGems: 0,
@@ -516,6 +555,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'dj_holo_stage',
     name: 'Cyberpunk Hologram DJ Console',
     category: 'DJ_BOOTH',
+    subCategory: 'DJ_AUDIO',
     tier: 3,
     costCash: 2400,
     costGems: 5,
@@ -538,6 +578,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'light_string',
     name: 'Warm Edison String Pillar',
     category: 'LIGHTING',
+    subCategory: 'LIGHTING',
     tier: 1,
     costCash: 140,
     costGems: 0,
@@ -558,6 +599,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'light_neon_palm',
     name: 'Neon Miami Palm Pillar',
     category: 'LIGHTING',
+    subCategory: 'LIGHTING',
     tier: 1,
     costCash: 240,
     costGems: 0,
@@ -578,6 +620,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'light_laser_rig',
     name: 'Prism Sweeping Laser Truss',
     category: 'LIGHTING',
+    subCategory: 'LIGHTING',
     tier: 2,
     costCash: 620,
     costGems: 0,
@@ -598,6 +641,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: 'light_disco_orb',
     name: 'Supernova Mirror Disco Rig',
     category: 'LIGHTING',
+    subCategory: 'LIGHTING',
     tier: 3,
     costCash: 1550,
     costGems: 3,
@@ -613,6 +657,92 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     description: 'Suspended crystalline prism rig with volumetric fog bursts and gold reflections.',
     primaryColor: '#3b0764',
     accentColor: '#facc15',
+  },
+
+  // WALL ART & NEON DISPLAYS
+  {
+    id: 'wall_neon_wings',
+    name: 'Neon Cyber Angel Wings Wall Art',
+    category: 'LIGHTING',
+    subCategory: 'WALL_ART',
+    tier: 1,
+    costCash: 210,
+    costGems: 0,
+    unlockLevel: 1,
+    width: 1,
+    depth: 1,
+    walkable: false,
+    hypeBonus: 9,
+    vibeBonus: 16,
+    tipMultiplier: 0.05,
+    capacityBonus: 2,
+    prepSpeedBonus: 0,
+    description: 'Viral selfie-backdrop wall display with glowing magenta & cyan neon wings.',
+    primaryColor: '#701a75',
+    accentColor: '#f472b6',
+  },
+  {
+    id: 'wall_gold_records',
+    name: 'Platinum & Gold Vinyl Trophy Wall',
+    category: 'LIGHTING',
+    subCategory: 'WALL_ART',
+    tier: 1,
+    costCash: 320,
+    costGems: 0,
+    unlockLevel: 2,
+    width: 1,
+    depth: 1,
+    walkable: false,
+    hypeBonus: 14,
+    vibeBonus: 22,
+    tipMultiplier: 0.08,
+    capacityBonus: 2,
+    prepSpeedBonus: 0,
+    description: 'Illuminated display case of framed 24K gold & platinum LP records.',
+    primaryColor: '#4c1d95',
+    accentColor: '#facc15',
+  },
+  {
+    id: 'wall_equalizer_mural',
+    name: 'LED Spectrum Equalizer Wall Panel',
+    category: 'LIGHTING',
+    subCategory: 'WALL_ART',
+    tier: 2,
+    costCash: 560,
+    costGems: 0,
+    unlockLevel: 3,
+    width: 1,
+    depth: 1,
+    walkable: false,
+    hypeBonus: 24,
+    vibeBonus: 34,
+    tipMultiplier: 0.14,
+    capacityBonus: 3,
+    prepSpeedBonus: 0,
+    description: 'Audio-reactive vertical LED bar matrix wall installation that pulses to the beat.',
+    primaryColor: '#1e1b4b',
+    accentColor: '#22d3ee',
+  },
+  {
+    id: 'wall_vip_crown_sign',
+    name: '24K Gold VIP Crown Neon Marquee',
+    category: 'LIGHTING',
+    subCategory: 'WALL_ART',
+    tier: 3,
+    costCash: 1280,
+    costGems: 2,
+    unlockLevel: 5,
+    width: 1,
+    depth: 1,
+    walkable: false,
+    hypeBonus: 42,
+    vibeBonus: 62,
+    tipMultiplier: 0.22,
+    capacityBonus: 5,
+    prepSpeedBonus: 0,
+    description: 'Oversized neon crown & starlight wall sculpture that draws celebrity VIPs.',
+    primaryColor: '#311042',
+    accentColor: '#fbbf24',
   },
 ];
 

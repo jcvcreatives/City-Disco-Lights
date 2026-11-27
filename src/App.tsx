@@ -47,6 +47,7 @@ import {
   ClubGossipCategory,
   ClubGossipPost,
   createNextTierQuest,
+  DecorSubCategory,
   DRINK_MIXES,
   FloatingText,
   FloorLevel,
@@ -55,7 +56,6 @@ import {
   INITIAL_QUESTS,
   INITIAL_STAFF_MEMBERS,
   isVipBoothCatalogId,
-  ItemCategory,
   LEVEL_1_DIVE_BAR_ITEMS,
   ParkingUpgradeState,
   PlacedItem,
@@ -131,9 +131,12 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#1e1b4b',
     pantsColor: '#1e3a8a',
     cashSpent: 45,
-    danceMove: 'SHUFFLE_STEP',
+    danceMove: 'TWO_STEP_GROOVE',
     danceMoveTimer: 3.8,
     dancePhaseOffset: 0.4,
+    danceTempoMul: 0.92,
+    danceEnergy: 0.88,
+    danceAsymmetry: 1,
   },
   {
     id: 'g_dance_2',
@@ -154,9 +157,12 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#0D0D14',
     pantsColor: '#1e293b',
     cashSpent: 90,
-    danceMove: 'FIST_PUMP',
+    danceMove: 'LATIN_SALSA_SWAY',
     danceMoveTimer: 4.2,
     dancePhaseOffset: 1.7,
+    danceTempoMul: 1.04,
+    danceEnergy: 0.98,
+    danceAsymmetry: -1,
   },
   {
     id: 'g_dance_3',
@@ -177,9 +183,12 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#facc15',
     pantsColor: '#0f172a',
     cashSpent: 120,
-    danceMove: 'SPIN_TWIRL',
+    danceMove: 'DISCO_POINT',
     danceMoveTimer: 3.6,
     dancePhaseOffset: 2.9,
+    danceTempoMul: 0.98,
+    danceEnergy: 1.08,
+    danceAsymmetry: 1,
   },
   {
     id: 'g_dance_4',
@@ -200,9 +209,12 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#7c2d12',
     pantsColor: '#1e3a8a',
     cashSpent: 65,
-    danceMove: 'BREAKDANCE_WAVE',
+    danceMove: 'HIP_HOP_BOUNCE',
     danceMoveTimer: 4.0,
     dancePhaseOffset: 4.1,
+    danceTempoMul: 0.88,
+    danceEnergy: 1.02,
+    danceAsymmetry: -1,
   },
   {
     id: 'g_dance_5',
@@ -223,14 +235,17 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#451a03',
     pantsColor: '#1e1b4b',
     cashSpent: 80,
-    danceMove: 'CYBER_JUMP',
+    danceMove: 'HOUSE_JACK',
     danceMoveTimer: 3.9,
     dancePhaseOffset: 5.2,
+    danceTempoMul: 1.12,
+    danceEnergy: 1.05,
+    danceAsymmetry: 1,
   },
   {
     id: 'g_dance_6',
-    name: 'Noel',
-    isCelebrity: false,
+    name: 'Kyra Vance (Pop Icon)',
+    isCelebrity: true,
     floor: 1,
     targetFloor: 1,
     gridX: 2.35,
@@ -239,16 +254,19 @@ const INITIAL_GUESTS: GuestAgent[] = [
     state: 'DANCER_MOVES',
     stateTimer: 10.5,
     patience: 94,
-    hype: 89,
+    hype: 98,
     bubble: 'VIP_CROWN',
     bubbleTimer: 9,
-    shirtColor: '#38bdf8',
+    shirtColor: '#facc15',
     hairColor: '#f8fafc',
     pantsColor: '#1e293b',
-    cashSpent: 110,
-    danceMove: 'SHUFFLE_STEP',
+    cashSpent: 220,
+    danceMove: 'CHILL_DRINK_VIBE',
     danceMoveTimer: 4.1,
     dancePhaseOffset: 1.1,
+    danceTempoMul: 0.84,
+    danceEnergy: 0.78,
+    danceAsymmetry: -1,
   },
   {
     id: 'g_dance_7',
@@ -269,9 +287,12 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#111116',
     pantsColor: '#0f172a',
     cashSpent: 75,
-    danceMove: 'FIST_PUMP',
+    danceMove: 'HANDS_UP_EUPHORIA',
     danceMoveTimer: 3.7,
     dancePhaseOffset: 2.3,
+    danceTempoMul: 1.08,
+    danceEnergy: 1.14,
+    danceAsymmetry: 1,
   },
   {
     id: 'g_dance_8',
@@ -292,9 +313,12 @@ const INITIAL_GUESTS: GuestAgent[] = [
     hairColor: '#7c2d12',
     pantsColor: '#1e293b',
     cashSpent: 60,
-    danceMove: 'SPIN_TWIRL',
+    danceMove: 'SHUFFLE_STEP',
     danceMoveTimer: 4.4,
     dancePhaseOffset: 3.5,
+    danceTempoMul: 1.16,
+    danceEnergy: 0.96,
+    danceAsymmetry: -1,
   },
   // Patrons Sitting on Tufted Purple VIP Booth Sofas along Back-Left Wall (occupying distinct sofa cushions)
   {
@@ -345,8 +369,8 @@ const INITIAL_GUESTS: GuestAgent[] = [
   },
   {
     id: 'g_vip_sofa_3',
-    name: 'Jaxon',
-    isCelebrity: false,
+    name: 'Jax Sterling (Synth King)',
+    isCelebrity: true,
     floor: 1,
     targetFloor: 1,
     gridX: 0.28,
@@ -354,14 +378,14 @@ const INITIAL_GUESTS: GuestAgent[] = [
     path: [],
     state: 'RESTING_AT_SEAT',
     stateTimer: 15,
-    patience: 93,
-    hype: 87,
+    patience: 96,
+    hype: 97,
     bubble: 'VIP_CROWN',
     bubbleTimer: 8,
-    shirtColor: '#f59e0b',
+    shirtColor: '#facc15',
     hairColor: '#1e1b4b',
     pantsColor: '#0f172a',
-    cashSpent: 135,
+    cashSpent: 260,
     seatPosture: 'SITTING_SOFA',
     facingDir: 'SE',
     assignedSlotId: 'init_couch_left1_sofa_2',
@@ -708,6 +732,79 @@ const INITIAL_GUESTS: GuestAgent[] = [
     pantsColor: '#1e293b',
     cashSpent: 0,
   },
+  // Sprites lined up outside at the Right-Side Road Taxi Stand waiting for a taxi/pickup ride
+  {
+    id: 'g_right_ride_waiter_1',
+    name: 'Julian',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 10.82,
+    gridY: 6.18,
+    path: [],
+    state: 'WALKING_TO_CAR',
+    stateTimer: 2.0,
+    patience: 95,
+    hype: 90,
+    bubble: 'SPARKLE',
+    bubbleTimer: 6,
+    shirtColor: '#facc15',
+    hairColor: '#111116',
+    pantsColor: '#1e293b',
+    cashSpent: 140,
+    carId: 'WAIT_RIGHT_RIDE_SIGN',
+    facingDir: 'SE',
+    chatText: 'Hailing a cab outside at the Taxi Stand! 🚕👋',
+    chatTimer: 6.0,
+  },
+  {
+    id: 'g_right_ride_waiter_2',
+    name: 'Sienna',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 10.82,
+    gridY: 6.9,
+    path: [],
+    state: 'WALKING_TO_CAR',
+    stateTimer: 2.4,
+    patience: 94,
+    hype: 86,
+    bubble: 'CHAT',
+    bubbleTimer: 5,
+    shirtColor: '#ec4899',
+    hairColor: '#451a03',
+    pantsColor: '#0f172a',
+    cashSpent: 115,
+    carId: 'WAIT_RIGHT_RIDE_SIGN',
+    facingDir: 'SE',
+    chatText: 'Lined up outside at the Taxi Stand for my ride! 🚕✨',
+    chatTimer: 5.5,
+  },
+  {
+    id: 'g_right_ride_waiter_3',
+    name: 'Mateo',
+    isCelebrity: false,
+    floor: 1,
+    targetFloor: 1,
+    gridX: 10.82,
+    gridY: 7.62,
+    path: [],
+    state: 'WALKING_TO_CAR',
+    stateTimer: 2.8,
+    patience: 92,
+    hype: 84,
+    bubble: 'MUSIC',
+    bubbleTimer: 5,
+    shirtColor: '#22d3ee',
+    hairColor: '#1e293b',
+    pantsColor: '#111827',
+    cashSpent: 95,
+    carId: 'WAIT_RIGHT_RIDE_SIGN',
+    facingDir: 'SE',
+    chatText: 'Waiting in the Taxi Stand line outside! What a night! 🎶🚕',
+    chatTimer: 5.0,
+  },
 ];
 
 const AVATAR_STYLES = [
@@ -837,7 +934,8 @@ export default function App() {
   // Navigation Dock & Top-Left Modals
   const [activeDockTab, setActiveDockTab] = useState<DockTabId>(null);
   const [activeTopLeftModal, setActiveTopLeftModal] = useState<TopLeftModalId>(null);
-  const [buildCategory, setBuildCategory] = useState<ItemCategory | 'ALL'>('ALL');
+  const [buildCategory, setBuildCategory] = useState<DecorSubCategory | 'ALL'>('ALL');
+  const [decorSearchQuery, setDecorSearchQuery] = useState<string>('');
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogItem | null>(
     CATALOG_ITEMS.find((i) => i.id === 'dance_basic') || CATALOG_ITEMS[0]
   );
@@ -2924,9 +3022,16 @@ export default function App() {
   };
 
   const filteredCatalog = useMemo(() => {
-    if (buildCategory === 'ALL') return CATALOG_ITEMS;
-    return CATALOG_ITEMS.filter((i) => i.category === buildCategory);
-  }, [buildCategory]);
+    const query = decorSearchQuery.trim().toLowerCase();
+    return CATALOG_ITEMS.filter((item) => {
+      const matchesSubCat = buildCategory === 'ALL' || item.subCategory === buildCategory;
+      const matchesQuery =
+        !query ||
+        item.name.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query);
+      return matchesSubCat && matchesQuery;
+    });
+  }, [buildCategory, decorSearchQuery]);
 
   const unclaimedQuestCount = quests.filter((q) => q.currentValue >= q.targetValue && !q.claimed).length;
 
@@ -2990,6 +3095,7 @@ export default function App() {
         parkingState={parkingState}
         clubMetrics={clubMetrics}
         clubBpm={selectedBpm}
+        partyTriggerTick={partyCount}
         isRemoveMode={isRemoveMode}
         cameraZoom={cameraZoom}
         onZoomChange={setCameraZoom}
@@ -4448,29 +4554,57 @@ export default function App() {
                     <div className="flex items-center gap-1 overflow-x-auto pb-1">
                       {(
                         [
-                          { id: 'ALL', label: 'All Gear' },
-                          { id: 'DANCE_TILE', label: 'Dance Tiles' },
-                          { id: 'DJ_BOOTH', label: 'DJ & Speakers' },
-                          { id: 'BAR_UNIT', label: 'Bars & Shelves' },
-                          { id: 'SEATING', label: 'VIP & Tables' },
-                          { id: 'LIGHTING', label: 'Lasers & Orbs' },
+                          { id: 'ALL', label: 'All Decor', icon: '✨' },
+                          { id: 'FLOORING', label: 'Flooring', icon: '🪩' },
+                          { id: 'WALL_ART', label: 'Wall Art', icon: '🖼️' },
+                          { id: 'LIGHTING', label: 'Lighting', icon: '🔦' },
+                          { id: 'VIP_FURNITURE', label: 'VIP Furniture', icon: '🛋️' },
+                          { id: 'DJ_AUDIO', label: 'DJ & Audio', icon: '🎧' },
+                          { id: 'BAR_LOUNGE', label: 'Bars & Counters', icon: '🍸' },
                         ] as const
-                      ).map((cat) => (
-                        <button
-                          key={cat.id}
-                          onClick={() => setBuildCategory(cat.id)}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-black whitespace-nowrap cursor-pointer border border-[#111116] ${
-                            buildCategory === cat.id
-                              ? 'bg-cyan-400 text-slate-950'
-                              : 'bg-purple-950/80 text-purple-200 hover:bg-purple-900'
-                          }`}
-                        >
-                          {cat.label}
-                        </button>
-                      ))}
+                      ).map((cat) => {
+                        const count =
+                          cat.id === 'ALL'
+                            ? CATALOG_ITEMS.length
+                            : CATALOG_ITEMS.filter((i) => i.subCategory === cat.id).length;
+                        const isActive = buildCategory === cat.id;
+                        return (
+                          <button
+                            key={cat.id}
+                            onClick={() => {
+                              setBuildCategory(cat.id);
+                              soundEngine.playClick();
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-black whitespace-nowrap cursor-pointer border border-[#111116] flex items-center gap-1 transition-all ${
+                              isActive
+                                ? 'bg-cyan-400 text-slate-950 shadow-[0_2px_0_#111116]'
+                                : 'bg-purple-950/80 text-purple-200 hover:bg-purple-900'
+                            }`}
+                          >
+                            <span>{cat.icon}</span>
+                            <span>{cat.label}</span>
+                            <span
+                              className={`px-1.2 py-0.2 rounded text-[9px] font-mono ${
+                                isActive
+                                  ? 'bg-slate-950/20 text-slate-950 font-black'
+                                  : 'bg-purple-900/80 text-cyan-300'
+                              }`}
+                            >
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
 
                     <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={decorSearchQuery}
+                        onChange={(e) => setDecorSearchQuery(e.target.value)}
+                        placeholder="Search decor..."
+                        className="w-28 sm:w-36 px-2.5 py-1 rounded-lg bg-[#140d26] border border-purple-500/40 text-[11px] font-bold text-white placeholder-purple-300/50 focus:outline-none focus:border-cyan-400"
+                      />
                       <button
                         onClick={() => {
                           const next = !isEditDecorMode;
@@ -4558,6 +4692,18 @@ export default function App() {
                         !editingPlacedItemUid;
                       const isUnlocked = level >= item.unlockLevel;
                       const canAfford = cash >= item.costCash && isUnlocked;
+                      const subCatLabel =
+                        item.subCategory === 'FLOORING'
+                          ? 'Flooring'
+                          : item.subCategory === 'WALL_ART'
+                          ? 'Wall Art'
+                          : item.subCategory === 'LIGHTING'
+                          ? 'Lighting'
+                          : item.subCategory === 'VIP_FURNITURE'
+                          ? 'VIP Furniture'
+                          : item.subCategory === 'DJ_AUDIO'
+                          ? 'DJ & Audio'
+                          : 'Bar & Lounge';
                       return (
                         <div
                           key={item.id}
@@ -4568,7 +4714,7 @@ export default function App() {
                             setSelectedCatalogItem(item);
                             soundEngine.playClick();
                           }}
-                          className={`w-42 shrink-0 p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all ${
+                          className={`w-44 shrink-0 p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all ${
                             isSelected
                               ? 'bg-purple-900/90 border-cyan-300'
                               : !isUnlocked
@@ -4580,14 +4726,17 @@ export default function App() {
                             <span className={isUnlocked ? 'text-cyan-300 font-bold' : 'text-amber-300 font-bold'}>
                               {isUnlocked ? `LVL ${item.unlockLevel} · ${item.width}x${item.depth}` : `🔒 LVL ${item.unlockLevel}`}
                             </span>
-                            <span className="text-amber-300">
-                              +{item.hypeBonus}⚡ +{item.capacityBonus}👥
+                            <span className="px-1.5 py-0.2 rounded bg-purple-950/90 border border-purple-500/30 text-[9px] text-purple-200 font-bold">
+                              {subCatLabel}
                             </span>
                           </div>
                           <div className="text-xs font-black truncate mt-0.5 text-white">
                             {item.name}
                           </div>
-                          <div className="flex items-center justify-between gap-1 mt-2 pt-1.5 border-t border-purple-500/30 text-xs font-mono font-bold">
+                          <div className="text-[10px] font-mono text-amber-300 mt-0.5">
+                            +{item.hypeBonus}⚡ Hype · +{item.vibeBonus}✨ Vibe · +{item.capacityBonus}👥
+                          </div>
+                          <div className="flex items-center justify-between gap-1 mt-1.5 pt-1.5 border-t border-purple-500/30 text-xs font-mono font-bold">
                             <span className={cash >= item.costCash ? 'text-emerald-300' : 'text-rose-400'}>
                               ${item.costCash}
                             </span>
