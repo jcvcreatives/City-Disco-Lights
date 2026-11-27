@@ -468,6 +468,7 @@ class SoundEngine {
   private activePattern: BeatPattern = { ...PRESET_BEAT_PATTERNS.pat_pop_1 };
   private stepListeners: Set<(step: number) => void> = new Set();
   private stateListeners: Set<(running: boolean) => void> = new Set();
+  private bassDropListeners: Set<() => void> = new Set();
   private customAudioEl: HTMLAudioElement | null = null;
   private activeCustomAudioUrl: string | null = null;
   private hasUnlockedHardware: boolean = false;
@@ -878,6 +879,13 @@ class SoundEngine {
     };
   }
 
+  public subscribeBassDrop(listener: () => void): () => void {
+    this.bassDropListeners.add(listener);
+    return () => {
+      this.bassDropListeners.delete(listener);
+    };
+  }
+
   public getCurrentStep(): number {
     return this.step % 16;
   }
@@ -1201,6 +1209,7 @@ class SoundEngine {
   public triggerBassDrop() {
     this.unlockAudio();
     this.dropStepsRemaining = 16;
+    this.bassDropListeners.forEach((cb) => cb());
     const ctx = this.getContext();
     if (!ctx) return;
     const t = ctx.currentTime;

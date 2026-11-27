@@ -54,6 +54,7 @@ export interface DrinkMix {
 }
 
 export type GuestState =
+  | 'ARRIVING_FROM_CAR'
   | 'QUEUEING'
   | 'WALKING_TO_BAR'
   | 'ORDERING_DRINK'
@@ -64,7 +65,8 @@ export type GuestState =
   | 'RESTING_AT_SEAT'
   | 'CLIMBING_STAIRS'
   | 'DESCENDING_STAIRS'
-  | 'LEAVING';
+  | 'LEAVING'
+  | 'WALKING_TO_CAR';
 
 export type DancerMoveVariant =
   | 'SHUFFLE_STEP'
@@ -113,6 +115,7 @@ export interface GuestAgent {
   hairColor: string;
   pantsColor: string;
   cashSpent: number;
+  isWhale?: boolean;
   danceMove?: DancerMoveVariant;
   danceMoveTimer?: number;
   dancePhaseOffset?: number;
@@ -128,6 +131,9 @@ export interface GuestAgent {
   chatText?: string;
   chatTimer?: number;
   bottleServiceTrayId?: string;
+  carId?: string;
+  targetCarCoord?: { x: number; y: number };
+  queueSlotCoord?: { x: number; y: number };
 }
 
 export interface VipBottleServiceTray {
@@ -187,7 +193,11 @@ export type QuestTrackType =
   | 'DANCE_FLOOR'
   | 'STAFF_TEAM'
   | 'PARTY_FEVER'
-  | 'CLUB_REVENUE';
+  | 'CLUB_REVENUE'
+  | 'WHALE_HUNT'
+  | 'CELEB_PAPARAZZI'
+  | 'GOSSIP_VIRAL'
+  | 'LASER_OVERDRIVE';
 
 export type QuestCategoryTag = 'VIP RUSH' | 'CROWD HYPE' | 'DJ STUDIO' | 'TYCOON EMPIRE';
 
@@ -232,9 +242,29 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     tipMultiplier: 0.02,
     capacityBonus: 2,
     prepSpeedBonus: 0,
-    description: 'Pastel cycling acrylic floor tile. Essential for your initial 3x3 dive floor.',
+    description: 'Pastel cycling acrylic floor tile. Essential for expanding your starter disco floor.',
     primaryColor: '#38bdf8',
     accentColor: '#f472b6',
+  },
+  {
+    id: 'dance_gold_disco',
+    name: '70s Gold Fever Disco Tile',
+    category: 'DANCE_TILE',
+    tier: 1,
+    costCash: 180,
+    costGems: 0,
+    unlockLevel: 2,
+    width: 1,
+    depth: 1,
+    walkable: true,
+    hypeBonus: 8,
+    vibeBonus: 5,
+    tipMultiplier: 0.04,
+    capacityBonus: 2,
+    prepSpeedBonus: 0,
+    description: 'Warm amber & magenta Saturday-night glass tile that boosts dancer groove tips.',
+    primaryColor: '#f59e0b',
+    accentColor: '#ec4899',
   },
   {
     id: 'dance_cyber',
@@ -381,6 +411,26 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     accentColor: '#fbbf24',
   },
   {
+    id: 'seat_neon_diner',
+    name: 'Retro Vinyl Disco Booth',
+    category: 'SEATING',
+    tier: 1,
+    costCash: 340,
+    costGems: 0,
+    unlockLevel: 2,
+    width: 2,
+    depth: 1,
+    walkable: false,
+    hypeBonus: 10,
+    vibeBonus: 16,
+    tipMultiplier: 0.09,
+    capacityBonus: 4,
+    prepSpeedBonus: 0,
+    description: 'Classic turquoise & neon-pink vinyl booth where dancers chill and order bottle trays.',
+    primaryColor: '#0d9488',
+    accentColor: '#f472b6',
+  },
+  {
     id: 'seat_velvet_booth',
     name: 'Magenta Velvet Lounge Booth',
     category: 'SEATING',
@@ -503,6 +553,26 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     description: 'Cozy vintage bulb column that fixes dark corner complaints.',
     primaryColor: '#78350f',
     accentColor: '#fde047',
+  },
+  {
+    id: 'light_neon_palm',
+    name: 'Neon Miami Palm Pillar',
+    category: 'LIGHTING',
+    tier: 1,
+    costCash: 240,
+    costGems: 0,
+    unlockLevel: 1,
+    width: 1,
+    depth: 1,
+    walkable: false,
+    hypeBonus: 10,
+    vibeBonus: 18,
+    tipMultiplier: 0.06,
+    capacityBonus: 2,
+    prepSpeedBonus: 0,
+    description: 'Glowing pink & cyan neon palm column that transforms a starter room into a real disco.',
+    primaryColor: '#701a75',
+    accentColor: '#22d3ee',
   },
   {
     id: 'light_laser_rig',
@@ -654,27 +724,22 @@ export function isVipBoothCatalogId(catalogId: string): boolean {
   return (
     catalogId === 'seat_velvet_booth' ||
     catalogId === 'seat_vip_pod' ||
-    catalogId === 'seat_worn_couch'
+    catalogId === 'seat_worn_couch' ||
+    catalogId === 'seat_neon_diner'
   );
 }
 
-// Level 1 Dive Bar Starter Layout (Small gritty single-floor club with 3x3 dance floor, basic bar, warm string light, and a couple of chairs)
+// Level 1 Starter Disco Layout (Humble starter room with a compact 2x2 dance floor, 1 basic dive bar, 1 turntable rig, 1 string light, and 1 wood table — ready to earn money and build up!)
 export const LEVEL_1_DIVE_BAR_ITEMS: PlacedItem[] = [
   { uid: 'dive_bar_1', catalogId: 'bar_dive', floor: 1, gridX: 1, gridY: 0, rotation: 0 },
   { uid: 'dive_dj_1', catalogId: 'dj_turntable', floor: 1, gridX: 5, gridY: 0, rotation: 0 },
   { uid: 'dive_light_1', catalogId: 'light_string', floor: 1, gridX: 0, gridY: 1, rotation: 0 },
   { uid: 'dive_chair_1', catalogId: 'seat_bistro', floor: 1, gridX: 1, gridY: 6, rotation: 0 },
-  { uid: 'dive_chair_2', catalogId: 'seat_worn_couch', floor: 1, gridX: 0, gridY: 3, rotation: 90 },
-  // Basic 3x3 illuminated dance floor
+  // Compact 2x2 starter LED dance floor in the center (expandable to 3x3, 4x4, and beyond as you earn cash!)
   { uid: 'dive_df_1', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 3, rotation: 0 },
   { uid: 'dive_df_2', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 3, rotation: 0 },
-  { uid: 'dive_df_3', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 3, rotation: 0 },
-  { uid: 'dive_df_4', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 4, rotation: 0 },
-  { uid: 'dive_df_5', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 4, rotation: 0 },
-  { uid: 'dive_df_6', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 4, rotation: 0 },
-  { uid: 'dive_df_7', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 5, rotation: 0 },
-  { uid: 'dive_df_8', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 5, rotation: 0 },
-  { uid: 'dive_df_9', catalogId: 'dance_basic', floor: 1, gridX: 5, gridY: 5, rotation: 0 },
+  { uid: 'dive_df_3', catalogId: 'dance_basic', floor: 1, gridX: 3, gridY: 4, rotation: 0 },
+  { uid: 'dive_df_4', catalogId: 'dance_basic', floor: 1, gridX: 4, gridY: 4, rotation: 0 },
 ];
 
 // Initial Nightclub City: Neon Layout matching uploaded reference image (IMG_1510_4d373b62.png)
@@ -896,6 +961,134 @@ export const INITIAL_QUESTS: QuestTask[] = [
     rewardXp: 180,
     claimed: false,
   },
+  {
+    id: 'quest_whale_hunt_t1',
+    track: 'WHALE_HUNT',
+    tier: 1,
+    badgeEmoji: '🐋',
+    categoryTag: 'VIP RUSH',
+    actionLabel: '🥂 Champagne Pyramid',
+    title: 'Golden Whale Champagne Tower I',
+    description: 'Pour the 4-tier Dom Pérignon Pyramid without overflowing or serve high-spending ★ VIP Whales on the floor.',
+    targetValue: 1,
+    currentValue: 0,
+    rewardCash: 1150,
+    rewardGems: 4,
+    rewardXp: 175,
+    claimed: false,
+  },
+  {
+    id: 'quest_celeb_paparazzi_t1',
+    track: 'CELEB_PAPARAZZI',
+    tier: 1,
+    badgeEmoji: '📸',
+    categoryTag: 'CROWD HYPE',
+    actionLabel: '📸 Paparazzi Shield',
+    title: 'Paparazzi Blitz & VIP Shield I',
+    description: 'Block sneaky paparazzi camera flashes while fulfilling live Celebrity & Whale requests to build a 4x combo.',
+    targetValue: 1,
+    currentValue: 0,
+    rewardCash: 1100,
+    rewardGems: 4,
+    rewardXp: 165,
+    claimed: false,
+  },
+  {
+    id: 'quest_gossip_viral_t1',
+    track: 'GOSSIP_VIRAL',
+    tier: 1,
+    badgeEmoji: '📱',
+    categoryTag: 'CROWD HYPE',
+    actionLabel: '📸 Viral VIP Blitz',
+    title: 'Viral Nightlife Tea Feed I',
+    description: 'React to or post sizzling Club Gossip stories on the Live Tea Feed, or win the Paparazzi Blitz challenge.',
+    targetValue: 3,
+    currentValue: 1,
+    rewardCash: 820,
+    rewardGems: 3,
+    rewardXp: 135,
+    claimed: false,
+  },
+  {
+    id: 'quest_laser_overdrive_t1',
+    track: 'LASER_OVERDRIVE',
+    tier: 1,
+    badgeEmoji: '⚡',
+    categoryTag: 'DJ STUDIO',
+    actionLabel: '🎧 Overdrive Drop',
+    title: 'Synthwave Laser Overdrive I',
+    description: 'Trigger DJ Hype Actions, switch custom beats, or nail a 3-drop combo on the Live Turntable Deck.',
+    targetValue: 3,
+    currentValue: 1,
+    rewardCash: 880,
+    rewardGems: 3,
+    rewardXp: 145,
+    claimed: false,
+  },
+  {
+    id: 'quest_bottle_service_t2_special',
+    track: 'WHALE_HUNT',
+    tier: 2,
+    badgeEmoji: '👑',
+    categoryTag: 'VIP RUSH',
+    actionLabel: '🥂 4x Pyramid Risk',
+    title: 'Double-or-Nothing Magnum Pour',
+    description: 'Reach Tier 3+ on the VIP Whale Champagne Pyramid challenge or host 2 ★ VIP Whales simultaneously.',
+    targetValue: 2,
+    currentValue: 0,
+    rewardCash: 1650,
+    rewardGems: 5,
+    rewardXp: 240,
+    claimed: false,
+  },
+  {
+    id: 'quest_dj_hype_encore',
+    track: 'LASER_OVERDRIVE',
+    tier: 2,
+    badgeEmoji: '🎛️',
+    categoryTag: 'DJ STUDIO',
+    actionLabel: '🎧 Bass Drop Encore',
+    title: 'Midnight Bassline Frenzy',
+    description: 'Lock Deck B within ±1 BPM of Master Tempo and trigger 4 consecutive Sub-Bass Drops without missing.',
+    targetValue: 3,
+    currentValue: 1,
+    rewardCash: 1350,
+    rewardGems: 4,
+    rewardXp: 200,
+    claimed: false,
+  },
+  {
+    id: 'quest_parking_valet_tycoon',
+    track: 'CLUB_REVENUE',
+    tier: 2,
+    badgeEmoji: '🏎️',
+    categoryTag: 'TYCOON EMPIRE',
+    actionLabel: '🛡️ Valet & VIP Door',
+    title: 'Supercar Valet & Red Carpet Boom',
+    description: 'Welcome arriving guests from the Neon Parking Plaza and generate $2,500 in high-roller club cashflow.',
+    targetValue: 2500,
+    currentValue: 950,
+    rewardCash: 1800,
+    rewardGems: 5,
+    rewardXp: 260,
+    claimed: false,
+  },
+  {
+    id: 'quest_celeb_entourage_fever',
+    track: 'CELEB_PAPARAZZI',
+    tier: 2,
+    badgeEmoji: '🌟',
+    categoryTag: 'CROWD HYPE',
+    actionLabel: '📸 Entourage Blitz',
+    title: 'A-List Entourage Takeover',
+    description: 'Invite a Celebrity Entourage or score 600+ pts in the Paparazzi Blitz & VIP Whisperer challenge.',
+    targetValue: 2,
+    currentValue: 0,
+    rewardCash: 1550,
+    rewardGems: 5,
+    rewardXp: 225,
+    claimed: false,
+  },
 ];
 
 const ROMAN_TIERS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
@@ -908,17 +1101,22 @@ export function createNextTierQuest(completed: QuestTask): QuestTask {
   let nextTarget = completed.targetValue;
   if (completed.track === 'CLUB_REVENUE') {
     nextTarget = Math.round((completed.targetValue * 1.65) / 100) * 100;
-  } else if (completed.track === 'STAFF_TEAM') {
+  } else if (completed.track === 'STAFF_TEAM' || completed.track === 'GOSSIP_VIRAL') {
     nextTarget = completed.targetValue + 3;
-  } else if (completed.track === 'BOTTLE_SERVICE' || completed.track === 'PARTY_FEVER') {
+  } else if (
+    completed.track === 'BOTTLE_SERVICE' ||
+    completed.track === 'PARTY_FEVER' ||
+    completed.track === 'WHALE_HUNT' ||
+    completed.track === 'CELEB_PAPARAZZI'
+  ) {
     nextTarget = completed.targetValue + 1;
   } else {
     nextTarget = completed.targetValue + 2;
   }
 
-  const nextCash = Math.round((completed.rewardCash * 1.45) / 25) * 25;
+  const nextCash = Math.round((completed.rewardCash * 1.48) / 25) * 25;
   const nextGems = completed.rewardGems + (nextTier % 2 === 0 ? 2 : 1);
-  const nextXp = Math.round(completed.rewardXp * 1.35);
+  const nextXp = Math.round(completed.rewardXp * 1.38);
 
   const trackDescriptions: Record<QuestTrackType, string> = {
     BOTTLE_SERVICE: `Master the Flair Mixology Shaker challenge or deliver ${nextTarget} sparkling VIP Bottle Service trays.`,
@@ -929,6 +1127,10 @@ export function createNextTierQuest(completed: QuestTask): QuestTask {
     PARTY_FEVER: `Win the Live DJ Beat-Match Drop challenge ${nextTarget} times to ignite Mega Laser Parties.`,
     STAFF_TEAM: `Inspect guest IDs & VIP hologram seals at the Velvet Rope Bouncer Scanner (${nextTarget} ops).`,
     CLUB_REVENUE: `Generate $${nextTarget.toLocaleString()} via VIP Bouncer cover tips, bottle trays, and bar sales.`,
+    WHALE_HUNT: `Complete the 4-Tier VIP Whale Champagne Pyramid pour or serve ${nextTarget} high-roller ★ VIP Whales.`,
+    CELEB_PAPARAZZI: `Score a winning streak in the Paparazzi Blitz & VIP Whisperer grid (${nextTarget} victories).`,
+    GOSSIP_VIRAL: `Spark ${nextTarget} viral Club Gossip moments or complete Paparazzi Blitz runs for massive hype.`,
+    LASER_OVERDRIVE: `Drop ${nextTarget} custom synthwave beats & DJ Overdrive combos to send the dancefloor into orbit.`,
   };
 
   return {

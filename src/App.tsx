@@ -717,14 +717,103 @@ const AVATAR_STYLES = [
   { id: 'emerald_dj', label: 'Lime Bass Bomber Jacket', hair: '#facc15', top: '#84cc16', cap: '#22d3ee' },
 ];
 
+interface DiscoBuildStage {
+  stage: number;
+  title: string;
+  clubTitleUpgrade: string;
+  badgeEmoji: string;
+  targetScore: number; // totalHype + totalVibe
+  targetItems: number; // placedItems.length
+  hint: string;
+  rewardCash: number;
+  rewardGems: number;
+  rewardXp: number;
+}
+
+const DISCO_BUILD_STAGES: DiscoBuildStage[] = [
+  {
+    stage: 1,
+    title: 'Stage 1: Garage Starter Disco',
+    clubTitleUpgrade: 'GROOVY RETRO DISCO',
+    badgeEmoji: '🪩',
+    targetScore: 135,
+    targetItems: 11,
+    hint: 'Earn cash from dancers & drinks, then buy Retro LED Dance Tiles ($100), String Lights ($140) or Tables ($220)!',
+    rewardCash: 500,
+    rewardGems: 2,
+    rewardXp: 150,
+  },
+  {
+    stage: 2,
+    title: 'Stage 2: Groovy Retro Club',
+    clubTitleUpgrade: 'ELECTRIC FEVER CLUB',
+    badgeEmoji: '🔊',
+    targetScore: 200,
+    targetItems: 15,
+    hint: 'Expand your dance floor to 3x3+, add a Subwoofer Bass Tower ($520) or Neon Palm Pillar ($240)!',
+    rewardCash: 850,
+    rewardGems: 3,
+    rewardXp: 240,
+  },
+  {
+    stage: 3,
+    title: 'Stage 3: Electric Fever Disco',
+    clubTitleUpgrade: 'CLUB NEON LOUNGE',
+    badgeEmoji: '⚡',
+    targetScore: 290,
+    targetItems: 19,
+    hint: 'Add Prism Sweeping Lasers ($620), Cyber Pulse Tiles ($280) & Magenta Velvet Booths ($680)!',
+    rewardCash: 1400,
+    rewardGems: 4,
+    rewardXp: 360,
+  },
+  {
+    stage: 4,
+    title: 'Stage 4: Neon Mixology Lounge',
+    clubTitleUpgrade: 'SUPERNOVA LASER DISCO',
+    badgeEmoji: '🍸',
+    targetScore: 410,
+    targetItems: 23,
+    hint: 'Upgrade to a Neon Quartz Mixology Bar ($1,100) & Supernova Mirror Disco Rig ($1,550)!',
+    rewardCash: 2200,
+    rewardGems: 5,
+    rewardXp: 500,
+  },
+  {
+    stage: 5,
+    title: 'Stage 5: Supernova Laser Arena',
+    clubTitleUpgrade: 'MEGA VIP DISCO PALACE',
+    badgeEmoji: '👑',
+    targetScore: 560,
+    targetItems: 27,
+    hint: 'Install VIP Supernova Stage Grids ($750), Starlight Sanctuaries ($1,850) & Hologram DJ Console ($2,400)!',
+    rewardCash: 3800,
+    rewardGems: 8,
+    rewardXp: 750,
+  },
+  {
+    stage: 6,
+    title: 'Stage 6: Mega VIP Disco Palace',
+    clubTitleUpgrade: 'ULTIMATE NEON EMPIRE',
+    badgeEmoji: '🏆',
+    targetScore: 760,
+    targetItems: 32,
+    hint: 'Unlock Floor 2 & Floor 3 Sky Lounges and pack your multi-floor disco empire with 24K Gold bars!',
+    rewardCash: 6500,
+    rewardGems: 12,
+    rewardXp: 1100,
+  },
+];
+
 export default function App() {
-  // Core Economy & Progression
-  const [clubName, setClubName] = useState<string>('CLUB NEON');
-  const [level, setLevel] = useState<number>(12);
-  const [xp, setXp] = useState<number>(1140);
-  const [cash, setCash] = useState<number>(14850);
-  const [gems, setGems] = useState<number>(24);
-  const [energy, setEnergy] = useState<number>(7);
+  // Core Economy & Progression — Starts at Level 1 as a Humble Starter Disco!
+  const [clubName, setClubName] = useState<string>('STARTER DISCO');
+  const [level, setLevel] = useState<number>(1);
+  const [xp, setXp] = useState<number>(0);
+  const [cash, setCash] = useState<number>(650);
+  const [gems, setGems] = useState<number>(5);
+  const [energy, setEnergy] = useState<number>(10);
+  const [claimedDiscoStage, setClaimedDiscoStage] = useState<number>(0);
   const maxEnergy = 12;
   const cashRef = useRef<number>(cash);
   cashRef.current = cash;
@@ -733,16 +822,16 @@ export default function App() {
   const [activeFloor, setActiveFloor] = useState<FloorLevel>(1);
   const [unlockedFloors, setUnlockedFloors] = useState<FloorLevel>(1);
 
-  // Placed Furniture & Drinks + Live Drink Mix Prep Timer & Servings Count
-  const [placedItems, setPlacedItems] = useState<PlacedItem[]>(INITIAL_PLACED_ITEMS);
-  const [activeDrinkId, setActiveDrinkId] = useState<string>('drink_electric_mule');
-  const [drinkPrepRemainingSec, setDrinkPrepRemainingSec] = useState<number>(3);
-  const [drinkServingsRemaining, setDrinkServingsRemaining] = useState<number>(48);
+  // Placed Furniture & Drinks + Live Drink Mix Prep Timer & Servings Count (Starts with Level 1 Starter Disco layout!)
+  const [placedItems, setPlacedItems] = useState<PlacedItem[]>(LEVEL_1_DIVE_BAR_ITEMS);
+  const [activeDrinkId, setActiveDrinkId] = useState<string>('drink_draft_beer');
+  const [drinkPrepRemainingSec, setDrinkPrepRemainingSec] = useState<number>(2);
+  const [drinkServingsRemaining, setDrinkServingsRemaining] = useState<number>(30);
   const [spriteAssetVersion, setSpriteAssetVersion] = useState<number>(0);
   const [parkingState, setParkingState] = useState<ParkingUpgradeState>({
-    lotTier: 2,
-    bouncerCount: 2,
-    ropeTier: 2,
+    lotTier: 1,
+    bouncerCount: 1,
+    ropeTier: 1,
   });
 
   // Navigation Dock & Top-Left Modals
@@ -750,12 +839,16 @@ export default function App() {
   const [activeTopLeftModal, setActiveTopLeftModal] = useState<TopLeftModalId>(null);
   const [buildCategory, setBuildCategory] = useState<ItemCategory | 'ALL'>('ALL');
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogItem | null>(
-    CATALOG_ITEMS.find((i) => i.id === 'seat_bistro') || null
+    CATALOG_ITEMS.find((i) => i.id === 'dance_basic') || CATALOG_ITEMS[0]
   );
   const [buildRotation, setBuildRotation] = useState<0 | 90 | 180 | 270>(0);
   const [isRemoveMode, setIsRemoveMode] = useState<boolean>(false);
   const [isEditDecorMode, setIsEditDecorMode] = useState<boolean>(false);
   const [editingPlacedItemUid, setEditingPlacedItemUid] = useState<string | null>(null);
+  const [newlyPlacedItemHighlight, setNewlyPlacedItemHighlight] = useState<{
+    uid: string;
+    placedAtMs: number;
+  } | null>(null);
 
   // Sprite & Crowd Mood Inspection State (Tap any sprite or open the side Mood Panel)
   const [selectedSpriteMood, setSelectedSpriteMood] = useState<SpriteMoodInfo | null>(null);
@@ -843,43 +936,10 @@ export default function App() {
   ]);
 
   // VIP Booth Bottle Service State (Premium Drink Trays with Sparklers, Spending Multipliers & Hype Boost)
-  const [selectedBottleTrayId, setSelectedBottleTrayId] = useState<string>('tray_neon_magnum');
+  const [selectedBottleTrayId, setSelectedBottleTrayId] = useState<string>('tray_crystal_rose');
   const [activeBottleServices, setActiveBottleServices] = useState<
     Record<string, ActiveBoothBottleService>
-  >(() => ({
-    init_booth_bottom: {
-      boothUid: 'init_booth_bottom',
-      floor: 1,
-      trayId: 'tray_neon_magnum',
-      trayName: 'Neon Blue Magnum & Shots Tray',
-      trayColor: '#22d3ee',
-      sparklerColor: '#38bdf8',
-      price: 850,
-      hypeBoost: 68,
-      vibeBoost: 45,
-      spendingMultiplier: 2.8,
-      status: 'ORDERED_WAITING',
-      timer: 24,
-      maxTimer: 24,
-      orderedByGuestName: 'Lady Supernova ★ VIP',
-    },
-    init_couch_left1: {
-      boothUid: 'init_couch_left1',
-      floor: 1,
-      trayId: 'tray_24k_supernova',
-      trayName: '24K Gold Supernova Parade Tray',
-      trayColor: '#facc15',
-      sparklerColor: '#fde047',
-      price: 1480,
-      hypeBoost: 120,
-      vibeBoost: 80,
-      spendingMultiplier: 3.6,
-      status: 'ACTIVE_SPARKLERS',
-      timer: 26,
-      maxTimer: 30,
-      orderedByGuestName: 'DJ Daft Nova ★ VIP',
-    },
-  }));
+  >(() => ({}));
 
   // Avatar, Music Catalog & Custom 16-Step Beat Studio State
   const [selectedAvatarIdx, setSelectedAvatarIdx] = useState<number>(0);
@@ -903,9 +963,9 @@ export default function App() {
 
   // Club Status, Party & Happy Hour Rush State
   const [isClubOpenStatus, setIsClubOpenStatus] = useState<boolean>(true);
-  const [hypeSurgeBonus, setHypeSurgeBonus] = useState<number>(45);
+  const [hypeSurgeBonus, setHypeSurgeBonus] = useState<number>(10);
   const [happyHourSeconds, setHappyHourSeconds] = useState<number>(165);
-  const [partyCount, setPartyCount] = useState<number>(3);
+  const [partyCount, setPartyCount] = useState<number>(1);
 
   // Camera Zoom, Pan Reset & iPad/Phone Cool Eco Mode
   const [cameraZoom, setCameraZoom] = useState<number>(1.0);
@@ -914,12 +974,15 @@ export default function App() {
   const [vipBottleToast, setVipBottleToast] = useState<string | null>(null);
   const vipBottleToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Quests, Streak Multiplier, Interactive Skill Challenge & VIP Jackpot Chest
+  // Quests, Streak Multiplier, Interactive Skill Challenge, 60s VIP Rush Frenzy & VIP Jackpot Chest
   const [quests, setQuests] = useState<QuestTask[]>(INITIAL_QUESTS);
   const [activeChallengeQuest, setActiveChallengeQuest] = useState<QuestTask | null>(null);
-  const [questStreak, setQuestStreak] = useState<number>(2);
-  const [jackpotProgress, setJackpotProgress] = useState<number>(2);
-  const [questsCompletedTotal, setQuestsCompletedTotal] = useState<number>(2);
+  const [questStreak, setQuestStreak] = useState<number>(1);
+  const [jackpotProgress, setJackpotProgress] = useState<number>(1);
+  const [questsCompletedTotal, setQuestsCompletedTotal] = useState<number>(0);
+  const [vipRushSeconds, setVipRushSeconds] = useState<number>(0);
+  const [mysterySpinsAvailable, setMysterySpinsAvailable] = useState<number>(1);
+  const [lastMysteryPrizeText, setLastMysteryPrizeText] = useState<string | null>(null);
   const [questCategoryFilter, setQuestCategoryFilter] = useState<'ALL' | QuestCategoryTag>('ALL');
   const [isQuestTrackerMinimized, setIsQuestTrackerMinimized] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
@@ -928,9 +991,9 @@ export default function App() {
   const [hypeBlastEvent, setHypeBlastEvent] = useState<HypeBlastEvent | null>(null);
   const staffRevenueTickRef = useRef<number>(0);
 
-  // Staff Management System
+  // Staff Management System (Starts at Level 1 with 1 starter Bartender — hire more as your disco grows!)
   const [staffMembers, setStaffMembers] = useState<StaffMemberAgent[]>(
-    INITIAL_STAFF_MEMBERS.map((s) => ({ ...s, path: [] }))
+    [INITIAL_STAFF_MEMBERS[0]].map((s) => ({ ...s, path: [] }))
   );
   const [placementModeStaff, setPlacementModeStaff] = useState<StaffCatalogItem | null>(null);
   const [relocatingStaffUid, setRelocatingStaffUid] = useState<string | null>(null);
@@ -945,8 +1008,8 @@ export default function App() {
     emissiveMultiplier: 1.85,
   });
 
-  // 60fps Mutable Refs for Guests & Floating Cash Pops
-  const guestsRef = useRef<GuestAgent[]>(INITIAL_GUESTS.map((g) => ({ ...g })));
+  // 60fps Mutable Refs for Guests & Floating Cash Pops (Starts with 6 guests in your Level 1 starter disco; building more tiles & furniture increases maxGuests!)
+  const guestsRef = useRef<GuestAgent[]>(INITIAL_GUESTS.slice(0, 6).map((g) => ({ ...g })));
   const floatingTextsRef = useRef<FloatingText[]>([]);
 
   const xpToNextLevel = level * 150;
@@ -1064,6 +1127,7 @@ export default function App() {
         }
         return changed ? next : prev;
       });
+      setVipRushSeconds((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
   }, [activeDrink.prepTimeSec]);
@@ -1074,11 +1138,12 @@ export default function App() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   }, [happyHourSeconds]);
 
-  // Compute Club Hype, Vibe, Star Rating, and Multipliers
+  // Compute Club Hype, Vibe, Star Rating, Capacity, and Multipliers
   const clubMetrics = useMemo<ClubSimulationMetrics>(() => {
     let totalHype = 0;
     let totalVibe = 0;
     let tipBonus = 0;
+    let totalCapacityBonus = 0;
     let maxBarTier: 1 | 2 | 3 = 1;
     let lightingCount = 0;
     let danceTileCount = 0;
@@ -1090,6 +1155,7 @@ export default function App() {
       totalHype += cat.hypeBonus;
       totalVibe += cat.vibeBonus;
       tipBonus += cat.tipMultiplier;
+      totalCapacityBonus += cat.capacityBonus;
       if (cat.category === 'BAR_UNIT' && cat.tier > maxBarTier) {
         maxBarTier = cat.tier;
       }
@@ -1126,7 +1192,14 @@ export default function App() {
 
     const hypeSegments = Math.min(3, Math.max(1, Math.floor(totalHype / 90) + 1));
     const vibeSegments = Math.min(3, Math.max(1, Math.floor(totalVibe / 85) + 1));
-    const maxGuests = 12 + parkingState.lotTier * 3 + (unlockedFloors - 1) * 6;
+    // Every Dance Tile, Table, Booth, Speaker, Light, and Bar placed increases guest capacity!
+    const maxGuests = Math.min(
+      36,
+      4 +
+        Math.floor(totalCapacityBonus * 0.45) +
+        (parkingState.lotTier - 1) * 3 +
+        (unlockedFloors - 1) * 6
+    );
 
     return {
       totalHype,
@@ -1150,8 +1223,21 @@ export default function App() {
     hypeSurgeBonus,
   ]);
 
+  const totalDiscoScore = clubMetrics.totalHype + clubMetrics.totalVibe;
+  const activeDiscoStage =
+    DISCO_BUILD_STAGES[Math.min(claimedDiscoStage, DISCO_BUILD_STAGES.length - 1)];
+  const discoStageProgressPct = useMemo(() => {
+    const scoreRatio = Math.min(1, totalDiscoScore / activeDiscoStage.targetScore);
+    const itemsRatio = Math.min(1, placedItems.length / activeDiscoStage.targetItems);
+    return Math.min(100, Math.round((scoreRatio * 0.6 + itemsRatio * 0.4) * 100));
+  }, [totalDiscoScore, placedItems.length, activeDiscoStage]);
+  const isDiscoStageReadyToClaim =
+    claimedDiscoStage < DISCO_BUILD_STAGES.length &&
+    (totalDiscoScore >= activeDiscoStage.targetScore ||
+      placedItems.length >= activeDiscoStage.targetItems);
+
   const starRating = useMemo(() => {
-    const raw = 4.2 + Math.min(0.8, (clubMetrics.totalHype + clubMetrics.totalVibe) / 600);
+    const raw = 3.2 + Math.min(1.8, (clubMetrics.totalHype + clubMetrics.totalVibe) / 360);
     return raw.toFixed(1);
   }, [clubMetrics.totalHype, clubMetrics.totalVibe]);
 
@@ -1185,13 +1271,17 @@ export default function App() {
     [cameraZoom]
   );
 
-  // Dynamic Quest Progress Engine: every action advances the matching quest track in real time
+  // Dynamic Quest Progress Engine: every action advances the matching quest track in real time (2x progress during VIP Rush Frenzy!)
+  const vipRushRef = useRef<number>(0);
+  vipRushRef.current = vipRushSeconds;
+
   const advanceQuestProgress = useCallback((track: QuestTrackType, delta: number) => {
     if (delta <= 0) return;
+    const effectiveDelta = vipRushRef.current > 0 ? delta * 2 : delta;
     setQuests((prev) =>
       prev.map((q) => {
         if (q.track !== track || q.claimed) return q;
-        const nextVal = Math.min(q.targetValue, q.currentValue + delta);
+        const nextVal = Math.min(q.targetValue, q.currentValue + effectiveDelta);
         if (nextVal === q.currentValue) return q;
         return { ...q, currentValue: nextVal };
       })
@@ -1207,34 +1297,103 @@ export default function App() {
   const addXp = useCallback(
     (amount: number) => {
       setXp((prevXp) => {
-        const next = prevXp + amount;
-        const threshold = level * 150;
-        if (next >= threshold) {
-          setLevel((l) => l + 1);
-          setGems((g) => g + 2);
+        let next = prevXp + amount;
+        let curLvl = level;
+        let threshold = curLvl * 150;
+        let gainedLevels = 0;
+        while (next >= threshold) {
+          next -= threshold;
+          curLvl += 1;
+          gainedLevels += 1;
+          threshold = curLvl * 150;
+        }
+        if (gainedLevels > 0) {
+          const newLvl = level + gainedLevels;
+          setLevel(newLvl);
+          setGems((g) => g + gainedLevels * 2);
+          setCash((c) => c + gainedLevels * 250);
           setEnergy(maxEnergy);
           soundEngine.playUpgradeFanfare();
-          return next - threshold;
+          const newlyUnlocked = CATALOG_ITEMS.filter(
+            (it) => it.unlockLevel > level && it.unlockLevel <= newLvl
+          ).map((it) => it.name);
+          const unlockMsg =
+            newlyUnlocked.length > 0
+              ? ` · UNLOCKED: ${newlyUnlocked.slice(0, 2).join(', ').toUpperCase()}!`
+              : '!';
+          floatingTextsRef.current.push({
+            id: `lvlup_${performance.now()}`,
+            text: `🎉 LEVEL ${newLvl} REACHED! +$${gainedLevels * 250} & +${gainedLevels * 2}💎${unlockMsg}`,
+            floor: activeFloor,
+            gridX: 4.2,
+            gridY: 3.8,
+            color: '#fde047',
+            age: 0,
+          });
         }
         return next;
       });
     },
-    [level]
+    [level, activeFloor]
   );
+
+  const handleClaimDiscoStageBonus = () => {
+    if (!isDiscoStageReadyToClaim) return;
+    const stageObj = activeDiscoStage;
+    soundEngine.playCashRegister();
+    soundEngine.playUpgradeFanfare();
+    soundEngine.triggerBassDrop();
+    setCash((c) => c + stageObj.rewardCash);
+    setGems((g) => g + stageObj.rewardGems);
+    addXp(stageObj.rewardXp);
+    setClubName(stageObj.clubTitleUpgrade);
+    setClaimedDiscoStage((s) => s + 1);
+    floatingTextsRef.current.push({
+      id: `stage_bonus_${performance.now()}`,
+      text: `🏗️ ${stageObj.title.toUpperCase()} COMPLETE! +$${stageObj.rewardCash} · +${stageObj.rewardGems}💎 → ${stageObj.clubTitleUpgrade}!`,
+      floor: activeFloor,
+      gridX: 4.2,
+      gridY: 4.0,
+      color: '#4ade80',
+      age: 0,
+    });
+  };
+
+  // Automatically assign isWhale flag on guests whose cumulative cashSpent exceeds the current average spend of all guests in the club
+  const syncGuestsWhaleFlag = useCallback(() => {
+    const allGuests = guestsRef.current;
+    const clubGuests = allGuests.filter((g) => g.state !== 'QUEUEING');
+    if (clubGuests.length === 0) return;
+    let totalSpent = 0;
+    for (let i = 0; i < clubGuests.length; i++) {
+      totalSpent += clubGuests[i].cashSpent;
+    }
+    const avgSpend = totalSpent / clubGuests.length;
+    for (let i = 0; i < allGuests.length; i++) {
+      const g = allGuests[i];
+      g.isWhale = g.state !== 'QUEUEING' && g.cashSpent > avgSpend && g.cashSpent > 0;
+    }
+  }, []);
 
   const handleEarnRevenue = useCallback(
     (cashDelta: number, xpDelta: number) => {
+      syncGuestsWhaleFlag();
       if (cashDelta > 0) {
-        setCash((c) => c + cashDelta);
-        advanceQuestProgress('CLUB_REVENUE', cashDelta);
+        const rushBoostedCash = vipRushRef.current > 0 ? Math.round(cashDelta * 1.5) : cashDelta;
+        setCash((c) => c + rushBoostedCash);
+        advanceQuestProgress('CLUB_REVENUE', rushBoostedCash);
         staffRevenueTickRef.current += 1;
         if (staffRevenueTickRef.current % 3 === 0) {
           advanceQuestProgress('STAFF_TEAM', 1);
         }
+        const whaleCount = guestsRef.current.filter((g) => g.isWhale).length;
+        if (whaleCount > 0 && staffRevenueTickRef.current % 4 === 0) {
+          advanceQuestProgress('WHALE_HUNT', 1);
+        }
       }
       if (xpDelta > 0) addXp(xpDelta);
     },
-    [addXp, advanceQuestProgress]
+    [addXp, advanceQuestProgress, syncGuestsWhaleFlag]
   );
 
   // Sync soundEngine pause/mute state & subscribe to AudioContext unlock status
@@ -1295,12 +1454,13 @@ export default function App() {
     if (isMuted || isMusicPaused) return;
     const msPerStep = Math.max(70, Math.round((60 / selectedBpm / 4) * 1000));
     const id = setInterval(() => {
+      syncGuestsWhaleFlag();
       const insideGuests = guestsRef.current.filter((g) => g.state !== 'QUEUEING').length;
       soundEngine.updateCrowdAmbience(insideGuests, clubMetrics.maxGuests, clubMetrics.hypeSegments);
       soundEngine.playBeatStep(clubMetrics.hypeSegments);
     }, msPerStep);
     return () => clearInterval(id);
-  }, [isMuted, isMusicPaused, selectedBpm, clubMetrics.hypeSegments, clubMetrics.maxGuests]);
+  }, [isMuted, isMusicPaused, selectedBpm, clubMetrics.hypeSegments, clubMetrics.maxGuests, syncGuestsWhaleFlag]);
 
   const handleSelectSong = useCallback(
     (song: ClubSongTrack) => {
@@ -1749,11 +1909,24 @@ export default function App() {
     item: CatalogItem,
     targetCoord?: { x: number; y: number }
   ): boolean => {
+    if (level < item.unlockLevel) {
+      soundEngine.playError();
+      floatingTextsRef.current.push({
+        id: `lvl_err_${performance.now()}`,
+        text: `🔒 UNLOCKS AT LEVEL ${item.unlockLevel}! EARN XP BY BUILDING & SERVING!`,
+        floor: activeFloor,
+        gridX: targetCoord ? targetCoord.x : 4,
+        gridY: targetCoord ? targetCoord.y : 4,
+        color: '#fbbf24',
+        age: 0,
+      });
+      return false;
+    }
     if (cashRef.current < item.costCash) {
       soundEngine.playError();
       floatingTextsRef.current.push({
         id: `err_${performance.now()}`,
-        text: `NEED $${item.costCash} CASH!`,
+        text: `NEED $${item.costCash} CASH! EARN MORE FROM DANCERS & DRINKS!`,
         floor: activeFloor,
         gridX: targetCoord ? targetCoord.x : 4,
         gridY: targetCoord ? targetCoord.y : 4,
@@ -1884,12 +2057,13 @@ export default function App() {
       ...prev.filter((p) => !replacedUids.includes(p.uid)),
       newItem,
     ]);
+    setNewlyPlacedItemHighlight({ uid: newItem.uid, placedAtMs: performance.now() });
     addXp(35);
     advanceQuestProgress('DANCE_FLOOR', 1);
     soundEngine.playPlaceItem();
     floatingTextsRef.current.push({
       id: `place_${performance.now()}`,
-      text: `+${item.hypeBonus} HYPE / +${item.vibeBonus} VIBE (-$${item.costCash})`,
+      text: `✨ NEW ${item.name.toUpperCase()} AT (${chosenX},${chosenY})! +${item.hypeBonus}⚡`,
       floor: activeFloor,
       gridX: chosenX,
       gridY: chosenY,
@@ -1897,6 +2071,29 @@ export default function App() {
       age: 0,
     });
     return true;
+  };
+
+  const handleLongPressPlacedItem = (itemUid: string) => {
+    const target = placedItems.find((p) => p.uid === itemUid);
+    if (!target) return;
+    soundEngine.unlockAudio();
+    soundEngine.playPlaceItem();
+    setIsRemoveMode(false);
+    setPlacementModeStaff(null);
+    setRelocatingStaffUid(null);
+    setIsEditDecorMode(true);
+    setEditingPlacedItemUid(target.uid);
+    setBuildRotation(target.rotation);
+    const cat = getCatalogItem(target.catalogId);
+    floatingTextsRef.current.push({
+      id: `longpress_edit_${performance.now()}`,
+      text: `✥ EDIT MODE: ${cat?.name.toUpperCase() || 'DECORATION'} — TAP ANY TILE TO MOVE!`,
+      floor: target.floor,
+      gridX: target.gridX,
+      gridY: target.gridY,
+      color: '#22d3ee',
+      age: 0,
+    });
   };
 
   const handleGridClick = (coord: { x: number; y: number }) => {
@@ -2113,6 +2310,26 @@ export default function App() {
       });
     if (clickedVipBooth) {
       serveVipBoothBottleService(clickedVipBooth.uid);
+      return;
+    }
+
+    // In normal play mode, tapping the DJ Booth or Dance Floor directly triggers a Bass Drop & dance floor ripple shockwave!
+    const clickedDjOrDanceFloor = [...placedItems]
+      .reverse()
+      .find((p) => {
+        if (p.floor !== activeFloor) return false;
+        const cat = getCatalogItem(p.catalogId);
+        if (!cat || (cat.category !== 'DJ_BOOTH' && cat.category !== 'DANCE_TILE')) return false;
+        const fp = getRotatedFootprint(cat, p.rotation);
+        return (
+          coord.x >= p.gridX &&
+          coord.x < p.gridX + fp.width &&
+          coord.y >= p.gridY &&
+          coord.y < p.gridY + fp.depth
+        );
+      });
+    if (clickedDjOrDanceFloor) {
+      handleTriggerBassDrop();
     }
   };
 
@@ -2189,6 +2406,7 @@ export default function App() {
       bg.chatText = `Popping ${tray.name} with sparklers in VIP!! 🍾✨`;
       bg.chatTimer = 8.0;
     }
+    syncGuestsWhaleFlag();
 
     floatingTextsRef.current.push({
       id: `bottle_srv_${performance.now()}_${Math.random()}`,
@@ -2489,15 +2707,22 @@ export default function App() {
     const q = quests.find((item) => item.id === questId);
     if (!q || q.currentValue < q.targetValue || q.claimed) return;
 
-    const finalCash = Math.round(q.rewardCash * questStreakMultiplier);
-    const finalGems = q.rewardGems + (questStreak >= 4 ? 1 : 0);
+    const rushBonusMult = vipRushSeconds > 0 ? 1.5 : 1.0;
+    const finalCash = Math.round(q.rewardCash * questStreakMultiplier * rushBonusMult);
+    const finalGems = q.rewardGems + (questStreak >= 4 ? 1 : 0) + (vipRushSeconds > 0 ? 1 : 0);
     const finalXp = Math.round(q.rewardXp * questStreakMultiplier);
 
     setCash((c) => c + finalCash);
     setGems((g) => g + finalGems);
     addXp(finalXp);
     setQuestStreak((s) => Math.min(5, s + 1));
-    setQuestsCompletedTotal((t) => t + 1);
+    setQuestsCompletedTotal((t) => {
+      const nextTotal = t + 1;
+      if (nextTotal % 2 === 0) {
+        setMysterySpinsAvailable((m) => m + 1);
+      }
+      return nextTotal;
+    });
     setJackpotProgress((p) => Math.min(3, p + 1));
     setHypeSurgeBonus((h) => Math.min(250, h + 35));
 
@@ -2516,6 +2741,70 @@ export default function App() {
       gridX: 4.2,
       gridY: 4.0,
       color: '#facc15',
+      age: 0,
+    });
+  };
+
+  const handleStartVipRushFrenzy = () => {
+    if (vipRushSeconds > 0) return;
+    soundEngine.unlockAudio();
+    soundEngine.triggerBassDrop();
+    soundEngine.playUpgradeFanfare();
+    setVipRushSeconds(60);
+    setHypeSurgeBonus((h) => Math.min(260, h + 85));
+    triggerHypeBlast(85, clubMetrics.totalHype + 85, clubMetrics.tipBonus + 0.35);
+    floatingTextsRef.current.push({
+      id: `vip_rush_${performance.now()}`,
+      text: `⚡ 60s VIP RUSH FRENZY ACTIVATED! 2x QUEST PROGRESS & 1.5x CASH PAYOUTS!`,
+      floor: activeFloor,
+      gridX: 4.5,
+      gridY: 4.2,
+      color: '#38bdf8',
+      age: 0,
+    });
+  };
+
+  const handleSpinMysteryLootDrop = () => {
+    if (mysterySpinsAvailable <= 0) {
+      soundEngine.playError();
+      return;
+    }
+    setMysterySpinsAvailable((m) => Math.max(0, m - 1));
+    soundEngine.playCashRegister();
+    soundEngine.playUpgradeFanfare();
+
+    const prizes = [
+      { label: '🐋 Golden Whale Tip Drop: +$1,850 Cash & +4💎', cash: 1850, gems: 4, xp: 160 },
+      { label: '🍾 Free 24K Supernova Sparkler Parade & +$1,400 Cash!', cash: 1400, gems: 3, xp: 200, parade: true },
+      { label: '⚡ Instant 60s VIP Rush Overdrive + $1,250 Cash!', cash: 1250, gems: 3, xp: 150, rush: true },
+      { label: '💎 Diamond High-Roller Jackpot: +7💎 Gems & +$1,500 Cash!', cash: 1500, gems: 7, xp: 180 },
+    ];
+    const roll = prizes[Math.floor(Math.random() * prizes.length)];
+    setCash((c) => c + roll.cash);
+    setGems((g) => g + roll.gems);
+    addXp(roll.xp);
+    setLastMysteryPrizeText(roll.label);
+
+    if (roll.rush) {
+      setVipRushSeconds((s) => Math.max(s, 60));
+    }
+    if (roll.parade) {
+      const goldTray = VIP_BOTTLE_SERVICE_TRAYS[2] || selectedBottleTray;
+      const floorVipBooths = placedItems.filter(
+        (p) => p.floor === activeFloor && isVipBoothCatalogId(p.catalogId)
+      );
+      floorVipBooths.forEach((b) =>
+        serveVipBoothBottleService(b.uid, goldTray, 'Mystery Neon Crate')
+      );
+    }
+
+    floatingTextsRef.current.push({
+      id: `mystery_loot_${performance.now()}`,
+      text: `🎰 MYSTERY LOOT: ${roll.label.toUpperCase()}`,
+      floor: activeFloor,
+      gridX: 4.6,
+      gridY: 3.6,
+      color: '#fde047',
       age: 0,
     });
   };
@@ -2582,7 +2871,11 @@ export default function App() {
     );
 
     // Trigger real world simulation effects on the club floor based on the challenge track
-    if (quest.track === 'BOTTLE_SERVICE' || quest.track === 'MIXOLOGY_CRAFT') {
+    if (
+      quest.track === 'BOTTLE_SERVICE' ||
+      quest.track === 'MIXOLOGY_CRAFT' ||
+      quest.track === 'WHALE_HUNT'
+    ) {
       setDrinkServingsRemaining((s) => s + 36);
       const floorVipBooths = placedItems.filter(
         (p) => p.floor === activeFloor && isVipBoothCatalogId(p.catalogId)
@@ -2590,10 +2883,18 @@ export default function App() {
       if (floorVipBooths.length > 0) {
         serveVipBoothBottleService(floorVipBooths[0].uid, selectedBottleTray);
       }
-    } else if (quest.track === 'DJ_HYPE_DROP' || quest.track === 'PARTY_FEVER') {
+      advanceQuestProgress('WHALE_HUNT', 1);
+    } else if (
+      quest.track === 'DJ_HYPE_DROP' ||
+      quest.track === 'PARTY_FEVER' ||
+      quest.track === 'LASER_OVERDRIVE'
+    ) {
       soundEngine.triggerBassDrop();
       triggerHypeBlast(75, clubMetrics.totalHype + 75, clubMetrics.tipBonus + 0.25);
+      advanceQuestProgress('LASER_OVERDRIVE', 1);
     } else {
+      advanceQuestProgress('CELEB_PAPARAZZI', 1);
+      advanceQuestProgress('GOSSIP_VIRAL', 1);
       // Synchronize dancers on the active floor into an ecstatic Group Dance wave
       const floorDancers = guestsRef.current.filter(
         (g) => g.floor === activeFloor && g.state !== 'QUEUEING'
@@ -2681,6 +2982,8 @@ export default function App() {
         relocatingStaffUid={relocatingStaffUid}
         editingPlacedItemUid={editingPlacedItemUid}
         isEditDecorMode={isEditDecorMode}
+        newlyPlacedItemHighlight={newlyPlacedItemHighlight}
+        onLongPressPlacedItem={handleLongPressPlacedItem}
         buildRotation={buildRotation}
         activeDrink={activeDrink}
         activeGenre={currentTrack.genre}
@@ -2749,29 +3052,66 @@ export default function App() {
           <div className="pointer-events-auto w-full flex items-center justify-between gap-1 sm:gap-2 px-2 py-1 rounded-xl bg-[#110b20]/88 backdrop-blur-md border border-white/15 shadow-[0_4px_16px_rgba(0,0,0,0.6)] overflow-x-auto no-scrollbar">
             {/* LEFT CLUSTER: Level + Energy + DJ + Economy Strip */}
             <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-              {/* Compact Level Pill */}
-              <div
-                className="relative px-1.5 h-7 rounded-lg bg-gradient-to-b from-[#a855f7] to-[#581c87] border border-white/20 flex items-center gap-1 shrink-0"
-                title={`Level ${level} (${xp}/${xpToNextLevel} XP)`}
-              >
-                <span className="text-[8px] font-black uppercase text-purple-200">LVL</span>
-                <span className="text-xs font-black text-white leading-none">{level}</span>
-              </div>
+              {/* Visible Level Badge + XP & Energy Progress Gauges */}
+              <div className="flex items-center gap-1.5 pr-1.5 rounded-xl bg-[#160e2c]/95 border border-purple-400/35 shadow-[0_0_12px_rgba(168,85,247,0.25)] shrink-0">
+                <div
+                  className="relative px-2 h-8 rounded-lg bg-gradient-to-b from-[#c084fc] via-[#9333ea] to-[#581c87] border border-white/30 shadow-[0_0_10px_rgba(168,85,247,0.45)] flex flex-col items-center justify-center shrink-0"
+                  title={`Level ${level} (${xp}/${xpToNextLevel} XP)`}
+                >
+                  <span className="text-[7px] font-black uppercase tracking-wider text-purple-100 leading-none">
+                    LVL
+                  </span>
+                  <span className="text-xs font-black text-white leading-tight">{level}</span>
+                </div>
 
-              {/* Compact Energy Refill Pill */}
-              <button
-                onClick={() => {
-                  soundEngine.playClick();
-                  setEnergy(maxEnergy);
-                }}
-                title="Tap to Refill DJ Energy"
-                className="px-1.5 h-7 rounded-lg bg-[#1a1130] hover:bg-[#251845] border border-amber-400/40 flex items-center gap-1 shrink-0 cursor-pointer"
-              >
-                <Zap className="w-3 h-3 text-yellow-300 fill-yellow-300 shrink-0" />
-                <span className="text-[10px] font-mono font-black text-yellow-200">
-                  {energy}/{maxEnergy}
-                </span>
-              </button>
+                {/* XP & Energy Dual Stacked Gauges */}
+                <div className="flex flex-col justify-center gap-1 py-0.5 min-w-[88px] sm:min-w-[106px]">
+                  {/* XP Level Progress Gauge */}
+                  <div
+                    className="relative w-full h-3.5 rounded-full bg-[#090514] border border-cyan-400/40 overflow-hidden shadow-inner"
+                    title={`XP Progress: ${xp} / ${xpToNextLevel}`}
+                  >
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] transition-all duration-300"
+                      style={{
+                        width: `${Math.max(8, Math.min(100, Math.round((xp / Math.max(1, xpToNextLevel)) * 100)))}%`,
+                      }}
+                    />
+                    <div className="absolute inset-0 px-1.5 flex items-center justify-between text-[8px] font-mono font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
+                      <span className="text-cyan-200">XP</span>
+                      <span>
+                        {xp}/{xpToNextLevel}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Energy Progress Gauge (Tap to Refill) */}
+                  <button
+                    onClick={() => {
+                      soundEngine.playClick();
+                      setEnergy(maxEnergy);
+                    }}
+                    title="Tap to Refill DJ Energy"
+                    className="relative w-full h-3.5 rounded-full bg-[#090514] border border-amber-400/45 overflow-hidden cursor-pointer group"
+                  >
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-lime-300 shadow-[0_0_10px_rgba(250,204,21,0.8)] transition-all duration-300"
+                      style={{
+                        width: `${Math.max(8, Math.min(100, Math.round((energy / Math.max(1, maxEnergy)) * 100)))}%`,
+                      }}
+                    />
+                    <div className="absolute inset-0 px-1.5 flex items-center justify-between text-[8px] font-mono font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
+                      <span className="flex items-center gap-0.5 text-yellow-200">
+                        <Zap className="w-2.5 h-2.5 text-yellow-300 fill-yellow-300" />
+                        EN
+                      </span>
+                      <span>
+                        {energy}/{maxEnergy}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
 
               {/* Compact DJ Avatar Button */}
               <button
@@ -3032,6 +3372,16 @@ export default function App() {
                 );
               })}
 
+              {/* One-Click Bass Drop Ripple Button */}
+              <button
+                onClick={handleTriggerBassDrop}
+                title="Trigger Bass Drop & Dance Floor Ripple Shockwave"
+                className="px-2 h-7 rounded-lg bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-500 hover:brightness-110 border border-white/25 text-slate-950 font-black text-[9px] sm:text-[10px] uppercase flex items-center gap-1 cursor-pointer shrink-0 shadow-[0_0_10px_rgba(34,211,238,0.45)]"
+              >
+                <span>🔊</span>
+                <span>DROP</span>
+              </button>
+
               {/* Throw Party Button */}
               <button
                 onClick={handleThrowParty}
@@ -3039,6 +3389,37 @@ export default function App() {
               >
                 <Sparkles className="w-3 h-3 text-yellow-300 fill-yellow-300 shrink-0" />
                 <span>PARTY</span>
+              </button>
+
+              {/* Build Disco Upgrade Button (Shows Stage Progress or Claimable Bonus!) */}
+              <button
+                onClick={() => {
+                  soundEngine.playClick();
+                  if (isDiscoStageReadyToClaim) {
+                    handleClaimDiscoStageBonus();
+                  } else {
+                    setActiveDockTab((tab) => (tab === 'DECORATE' ? null : 'DECORATE'));
+                  }
+                }}
+                title={
+                  isDiscoStageReadyToClaim
+                    ? `Claim ${activeDiscoStage.title} Bonus (+$${activeDiscoStage.rewardCash})`
+                    : `${activeDiscoStage.title}: ${activeDiscoStage.hint}`
+                }
+                className={`px-2 h-7 rounded-lg border flex items-center gap-1 cursor-pointer shrink-0 transition-all ${
+                  isDiscoStageReadyToClaim
+                    ? 'bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 border-white font-black animate-pulse'
+                    : activeDockTab === 'DECORATE'
+                    ? 'bg-cyan-400 text-slate-950 border-white font-black'
+                    : 'bg-[#18102e] text-emerald-300 border-emerald-400/60 hover:border-cyan-300 font-black'
+                }`}
+              >
+                <span className="text-[10px]">{isDiscoStageReadyToClaim ? '🎁' : '🔨'}</span>
+                <span className="text-[9px] sm:text-[10px] uppercase">
+                  {isDiscoStageReadyToClaim
+                    ? `STAGE +$${activeDiscoStage.rewardCash}`
+                    : `BUILD ${discoStageProgressPct}%`}
+                </span>
               </button>
 
               {/* Quests Toggle Button */}
@@ -3757,6 +4138,7 @@ export default function App() {
                               setCash((c) => c + 45);
                               addXp(12);
                               advanceQuestProgress('CLUB_REVENUE', 45);
+                              advanceQuestProgress('GOSSIP_VIRAL', 1);
                               setGossipFeed((prev) =>
                                 prev.map((item) =>
                                   item.id === post.id
@@ -3808,59 +4190,114 @@ export default function App() {
             )}
           </div>
 
-          {/* ACTIVE PLACEMENT / RELOCATION / DECORATION EDIT BANNER */}
-          {(placementModeStaff || relocatingStaffUid || isEditDecorMode || editingPlacedItemUid) && (
-            <div className="fixed sm:static inset-x-2.5 bottom-[74px] z-30 mx-auto sm:mt-auto sm:mb-3 pointer-events-auto w-auto sm:w-[500px] bg-[#160d2e]/96 border-2 border-cyan-300 rounded-2xl px-3.5 py-2 shadow-2xl text-white flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-300 font-bold">
-                  {placementModeStaff
-                    ? `Hiring ${placementModeStaff.name} ($${placementModeStaff.hireCostCash})`
-                    : relocatingStaffUid
-                    ? 'Relocating Staff Station'
-                    : editingPlacedItemUid
-                    ? `Moving ${
-                        getCatalogItem(
-                          placedItems.find((p) => p.uid === editingPlacedItemUid)?.catalogId || ''
-                        )?.name || 'Decoration'
-                      } ($0 Free Move)`
-                    : 'Edit Decoration Position Mode'}
+          {/* NEWLY BOUGHT DECORATION SPOTLIGHT HUD NOTIFICATION PILL */}
+          {newlyPlacedItemHighlight &&
+            !editingPlacedItemUid &&
+            !isEditDecorMode &&
+            (() => {
+              const newPlaced = placedItems.find((p) => p.uid === newlyPlacedItemHighlight.uid);
+              const newCat = newPlaced ? getCatalogItem(newPlaced.catalogId) : null;
+              if (!newPlaced || !newCat) return null;
+              return (
+                <div className="fixed sm:static inset-x-2.5 bottom-[74px] z-30 mx-auto sm:mt-auto sm:mb-2 pointer-events-auto w-auto sm:w-[520px] bg-gradient-to-r from-[#07261c]/96 via-[#0c2d2a]/96 to-[#131b38]/96 border-2 border-emerald-400 rounded-2xl px-3.5 py-2 shadow-[0_0_20px_rgba(74,222,128,0.45)] text-white flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-400 text-slate-950 font-black text-[9px] uppercase">
+                        ✨ NEW PURCHASE PLACED
+                      </span>
+                      <span className="text-[10px] font-mono text-emerald-300 font-bold">
+                        Floor {newPlaced.floor} · Tile ({newPlaced.gridX}, {newPlaced.gridY})
+                      </span>
+                    </div>
+                    <div className="text-xs sm:text-sm font-black text-white truncate mt-0.5">
+                      {newCat.name} is glowing green on the floor! Long-press it or tap Move to reposition.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setActiveDockTab(null);
+                        setIsEditDecorMode(true);
+                        setEditingPlacedItemUid(newPlaced.uid);
+                        setBuildRotation(newPlaced.rotation);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-black cursor-pointer shadow"
+                    >
+                      ✥ Move / Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        soundEngine.playClick();
+                        setNewlyPlacedItemHighlight(null);
+                      }}
+                      className="px-2 py-1 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-400/50 text-emerald-200 text-xs font-bold cursor-pointer"
+                    >
+                      Got It
+                    </button>
+                  </div>
                 </div>
-                <div className="text-xs sm:text-sm font-extrabold text-white">
+              );
+            })()}
+
+          {/* ACTIVE PLACEMENT / RELOCATION / DECORATION EDIT MODE BANNER */}
+          {(placementModeStaff || relocatingStaffUid || isEditDecorMode || editingPlacedItemUid) && (
+            <div className="fixed sm:static inset-x-2.5 bottom-[74px] z-50 mx-auto sm:mt-auto sm:mb-3 pointer-events-auto w-auto sm:w-[560px] bg-gradient-to-r from-[#120b29]/98 via-[#19103b]/98 to-[#0e2238]/98 border-2 border-cyan-300 ring-2 ring-amber-400/60 rounded-2xl px-3.5 py-2.5 shadow-[0_0_28px_rgba(34,211,238,0.5)] text-white flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-400 to-cyan-300 text-slate-950 font-black text-[10px] uppercase tracking-wider animate-pulse">
+                    {placementModeStaff || relocatingStaffUid ? '🧑‍🍳 STAFF STATION MODE' : '✥ EDIT MODE ACTIVE'}
+                  </span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-300 font-bold truncate">
+                    {placementModeStaff
+                      ? `Hiring ${placementModeStaff.name} ($${placementModeStaff.hireCostCash})`
+                      : relocatingStaffUid
+                      ? 'Relocating Staff Station'
+                      : editingPlacedItemUid
+                      ? (() => {
+                          const editIt = placedItems.find((p) => p.uid === editingPlacedItemUid);
+                          const editCat = editIt ? getCatalogItem(editIt.catalogId) : null;
+                          return `${editCat?.name || 'Decoration'} · Tile (${editIt?.gridX ?? 0},${editIt?.gridY ?? 0}) · $0 Free Move`;
+                        })()
+                      : 'Floor Edit Mode (Long-Press or Tap Any Decoration)'}
+                  </span>
+                </div>
+                <div className="text-xs sm:text-sm font-extrabold text-white mt-0.5">
                   {placementModeStaff || relocatingStaffUid
                     ? `Tap any isometric tile on Floor ${activeFloor} to station staff!`
                     : editingPlacedItemUid
-                    ? 'Tap any green tile on the floor or use arrows to reposition!'
-                    : 'Tap any placed decoration on the floor to move or rotate it!'}
+                    ? 'Tap any open floor tile to move it, or use arrows & Rotate below!'
+                    : 'Tap or long-press any decoration on the floor to pick it up and move it!'}
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1 shrink-0 flex-wrap">
                 {editingPlacedItemUid && (
                   <>
                     <button
                       onClick={() => nudgeEditingDecoration(-1, 0)}
                       title="Nudge Back-Left (-X)"
-                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 border border-cyan-400/40 text-xs font-black cursor-pointer"
                     >
                       ↖
                     </button>
                     <button
                       onClick={() => nudgeEditingDecoration(1, 0)}
                       title="Nudge Front-Right (+X)"
-                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 border border-cyan-400/40 text-xs font-black cursor-pointer"
                     >
                       ↘
                     </button>
                     <button
                       onClick={() => nudgeEditingDecoration(0, -1)}
                       title="Nudge Back-Right (-Y)"
-                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 border border-cyan-400/40 text-xs font-black cursor-pointer"
                     >
                       ↗
                     </button>
                     <button
                       onClick={() => nudgeEditingDecoration(0, 1)}
                       title="Nudge Front-Left (+Y)"
-                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 text-xs font-black cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-purple-800 hover:bg-purple-700 border border-cyan-400/40 text-xs font-black cursor-pointer"
                     >
                       ↙
                     </button>
@@ -3876,9 +4313,36 @@ export default function App() {
                         soundEngine.playClick();
                       }}
                       title="Rotate 90°"
-                      className="px-2 py-1 rounded-lg bg-cyan-500 text-slate-950 text-xs font-black cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-black cursor-pointer"
                     >
                       ↻ {buildRotation}°
+                    </button>
+                    <button
+                      onClick={() => {
+                        const target = placedItems.find((p) => p.uid === editingPlacedItemUid);
+                        if (!target) return;
+                        const cat = getCatalogItem(target.catalogId);
+                        const refund = cat ? Math.floor(cat.costCash * 0.5) : 50;
+                        setPlacedItems((prev) => prev.filter((i) => i.uid !== target.uid));
+                        cashRef.current += refund;
+                        setCash((c) => c + refund);
+                        soundEngine.playCashRegister();
+                        floatingTextsRef.current.push({
+                          id: `refund_${performance.now()}`,
+                          text: `+$${refund} REFUND`,
+                          floor: activeFloor,
+                          gridX: target.gridX,
+                          gridY: target.gridY,
+                          color: '#fbbf24',
+                          age: 0,
+                        });
+                        setEditingPlacedItemUid(null);
+                        setIsEditDecorMode(false);
+                      }}
+                      title="Sell Decoration (50% Refund)"
+                      className="px-2 py-1 rounded-lg bg-rose-900/90 hover:bg-rose-800 border border-rose-400/50 text-rose-200 text-xs font-black cursor-pointer"
+                    >
+                      🗑️ Sell
                     </button>
                   </>
                 )}
@@ -3890,9 +4354,9 @@ export default function App() {
                     setIsEditDecorMode(false);
                     soundEngine.playClick();
                   }}
-                  className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold cursor-pointer shrink-0"
+                  className="px-3 py-1 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-black cursor-pointer shrink-0 shadow"
                 >
-                  Done
+                  ✓ Done
                 </button>
               </div>
             </div>
@@ -3942,9 +4406,44 @@ export default function App() {
                 </div>
               )}
 
-              {/* 1. DECORATE TAB (Furniture & Equipment Placement + Edit Decoration Position Mode) */}
+              {/* 1. DECORATE TAB (Furniture & Equipment Placement + Disco Builder Roadmap + Edit Position Mode) */}
               {activeDockTab === 'DECORATE' && (
                 <div>
+                  {/* DISCO BUILDER PROGRESSION ROADMAP BANNER */}
+                  <div className="mb-2.5 p-2.5 rounded-xl bg-gradient-to-r from-[#1c1136] via-[#231444] to-[#16203d] border-2 border-cyan-400/50 space-y-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg shrink-0">{activeDiscoStage.badgeEmoji}</span>
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-mono uppercase text-cyan-300 font-black">
+                            {activeDiscoStage.title} · Score {totalDiscoScore}/{activeDiscoStage.targetScore} · Gear {placedItems.length}/{activeDiscoStage.targetItems}
+                          </div>
+                          <div className="text-[11px] font-bold text-purple-100 leading-snug">
+                            {activeDiscoStage.hint}
+                          </div>
+                        </div>
+                      </div>
+                      {isDiscoStageReadyToClaim ? (
+                        <button
+                          onClick={handleClaimDiscoStageBonus}
+                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 hover:brightness-110 border-2 border-[#111116] text-slate-950 font-black text-[11px] uppercase cursor-pointer shrink-0 shadow-[0_3px_0_#111116]"
+                        >
+                          🎁 Claim +${activeDiscoStage.rewardCash} &amp; +{activeDiscoStage.rewardGems}💎
+                        </button>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-lg bg-purple-950/90 border border-purple-500/40 text-[10px] font-mono font-black text-amber-300 shrink-0">
+                          {discoStageProgressPct}% → +${activeDiscoStage.rewardCash}
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-[#0c0718] border border-purple-500/30 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-fuchsia-400 transition-all duration-300"
+                        style={{ width: `${discoStageProgressPct}%` }}
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2.5">
                     <div className="flex items-center gap-1 overflow-x-auto pb-1">
                       {(
@@ -4057,7 +4556,8 @@ export default function App() {
                         !isRemoveMode &&
                         !isEditDecorMode &&
                         !editingPlacedItemUid;
-                      const canAfford = cash >= item.costCash;
+                      const isUnlocked = level >= item.unlockLevel;
+                      const canAfford = cash >= item.costCash && isUnlocked;
                       return (
                         <div
                           key={item.id}
@@ -4068,23 +4568,27 @@ export default function App() {
                             setSelectedCatalogItem(item);
                             soundEngine.playClick();
                           }}
-                          className={`w-38 shrink-0 p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all ${
+                          className={`w-42 shrink-0 p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all ${
                             isSelected
                               ? 'bg-purple-900/90 border-cyan-300'
+                              : !isUnlocked
+                              ? 'bg-[#150f29]/80 border-[#111116] opacity-75'
                               : 'bg-[#1d1436]/90 border-[#111116] hover:border-purple-500'
                           }`}
                         >
                           <div className="flex items-center justify-between text-[10px] font-mono">
-                            <span className="text-cyan-300">
-                              T{item.tier} · {item.width}x{item.depth}
+                            <span className={isUnlocked ? 'text-cyan-300 font-bold' : 'text-amber-300 font-bold'}>
+                              {isUnlocked ? `LVL ${item.unlockLevel} · ${item.width}x${item.depth}` : `🔒 LVL ${item.unlockLevel}`}
                             </span>
-                            <span className="text-amber-300">+{item.hypeBonus}⚡</span>
+                            <span className="text-amber-300">
+                              +{item.hypeBonus}⚡ +{item.capacityBonus}👥
+                            </span>
                           </div>
                           <div className="text-xs font-black truncate mt-0.5 text-white">
                             {item.name}
                           </div>
                           <div className="flex items-center justify-between gap-1 mt-2 pt-1.5 border-t border-purple-500/30 text-xs font-mono font-bold">
-                            <span className={canAfford ? 'text-emerald-300' : 'text-rose-400'}>
+                            <span className={cash >= item.costCash ? 'text-emerald-300' : 'text-rose-400'}>
                               ${item.costCash}
                             </span>
                             <button
@@ -4097,12 +4601,14 @@ export default function App() {
                                 purchaseAndPlaceCatalogItem(item);
                               }}
                               className={`px-2 py-0.5 rounded border border-[#0D0D14] text-[10px] font-black cursor-pointer ${
-                                canAfford
+                                !isUnlocked
+                                  ? 'bg-purple-950 text-amber-300'
+                                  : canAfford
                                   ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
                                   : 'bg-rose-950 text-rose-300'
                               }`}
                             >
-                              Buy+Place
+                              {!isUnlocked ? `Lvl ${item.unlockLevel}` : 'Buy+Place'}
                             </button>
                           </div>
                         </div>
@@ -4651,16 +5157,68 @@ export default function App() {
                     </button>
                   </div>
 
+                  {/* Addicting Live Events Row: 60s VIP Rush Frenzy (2x Progress & 1.5x Cash) + Mystery Neon Prize Wheel */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="p-2 rounded-xl bg-[#170f2e] border-2 border-cyan-400/50 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-mono font-black uppercase text-cyan-300 flex items-center gap-1">
+                          <span>⚡ 60s VIP RUSH FRENZY</span>
+                          {vipRushSeconds > 0 && (
+                            <span className="px-1.5 py-0.2 rounded bg-cyan-400 text-slate-950 text-[9px] animate-pulse">
+                              {vipRushSeconds}s ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-purple-200 truncate">
+                          2x Quest Progress &amp; 1.5x Cash Rewards on all tasks!
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleStartVipRushFrenzy}
+                        disabled={vipRushSeconds > 0}
+                        className={`px-2.5 py-1.5 rounded-xl border border-[#111116] font-black text-[10px] uppercase shrink-0 cursor-pointer ${
+                          vipRushSeconds > 0
+                            ? 'bg-cyan-500/30 text-cyan-200 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-cyan-400 to-fuchsia-400 hover:brightness-110 text-slate-950 shadow'
+                        }`}
+                      >
+                        {vipRushSeconds > 0 ? `🔥 2x Rush (${vipRushSeconds}s)` : '⚡ Trigger 2x Rush'}
+                      </button>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-[#170f2e] border-2 border-fuchsia-400/50 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-mono font-black uppercase text-fuchsia-300">
+                          🎰 NEON MYSTERY LOOT ({mysterySpinsAvailable} SPIN{mysterySpinsAvailable === 1 ? '' : 'S'})
+                        </div>
+                        <div className="text-[10px] text-purple-200 truncate">
+                          {lastMysteryPrizeText || 'Earn 1 Free Spin every 2 quests claimed!'}
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleSpinMysteryLootDrop}
+                        disabled={mysterySpinsAvailable <= 0}
+                        className={`px-2.5 py-1.5 rounded-xl border border-[#111116] font-black text-[10px] uppercase shrink-0 cursor-pointer ${
+                          mysterySpinsAvailable > 0
+                            ? 'bg-gradient-to-r from-amber-400 via-pink-400 to-purple-500 hover:brightness-110 text-slate-950 shadow animate-pulse'
+                            : 'bg-purple-950/70 text-purple-400 cursor-not-allowed'
+                        }`}
+                      >
+                        {mysterySpinsAvailable > 0 ? '🎰 Spin Crate!' : 'Locked (0)'}
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Category Filter Pills */}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
                       {(
                         [
-                          { id: 'ALL', label: '★ All Tracks (8)' },
-                          { id: 'VIP RUSH', label: '🍾 VIP Rush' },
-                          { id: 'CROWD HYPE', label: '🔥 Crowd Hype' },
-                          { id: 'DJ STUDIO', label: '🔊 DJ Studio' },
-                          { id: 'TYCOON EMPIRE', label: '🪩 Tycoon Empire' },
+                          { id: 'ALL', label: `★ All Quests (${quests.length})` },
+                          { id: 'VIP RUSH', label: '🍾 VIP & Whales' },
+                          { id: 'CROWD HYPE', label: '🔥 Hype & Paparazzi' },
+                          { id: 'DJ STUDIO', label: '🔊 DJ Overdrive' },
+                          { id: 'TYCOON EMPIRE', label: '🏎️ Tycoon & Valet' },
                         ] as const
                       ).map((tab) => (
                         <button

@@ -7,7 +7,9 @@ export type InteractiveChallengeMode =
   | 'DJ_BEAT_DROP'
   | 'NEON_MIXOLOGY'
   | 'VELVET_ROPE_BOUNCER'
-  | 'NEON_DANCE_GRID';
+  | 'NEON_DANCE_GRID'
+  | 'WHALE_CHAMPAGNE_TOWER'
+  | 'CELEB_PAPARAZZI_BLITZ';
 
 interface InteractiveQuestChallengeModalProps {
   quest: QuestTask | null;
@@ -194,10 +196,16 @@ export function getChallengeModeForQuest(quest: QuestTask): InteractiveChallenge
   switch (quest.track) {
     case 'DJ_HYPE_DROP':
     case 'PARTY_FEVER':
+    case 'LASER_OVERDRIVE':
       return 'DJ_BEAT_DROP';
     case 'MIXOLOGY_CRAFT':
     case 'BOTTLE_SERVICE':
       return 'NEON_MIXOLOGY';
+    case 'WHALE_HUNT':
+      return 'WHALE_CHAMPAGNE_TOWER';
+    case 'CELEB_PAPARAZZI':
+    case 'GOSSIP_VIRAL':
+      return 'CELEB_PAPARAZZI_BLITZ';
     case 'STAFF_TEAM':
     case 'CLUB_REVENUE':
       return 'VELVET_ROPE_BOUNCER';
@@ -605,6 +613,8 @@ export const InteractiveQuestChallengeModal: React.FC<InteractiveQuestChallengeM
               [
                 { id: 'DJ_BEAT_DROP', label: '🎧 DJ Beat-Match', desc: 'BPM Pitch & Drop' },
                 { id: 'NEON_MIXOLOGY', label: '🍸 Flair Mixology', desc: 'Recipe & Shaker' },
+                { id: 'WHALE_CHAMPAGNE_TOWER', label: '🥂 Whale Pyramid', desc: '4x Double-or-Nothing' },
+                { id: 'CELEB_PAPARAZZI_BLITZ', label: '📸 Paparazzi Blitz', desc: 'VIP Reflex Combo' },
                 { id: 'VELVET_ROPE_BOUNCER', label: '🛡️ VIP Bouncer', desc: 'ID & Dress Scanner' },
                 { id: 'NEON_DANCE_GRID', label: '🪩 Dance Grid Sync', desc: 'Neon Tile Memory' },
               ] as const
@@ -615,7 +625,7 @@ export const InteractiveQuestChallengeModal: React.FC<InteractiveQuestChallengeM
                   soundEngine.playClick();
                   setActiveMode(tab.id);
                 }}
-                className={`px-2.5 py-1 rounded-xl text-[10px] font-black cursor-pointer border transition-all ${
+                className={`px-2.5 py-1 rounded-xl text-[10px] font-black cursor-pointer border transition-all shrink-0 ${
                   activeMode === tab.id
                     ? 'bg-gradient-to-r from-cyan-400 to-fuchsia-400 text-slate-950 border-white shadow'
                     : 'bg-[#1b1136] text-purple-200 border-purple-600/40 hover:border-cyan-400/60'
@@ -1024,8 +1034,430 @@ export const InteractiveQuestChallengeModal: React.FC<InteractiveQuestChallengeM
               </div>
             </div>
           )}
+
+          {/* ==================================================================
+              5. VIP WHALE CHAMPAGNE PYRAMID POUR (DOUBLE-OR-NOTHING 4x TOWER)
+             ================================================================== */}
+          {activeMode === 'WHALE_CHAMPAGNE_TOWER' && (
+            <WhaleChampagnePyramidChallenge
+              quest={quest}
+              setFeedbackBanner={setFeedbackBanner}
+              onCompleteChallenge={onCompleteChallenge}
+            />
+          )}
+
+          {/* ==================================================================
+              6. CELEB PAPARAZZI SHIELD & VIP WHISPERER BLITZ
+             ================================================================== */}
+          {activeMode === 'CELEB_PAPARAZZI_BLITZ' && (
+            <CelebPaparazziBlitzChallenge
+              quest={quest}
+              setFeedbackBanner={setFeedbackBanner}
+              onCompleteChallenge={onCompleteChallenge}
+            />
+          )}
         </div>
       </div>
     </div>
   );
 };
+
+interface SubChallengeProps {
+  quest: QuestTask;
+  setFeedbackBanner: React.Dispatch<
+    React.SetStateAction<{ text: string; tone: 'SUCCESS' | 'WARN' | 'INFO' }>
+  >;
+  onCompleteChallenge: (quest: QuestTask, bonusCash: number, accuracyLabel: string) => void;
+}
+
+const PYRAMID_TIERS = [
+  { tier: 1, label: 'Base Row (4 Flutes)', minZone: 24, maxZone: 82, multiplier: 1.3, speed: 4.8 },
+  { tier: 2, label: 'Mid Row (3 Flutes)', minZone: 32, maxZone: 76, multiplier: 2.0, speed: 6.2 },
+  { tier: 3, label: 'Crown Row (2 Flutes)', minZone: 40, maxZone: 70, multiplier: 3.1, speed: 7.6 },
+  { tier: 4, label: 'Apex Sovereign Flute (1 Flute)', minZone: 46, maxZone: 66, multiplier: 4.5, speed: 9.2 },
+];
+
+const WhaleChampagnePyramidChallenge: React.FC<SubChallengeProps> = ({
+  quest,
+  setFeedbackBanner,
+  onCompleteChallenge,
+}) => {
+  const [currentTierIdx, setCurrentTierIdx] = useState<number>(0);
+  const [cursorPos, setCursorPos] = useState<number>(15);
+  const dirRef = useRef<number>(1);
+  const [filledTiers, setFilledTiers] = useState<number[]>([]);
+
+  const activeTier = PYRAMID_TIERS[Math.min(currentTierIdx, PYRAMID_TIERS.length - 1)];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCursorPos((prev) => {
+        let next = prev + dirRef.current * activeTier.speed;
+        if (next >= 100) {
+          next = 100;
+          dirRef.current = -1;
+        } else if (next <= 0) {
+          next = 0;
+          dirRef.current = 1;
+        }
+        return next;
+      });
+    }, 40);
+    return () => clearInterval(timer);
+  }, [activeTier.speed]);
+
+  const handlePourTier = () => {
+    const inZone = cursorPos >= activeTier.minZone && cursorPos <= activeTier.maxZone;
+    if (inZone) {
+      const nextFilled = [...filledTiers, activeTier.tier];
+      setFilledTiers(nextFilled);
+      soundEngine.previewChannelHit('arp');
+
+      if (nextFilled.length >= PYRAMID_TIERS.length) {
+        soundEngine.playUpgradeFanfare();
+        const jackpotBonus = Math.round(450 * activeTier.multiplier);
+        setFeedbackBanner({
+          text: `👑 4.5x GOLDEN PYRAMID JACKPOT! All 4 Champagne Tiers Poured Perfectly! +$${jackpotBonus} Tip!`,
+          tone: 'SUCCESS',
+        });
+        setTimeout(() => {
+          onCompleteChallenge(quest, jackpotBonus, '4.5x WHALE PYRAMID JACKPOT');
+        }, 420);
+      } else {
+        setCurrentTierIdx(nextFilled.length);
+        setFeedbackBanner({
+          text: `🥂 Tier ${activeTier.tier} Filled (${activeTier.multiplier}x)! Lock in your payout or risk Double-or-Nothing for Tier ${activeTier.tier + 1}!`,
+          tone: 'SUCCESS',
+        });
+      }
+    } else {
+      soundEngine.playError();
+      if (filledTiers.length > 0) {
+        setFilledTiers([]);
+        setCurrentTierIdx(0);
+        setFeedbackBanner({
+          text: `💦 Champagne Overflowed at ${Math.round(cursorPos)}%! Tower reset to Tier 1 — hit the Golden Foam Zone!`,
+          tone: 'WARN',
+        });
+      } else {
+        setFeedbackBanner({
+          text: `💦 Missed the Golden Pour Zone (${activeTier.minZone}%–${activeTier.maxZone}%)! Wait for the stream to align!`,
+          tone: 'WARN',
+        });
+      }
+    }
+  };
+
+  const handleCashOutEarly = () => {
+    if (filledTiers.length < 2) return;
+    const achievedTier = PYRAMID_TIERS[filledTiers.length - 1];
+    const bonus = Math.round(320 * achievedTier.multiplier);
+    soundEngine.playUpgradeFanfare();
+    setFeedbackBanner({
+      text: `💰 Locked in ${achievedTier.multiplier}x Whale Champagne Tip (+$${bonus})!`,
+      tone: 'SUCCESS',
+    });
+    setTimeout(() => {
+      onCompleteChallenge(quest, bonus, `${achievedTier.multiplier}x CHAMPAGNE TOWER`);
+    }, 350);
+  };
+
+  return (
+    <div className="space-y-3.5">
+      <div className="p-3 rounded-2xl bg-[#1a1133] border-2 border-[#111116] flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[10px] font-mono uppercase text-amber-300 font-bold">
+            🐋 VIP WHALE DOUBLE-OR-NOTHING CHAMPAGNE PYRAMID
+          </div>
+          <div className="text-xs font-bold text-purple-200 mt-0.5">
+            Pour inside the Golden Champagne Sweet-Spot! Cash out safely after Tier 2+ or risk it for the 4.5x Apex Jackpot!
+          </div>
+        </div>
+        <div className="px-3 py-1 rounded-xl bg-amber-400/20 border border-amber-300 text-amber-200 font-mono font-black text-xs">
+          Current Tier: {activeTier.tier}/4 ({activeTier.multiplier}x)
+        </div>
+      </div>
+
+      {/* Visual 4-Tier Champagne Glass Pyramid */}
+      <div className="p-3.5 rounded-2xl bg-[#110a24] border-2 border-amber-400/40 flex flex-col items-center gap-2">
+        {[...PYRAMID_TIERS].reverse().map((t) => {
+          const isFilled = filledTiers.includes(t.tier);
+          const isCurrent = activeTier.tier === t.tier;
+          const glassCount = 5 - t.tier;
+          return (
+            <div
+              key={t.tier}
+              className={`w-full max-w-md px-3 py-1.5 rounded-xl border transition-all flex items-center justify-between ${
+                isFilled
+                  ? 'bg-gradient-to-r from-amber-500/35 via-yellow-400/35 to-amber-500/35 border-amber-300 shadow-[0_0_15px_rgba(250,204,21,0.35)]'
+                  : isCurrent
+                  ? 'bg-purple-900/60 border-cyan-400 ring-2 ring-cyan-400/40'
+                  : 'bg-[#180f30] border-purple-800/40 opacity-65'
+              }`}
+            >
+              <span className="text-[10px] font-mono font-black text-amber-200">
+                TIER {t.tier} · {t.multiplier}x
+              </span>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: glassCount }).map((_, idx) => (
+                  <span
+                    key={idx}
+                    className={`text-base transition-transform ${
+                      isFilled ? 'scale-110 drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]' : ''
+                    }`}
+                  >
+                    {isFilled ? '🥂' : '🍷'}
+                  </span>
+                ))}
+              </div>
+              <span className="text-[10px] font-black uppercase text-cyan-200">
+                {isFilled ? '✓ FILLED' : isCurrent ? 'POURING NOW' : 'LOCKED'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Oscillating Champagne Stream Gauge */}
+      <div className="p-3 rounded-2xl bg-[#1a1133] border-2 border-[#111116] space-y-2.5">
+        <div className="flex items-center justify-between text-xs font-black">
+          <span className="text-amber-300">
+            🍾 POUR STREAM: {activeTier.label}
+          </span>
+          <span className="font-mono text-cyan-300">
+            Sweet Spot: {activeTier.minZone}%–{activeTier.maxZone}%
+          </span>
+        </div>
+
+        <div className="relative h-7 rounded-xl bg-[#0d071c] border-2 border-[#111116] overflow-hidden">
+          <div
+            className="absolute top-0 bottom-0 bg-gradient-to-r from-amber-400/45 via-emerald-400/65 to-amber-400/45 border-x-2 border-amber-300"
+            style={{
+              left: `${activeTier.minZone}%`,
+              width: `${activeTier.maxZone - activeTier.minZone}%`,
+            }}
+          />
+          <div
+            className="absolute top-0 bottom-0 w-2.5 -ml-1.25 rounded-full bg-white shadow-[0_0_12px_#fff] border border-slate-950 transition-none"
+            style={{ left: `${cursorPos}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          <button
+            onClick={handlePourTier}
+            className="py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 hover:brightness-110 border-2 border-[#111116] shadow-[0_4px_0_#111116] font-black text-xs sm:text-sm uppercase text-slate-950 cursor-pointer"
+          >
+            🍾 POUR TIER {activeTier.tier} ({activeTier.multiplier}x)
+          </button>
+
+          <button
+            onClick={handleCashOutEarly}
+            disabled={filledTiers.length < 2}
+            className="py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-400 hover:brightness-110 disabled:opacity-40 border-2 border-[#111116] shadow-[0_4px_0_#111116] font-black text-xs sm:text-sm uppercase text-slate-950 cursor-pointer"
+          >
+            {filledTiers.length >= 2
+              ? `💰 LOCK IN ${PYRAMID_TIERS[filledTiers.length - 1].multiplier}x PAYOUT NOW`
+              : '🔒 Fill 2 Tiers to Lock Payout'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface BoothTarget {
+  boothIdx: number;
+  kind: 'PAPARAZZI' | 'WHALE_ORDER' | 'CELEB_TOAST';
+  title: string;
+  subtitle: string;
+  emoji: string;
+  points: number;
+}
+
+const BOOTH_TARGETS: Array<Omit<BoothTarget, 'boothIdx'>> = [
+  {
+    kind: 'PAPARAZZI',
+    title: 'BLOCK PAPARAZZI!',
+    subtitle: 'Sneaky Tabloid Camera Flash',
+    emoji: '📸',
+    points: 160,
+  },
+  {
+    kind: 'WHALE_ORDER',
+    title: 'SERVE ★ VIP WHALE',
+    subtitle: 'Wants 24K Gold Magnum',
+    emoji: '🐋',
+    points: 200,
+  },
+  {
+    kind: 'CELEB_TOAST',
+    title: 'A-LIST CELEB TOAST',
+    subtitle: 'Sparkler Selfie Moment',
+    emoji: '🌟',
+    points: 180,
+  },
+];
+
+const CelebPaparazziBlitzChallenge: React.FC<SubChallengeProps> = ({
+  quest,
+  setFeedbackBanner,
+  onCompleteChallenge,
+}) => {
+  const [score, setScore] = useState<number>(0);
+  const [combo, setCombo] = useState<number>(1);
+  const [activeTargets, setActiveTargets] = useState<BoothTarget[]>([]);
+  const targetScore = 700;
+
+  // Spawn dynamic VIP booth events every 750ms
+  useEffect(() => {
+    const spawnInitial = (): BoothTarget[] => {
+      const b1 = Math.floor(Math.random() * 3);
+      const b2 = 3 + Math.floor(Math.random() * 3);
+      const t1 = BOOTH_TARGETS[Math.floor(Math.random() * BOOTH_TARGETS.length)];
+      const t2 = BOOTH_TARGETS[Math.floor(Math.random() * BOOTH_TARGETS.length)];
+      return [
+        { ...t1, boothIdx: b1 },
+        { ...t2, boothIdx: b2 },
+      ];
+    };
+    setActiveTargets(spawnInitial());
+
+    const interval = setInterval(() => {
+      setActiveTargets((prev) => {
+        const occupied = new Set(prev.map((p) => p.boothIdx));
+        const freeBooths = [0, 1, 2, 3, 4, 5].filter((i) => !occupied.has(i));
+        if (freeBooths.length === 0) {
+          return prev.slice(1);
+        }
+        const randomBooth = freeBooths[Math.floor(Math.random() * freeBooths.length)];
+        const template = BOOTH_TARGETS[Math.floor(Math.random() * BOOTH_TARGETS.length)];
+        const nextList = [...prev.slice(-2), { ...template, boothIdx: randomBooth }];
+        return nextList;
+      });
+    }, 850);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleBoothTap = (boothIdx: number) => {
+    const hit = activeTargets.find((t) => t.boothIdx === boothIdx);
+    if (!hit) {
+      soundEngine.playError();
+      setCombo(1);
+      setFeedbackBanner({
+        text: '⚠️ Empty VIP Booth tapped! Combo reset to 1x — tap booths with active Paparazzi or VIP Whales!',
+        tone: 'WARN',
+      });
+      return;
+    }
+
+    const nextCombo = Math.min(5, combo + 1);
+    const earned = Math.round(hit.points * (1 + (nextCombo - 1) * 0.25));
+    const nextScore = score + earned;
+    setScore(nextScore);
+    setCombo(nextCombo);
+    setActiveTargets((prev) => prev.filter((t) => t.boothIdx !== boothIdx));
+
+    if (hit.kind === 'PAPARAZZI') {
+      soundEngine.previewChannelHit('snare');
+    } else {
+      soundEngine.previewChannelHit('arp');
+    }
+
+    if (nextScore >= targetScore) {
+      soundEngine.playUpgradeFanfare();
+      const bonusCash = 420 + nextCombo * 65;
+      setFeedbackBanner({
+        text: `📸 PAPARAZZI BLITZ CLEARED (${nextScore} PTS · ${nextCombo}x COMBO)! VIPs Protected & Hyped!`,
+        tone: 'SUCCESS',
+      });
+      setTimeout(() => {
+        onCompleteChallenge(quest, bonusCash, `${nextCombo}x VIP SHIELD COMBO`);
+      }, 380);
+    } else {
+      setFeedbackBanner({
+        text: `🔥 +${earned} PTS (${nextCombo}x COMBO)! ${
+          hit.kind === 'PAPARAZZI' ? 'Blocked Paparazzi Flash!' : 'VIP Whale Ecstatic!'
+        } (${nextScore}/${targetScore} PTS)`,
+        tone: 'SUCCESS',
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-3.5">
+      <div className="p-3 rounded-2xl bg-[#1a1133] border-2 border-[#111116] flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[10px] font-mono uppercase text-fuchsia-300 font-bold">
+            📸 PAPARAZZI SHIELD & ★ VIP WHALE WHISPERER
+          </div>
+          <div className="text-xs font-bold text-purple-200 mt-0.5">
+            Tap active VIP pods to block sneaky paparazzi flashes & serve ★ VIP Whales before they vanish!
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 rounded-xl bg-amber-400/20 border border-amber-300 text-amber-300 font-mono font-black text-xs">
+            🔥 {combo}x COMBO
+          </span>
+          <span className="px-2.5 py-1 rounded-xl bg-cyan-400/20 border border-cyan-300 text-cyan-200 font-mono font-black text-xs">
+            {score} / {targetScore} PTS
+          </span>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="h-3 rounded-full bg-[#0d071c] border border-purple-500/40 overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-400 transition-all duration-200"
+          style={{ width: `${Math.min(100, Math.round((score / targetScore) * 100))}%` }}
+        />
+      </div>
+
+      {/* 6-Booth Interactive Reflex Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        {[0, 1, 2, 3, 4, 5].map((boothIdx) => {
+          const target = activeTargets.find((t) => t.boothIdx === boothIdx);
+          const isPaparazzi = target?.kind === 'PAPARAZZI';
+          const isWhale = target?.kind === 'WHALE_ORDER';
+          return (
+            <button
+              key={boothIdx}
+              onClick={() => handleBoothTap(boothIdx)}
+              className={`h-28 rounded-2xl border-2 p-2.5 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                target
+                  ? isPaparazzi
+                    ? 'bg-gradient-to-br from-rose-600/80 to-red-900/90 border-rose-300 ring-2 ring-rose-400/60 scale-[1.02] shadow-[0_0_20px_rgba(244,63,94,0.5)]'
+                    : isWhale
+                    ? 'bg-gradient-to-br from-amber-500/80 to-yellow-700/90 border-amber-200 ring-2 ring-amber-300/60 scale-[1.02] shadow-[0_0_20px_rgba(250,204,21,0.5)]'
+                    : 'bg-gradient-to-br from-cyan-500/80 to-purple-800/90 border-cyan-200 ring-2 ring-cyan-300/60 scale-[1.02] shadow-[0_0_20px_rgba(34,211,238,0.5)]'
+                  : 'bg-[#150d2a] hover:bg-[#1e133b] border-[#111116] text-purple-400/70'
+              }`}
+            >
+              {target ? (
+                <>
+                  <span className="text-2xl animate-bounce">{target.emoji}</span>
+                  <span className="text-[11px] font-black uppercase text-white mt-1 leading-tight">
+                    {target.title}
+                  </span>
+                  <span className="text-[9px] font-bold text-amber-200 mt-0.5">
+                    {target.subtitle} (+{target.points})
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg opacity-40">🛋️</span>
+                  <span className="text-[10px] font-mono uppercase mt-1">
+                    VIP Booth #{boothIdx + 1}
+                  </span>
+                  <span className="text-[9px] opacity-60">Secure & Chill</span>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+

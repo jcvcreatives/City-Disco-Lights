@@ -85,23 +85,14 @@
         if (isStaticHost) {
           loadPrebuiltBundle();
         } else {
-          // Dev server loads ./src/main.tsx; fallback if not running under Vite dev middleware
+          // Dev server loads /src/main.tsx once; only fallback on actual script network error
           var devScript = document.createElement('script');
           devScript.type = 'module';
-          devScript.src = './src/main.tsx';
+          devScript.src = '/src/main.tsx';
           devScript.onerror = function () {
             loadPrebuiltBundle();
           };
           document.body.appendChild(devScript);
-
-          window.addEventListener('load', function () {
-            setTimeout(function () {
-              var root = document.getElementById('root');
-              if (root && root.childNodes.length === 0) {
-                loadPrebuiltBundle();
-              }
-            }, 900);
-          });
         }
       })();
     </script>

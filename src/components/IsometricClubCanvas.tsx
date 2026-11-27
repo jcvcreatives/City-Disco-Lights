@@ -9,6 +9,7 @@ import {
   FloorLevel,
   GuestAgent,
   GuestSeatPosture,
+  GuestState,
   isVipBoothCatalogId,
   ParkingUpgradeState,
   PlacedItem,
@@ -194,16 +195,41 @@ export interface SpriteMoodInfo {
   boothUid?: string;
 }
 
+interface ParkingLotStall {
+  idx: number;
+  label: string;
+  gx: number;
+  gy: number;
+  isTaxiDrop: boolean;
+}
+
+const PARKING_LOT_STALLS: ParkingLotStall[] = [
+  { idx: 0, label: 'P1', gx: -0.65, gy: 12.12, isTaxiDrop: false },
+  { idx: 1, label: 'TAXI', gx: 1.55, gy: 12.12, isTaxiDrop: true },
+  { idx: 2, label: 'P2', gx: 3.75, gy: 12.12, isTaxiDrop: false },
+  { idx: 3, label: 'P3', gx: 5.95, gy: 12.12, isTaxiDrop: false },
+  { idx: 4, label: 'P4', gx: 8.15, gy: 12.12, isTaxiDrop: false },
+];
+
+function isExteriorGuestState(state: GuestState): boolean {
+  return state === 'QUEUEING' || state === 'ARRIVING_FROM_CAR' || state === 'WALKING_TO_CAR';
+}
+
 interface TrafficCarAgent {
   id: string;
   lane: 'FRONT_EAST' | 'FRONT_WEST' | 'LEFT_SOUTH';
   gridX: number;
   gridY: number;
   speed: number;
+  currentSpeed?: number;
   bodyColor: string;
   shadeColor: string;
   isTaxi: boolean;
   stopCooldown: number;
+  carState?: 'CRUISING' | 'PARKING_IN' | 'PARKED' | 'WAITING_PICKUP' | 'PULLING_OUT';
+  stallIndex?: number;
+  parkTimer?: number;
+  headlightFlashTimer?: number;
 }
 
 interface PedestrianAgent {
@@ -222,6 +248,84 @@ interface PedestrianAgent {
   bubbleTimer: number;
   favoriteGenre: string;
   hype: number;
+}
+
+export interface BassDropRippleWave {
+  id: string;
+  floor: FloorLevel;
+  originGx: number;
+  originGy: number;
+  age: number;
+  maxAge: number;
+  radius: number;
+  maxRadius: number;
+  primaryColor: string;
+  secondaryColor: string;
+  reactedGuestIds: Set<string>;
+}
+
+function computeBassDropRippleExcitation(
+  gx: number,
+  gy: number,
+  ripples: BassDropRippleWave[] | undefined,
+  floor: FloorLevel
+): {
+  intensity: number;
+  crestSign: number;
+  primaryColor: string;
+  secondaryColor: string;
+} {
+  if (!ripples || ripples.length === 0) {
+    return {
+      intensity: 0,
+      crestSign: 0,
+      primaryColor: '#22d3ee',
+      secondaryColor: '#e879f9',
+    };
+  }
+
+  let totalIntensity = 0;
+  let totalCrest = 0;
+  let activePrimary = '#22d3ee';
+  let activeSecondary = '#e879f9';
+  let strongestHit = 0;
+
+  for (let i = 0; i < ripples.length; i++) {
+    const r = ripples[i];
+    if (r.floor !== floor) continue;
+    const dist = Math.hypot(gx - r.originGx, gy - r.originGy);
+    const lifeRatio = r.age / r.maxAge;
+    const envelopeFade =
+      Math.min(1, r.age / 0.08) * Math.max(0, 1 - Math.pow(lifeRatio, 1.75));
+    if (envelopeFade <= 0.01) continue;
+
+    // Leading primary shockwave crest + trailing harmonic echo ring
+    const d1 = dist - r.radius;
+    const primaryRing = Math.exp(-(d1 * d1) / 0.44);
+
+    const d2 = dist - (r.radius - 1.55);
+    const echoRing = r.radius > 1.3 ? 0.65 * Math.exp(-(d2 * d2) / 0.52) : 0;
+
+    const d3 = dist - (r.radius - 3.0);
+    const tailRing = r.radius > 2.8 ? 0.35 * Math.exp(-(d3 * d3) / 0.58) : 0;
+
+    const hit = (primaryRing + echoRing + tailRing) * envelopeFade;
+    if (hit > strongestHit) {
+      strongestHit = hit;
+      activePrimary = r.primaryColor;
+      activeSecondary = r.secondaryColor;
+    }
+
+    totalIntensity += hit;
+    totalCrest += (primaryRing - echoRing * 0.45) * envelopeFade;
+  }
+
+  return {
+    intensity: Math.min(1, totalIntensity),
+    crestSign: Math.max(-1, Math.min(1, totalCrest)),
+    primaryColor: activePrimary,
+    secondaryColor: activeSecondary,
+  };
 }
 
 interface IsometricClubCanvasProps {
@@ -245,6 +349,8 @@ interface IsometricClubCanvasProps {
   isRemoveMode: boolean;
   isEditDecorMode?: boolean;
   editingPlacedItemUid?: string | null;
+  newlyPlacedItemHighlight?: { uid: string; placedAtMs: number } | null;
+  onLongPressPlacedItem?: (itemUid: string) => void;
   selectedSpriteId?: string | null;
   onSelectSprite?: (info: SpriteMoodInfo) => void;
   onSpriteMoodListReport?: (list: SpriteMoodInfo[]) => void;
@@ -460,6 +566,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
   isRemoveMode,
   isEditDecorMode = false,
   editingPlacedItemUid = null,
+  newlyPlacedItemHighlight = null,
+  onLongPressPlacedItem,
   selectedSpriteId = null,
   onSelectSprite,
   onSpriteMoodListReport,
@@ -524,65 +632,156 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     h: 0,
   });
 
+  const longPressStateRef = useRef<{
+    timerId: number | null;
+    targetItemUid: string | null;
+    startTimeMs: number;
+    durationMs: number;
+    triggered: boolean;
+  }>({
+    timerId: null,
+    targetItemUid: null,
+    startTimeMs: 0,
+    durationMs: 420,
+    triggered: false,
+  });
+
+  const clearLongPressTimer = () => {
+    if (longPressStateRef.current.timerId !== null) {
+      window.clearTimeout(longPressStateRef.current.timerId);
+      longPressStateRef.current.timerId = null;
+    }
+    longPressStateRef.current.targetItemUid = null;
+  };
+
   const dancerParticlesRef = useRef<DancerHypeParticle[]>([]);
+  const bassDropRipplesRef = useRef<BassDropRippleWave[]>([]);
   const prevHypeSegmentsRef = useRef<number>(clubMetrics.hypeSegments);
 
-  // Moving Road Traffic Vehicles (Eastbound front avenue, Westbound front avenue, Southbound side street)
+  // Moving & Park-and-Go Road Traffic Vehicles (Eastbound front avenue, Westbound front avenue, and Real-World Parking Bays P1-P4 + Taxi Drop)
   const trafficCarsRef = useRef<TrafficCarAgent[]>([
+    {
+      id: 'car_parked_p1',
+      lane: 'FRONT_EAST',
+      gridX: -0.65,
+      gridY: 12.12,
+      speed: 2.35,
+      currentSpeed: 0,
+      bodyColor: '#2dd4bf',
+      shadeColor: '#0f766e',
+      isTaxi: false,
+      stopCooldown: 0,
+      carState: 'PARKED',
+      stallIndex: 0,
+      parkTimer: 16,
+      headlightFlashTimer: 0,
+    },
+    {
+      id: 'car_parked_p2',
+      lane: 'FRONT_EAST',
+      gridX: 3.75,
+      gridY: 12.12,
+      speed: 2.4,
+      currentSpeed: 0,
+      bodyColor: '#f43f5e',
+      shadeColor: '#9f1239',
+      isTaxi: false,
+      stopCooldown: 0,
+      carState: 'PARKED',
+      stallIndex: 2,
+      parkTimer: 22,
+      headlightFlashTimer: 0,
+    },
+    {
+      id: 'car_parked_p3',
+      lane: 'FRONT_EAST',
+      gridX: 5.95,
+      gridY: 12.12,
+      speed: 2.45,
+      currentSpeed: 0,
+      bodyColor: '#38bdf8',
+      shadeColor: '#1e3a8a',
+      isTaxi: false,
+      stopCooldown: 0,
+      carState: 'PARKED',
+      stallIndex: 3,
+      parkTimer: 28,
+      headlightFlashTimer: 0,
+    },
     {
       id: 'car_taxi_east_1',
       lane: 'FRONT_EAST',
-      gridX: -5.5,
+      gridX: -6.2,
       gridY: 13.55,
       speed: 2.35,
+      currentSpeed: 2.35,
       bodyColor: '#facc15',
       shadeColor: '#ca8a04',
       isTaxi: true,
       stopCooldown: 0,
+      carState: 'CRUISING',
+      parkTimer: 0,
+      headlightFlashTimer: 0,
     },
     {
-      id: 'car_cyber_east_2',
+      id: 'car_sedan_east_2',
       lane: 'FRONT_EAST',
-      gridX: 4.5,
+      gridX: 0.2,
       gridY: 13.55,
-      speed: 2.65,
+      speed: 2.4,
+      currentSpeed: 2.4,
+      bodyColor: '#a855f7',
+      shadeColor: '#6b21a8',
+      isTaxi: false,
+      stopCooldown: 1.5,
+      carState: 'CRUISING',
+      parkTimer: 0,
+      headlightFlashTimer: 0,
+    },
+    {
+      id: 'car_cyber_east_3',
+      lane: 'FRONT_EAST',
+      gridX: 7.4,
+      gridY: 13.55,
+      speed: 2.5,
+      currentSpeed: 2.5,
       bodyColor: '#38bdf8',
       shadeColor: '#0284c7',
       isTaxi: false,
-      stopCooldown: 0,
+      stopCooldown: 2.5,
+      carState: 'CRUISING',
+      parkTimer: 0,
+      headlightFlashTimer: 0,
     },
     {
       id: 'car_coupe_west_1',
       lane: 'FRONT_WEST',
-      gridX: 14.5,
-      gridY: 14.65,
-      speed: 2.85,
-      bodyColor: '#f43f5e',
+      gridX: 13.8,
+      gridY: 14.72,
+      speed: 2.55,
+      currentSpeed: 2.55,
+      bodyColor: '#fb7185',
       shadeColor: '#be123c',
       isTaxi: false,
       stopCooldown: 0,
+      carState: 'CRUISING',
+      parkTimer: 0,
+      headlightFlashTimer: 0,
     },
     {
       id: 'car_taxi_west_2',
       lane: 'FRONT_WEST',
-      gridX: 3.2,
-      gridY: 14.65,
+      gridX: 3.4,
+      gridY: 14.72,
       speed: 2.45,
+      currentSpeed: 2.45,
       bodyColor: '#facc15',
       shadeColor: '#ca8a04',
       isTaxi: true,
       stopCooldown: 0,
-    },
-    {
-      id: 'car_sedan_south_1',
-      lane: 'FRONT_EAST',
-      gridX: -1.85,
-      gridY: 13.55,
-      speed: 2.15,
-      bodyColor: '#a855f7',
-      shadeColor: '#6b21a8',
-      isTaxi: false,
-      stopCooldown: 0,
+      carState: 'CRUISING',
+      parkTimer: 0,
+      headlightFlashTimer: 0,
     },
   ]);
 
@@ -732,6 +931,71 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     }
   }, [dayNightOverrideHour]);
 
+  // Subscribe to soundEngine bass drops so every Bass Drop spawns a dynamic traveling ripple wave across the dance floor!
+  useEffect(() => {
+    return soundEngine.subscribeBassDrop(() => {
+      const props = latestPropsRef.current;
+      const floor = props.activeFloor;
+      const floorItems = props.placedItems.filter((p) => p.floor === floor);
+      const mood = getClubMoodLightingProfile(props.activeGenre);
+
+      // Compute dance floor centroid and DJ booth front-stage origin on the active floor
+      const danceTiles = floorItems.filter(
+        (p) => getCatalogItem(p.catalogId)?.category === 'DANCE_TILE'
+      );
+      const djBooths = floorItems.filter(
+        (p) => getCatalogItem(p.catalogId)?.category === 'DJ_BOOTH'
+      );
+
+      let dfCx = 4.2;
+      let dfCy = 4.2;
+      if (danceTiles.length > 0) {
+        let sumX = 0;
+        let sumY = 0;
+        for (let i = 0; i < danceTiles.length; i++) {
+          const dt = danceTiles[i];
+          const cat = getCatalogItem(dt.catalogId);
+          const fp = cat ? getRotatedFootprint(cat, dt.rotation) : { width: 1, depth: 1 };
+          sumX += dt.gridX + fp.width * 0.5;
+          sumY += dt.gridY + fp.depth * 0.5;
+        }
+        dfCx = sumX / danceTiles.length;
+        dfCy = sumY / danceTiles.length;
+      }
+
+      let originGx = dfCx;
+      let originGy = dfCy;
+      if (djBooths.length > 0) {
+        const dj = djBooths[0];
+        const cat = getCatalogItem(dj.catalogId);
+        const fp = cat ? getRotatedFootprint(cat, dj.rotation) : { width: 2, depth: 1 };
+        const djCx = dj.gridX + fp.width * 0.5;
+        const djCy = dj.gridY + fp.depth * 0.85;
+        // Start ripple right where the DJ console subwoofers meet the dance floor so it sweeps outward across all tiles
+        originGx = djCx * 0.58 + dfCx * 0.42;
+        originGy = djCy * 0.58 + dfCy * 0.42;
+      }
+
+      const ripples = bassDropRipplesRef.current;
+      if (ripples.length >= 4) {
+        ripples.shift();
+      }
+      ripples.push({
+        id: `bass_ripple_${performance.now()}_${Math.random()}`,
+        floor,
+        originGx,
+        originGy,
+        age: 0,
+        maxAge: 2.15,
+        radius: 0.18,
+        maxRadius: 11.6,
+        primaryColor: mood.primaryHex || '#22d3ee',
+        secondaryColor: mood.secondaryHex || '#e879f9',
+        reactedGuestIds: new Set<string>(),
+      });
+    });
+  }, []);
+
   // Keep latest props in a mutable ref so the 60fps requestAnimationFrame loop NEVER restarts on React renders
   const latestPropsRef = useRef({
     isPlaying,
@@ -752,6 +1016,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     isRemoveMode,
     isEditDecorMode,
     editingPlacedItemUid,
+    newlyPlacedItemHighlight,
+    onLongPressPlacedItem,
     selectedSpriteId,
     onSelectSprite,
     onSpriteMoodListReport,
@@ -788,6 +1054,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     isRemoveMode,
     isEditDecorMode,
     editingPlacedItemUid,
+    newlyPlacedItemHighlight,
+    onLongPressPlacedItem,
     selectedSpriteId,
     onSelectSprite,
     onSpriteMoodListReport,
@@ -944,41 +1212,291 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
-      // 0A. Update Exterior Road Traffic Cars (2-way Front Avenue + Side Street)
+      // 0A. Update Exterior Road Traffic Cars with Strict Non-Overlapping Headway, Real-World Parking Lot Pull-In/Pull-Out, and Customer Car Exit!
       const trafficCars = trafficCarsRef.current;
+      const guests = guestsRef.current;
+      const MIN_SAFE_CAR_GAP = 3.45; // Strict minimum grid distance between car centers so vehicles NEVER overlap
+      const SLOW_APPROACH_GAP = 5.1;
+
+      const spawnCustomerFromParkedCar = (car: TrafficCarAgent, stall: ParkingLotStall) => {
+        const currentExteriorQueue = guests.filter(
+          (g) => g.state === 'QUEUEING' || g.state === 'ARRIVING_FROM_CAR'
+        ).length;
+        if (currentExteriorQueue >= 8) return;
+
+        const insideCountNow = guests.filter((g) => !isExteriorGuestState(g.state)).length;
+        if (insideCountNow >= metrics.maxGuests && currentExteriorQueue >= 6) return;
+
+        const isCeleb = metrics.totalHype >= 130 && Math.random() < 0.24;
+        const namePool = isCeleb ? CELEBRITY_NAMES : GUEST_NAMES;
+        const bouncerStaffCount = props.staffMembers.filter((s) => s.role === 'BOUNCER').length;
+        const queueWait = Math.max(0.7, 3.3 - (bouncers + bouncerStaffCount) * 0.62);
+        const bubbles: BubbleType[] = ['MUSIC', 'CHAT', 'SPARKLE'];
+
+        // Customer steps right out of the parked car door onto the parking apron and walks across the crosswalk to the Red Carpet queue!
+        guests.push({
+          id: `guest_car_${performance.now()}_${Math.random()}`,
+          name: namePool[Math.floor(Math.random() * namePool.length)],
+          isCelebrity: isCeleb,
+          floor: 1,
+          targetFloor: 1,
+          gridX: stall.gx + 0.32,
+          gridY: stall.gy - 0.35,
+          path: [],
+          state: 'QUEUEING',
+          stateTimer: queueWait,
+          patience: 100,
+          hype: isCeleb ? 97 : 80 + Math.floor(Math.random() * 18),
+          bubble: isCeleb ? 'VIP_CROWN' : bubbles[Math.floor(Math.random() * bubbles.length)],
+          bubbleTimer: 5.5,
+          shirtColor: isCeleb
+            ? '#facc15'
+            : SHIRT_COLORS[Math.floor(Math.random() * SHIRT_COLORS.length)],
+          hairColor: HAIR_COLORS[Math.floor(Math.random() * HAIR_COLORS.length)],
+          pantsColor: PANTS_COLORS[Math.floor(Math.random() * PANTS_COLORS.length)],
+          cashSpent: 0,
+          facingDir: 'NW',
+          carId: car.id,
+          chatText: car.isTaxi
+            ? 'Just hopped out of the taxi! Time to hit the neon floor! 🚕✨'
+            : `Parked in Bay ${stall.label}! Let’s get inside! 🚗🔥`,
+          chatTimer: 4.5,
+        });
+      };
+
       for (let cIdx = 0; cIdx < trafficCars.length; cIdx++) {
         const car = trafficCars[cIdx];
-        if (car.stopCooldown > 0) {
-          car.stopCooldown -= dt;
+        if (!car.carState) car.carState = 'CRUISING';
+        if (car.stopCooldown > 0) car.stopCooldown -= dt;
+        if ((car.headlightFlashTimer ?? 0) > 0) {
+          car.headlightFlashTimer = Math.max(0, (car.headlightFlashTimer ?? 0) - dt);
         }
-        // Taxis briefly slow down near the front red carpet crosswalk (gx = 1.6..2.8) to drop off clubgoers
-        let speedMult = 1.0;
-        if (
-          car.isTaxi &&
-          car.lane === 'FRONT_EAST' &&
-          car.gridX >= 1.2 &&
-          car.gridX <= 2.6 &&
-          car.stopCooldown <= 0
-        ) {
-          speedMult = 0.25;
-          if (car.gridX >= 2.35) {
-            car.stopCooldown = 6.0;
+
+        // 1. STATE: PARKING_IN (Smoothly pulling from FRONT_EAST avenue gy=13.55 into assigned parking stall gy=12.12)
+        if (car.carState === 'PARKING_IN' && car.stallIndex !== undefined) {
+          const stall = PARKING_LOT_STALLS[car.stallIndex];
+          const dx = stall.gx - car.gridX;
+          const dy = stall.gy - car.gridY;
+          const dist = Math.hypot(dx, dy);
+          const pullSpeed = 1.85 * dt;
+          if (dist <= pullSpeed + 0.04) {
+            car.gridX = stall.gx;
+            car.gridY = stall.gy;
+            car.carState = 'PARKED';
+            car.currentSpeed = 0;
+            car.headlightFlashTimer = 0.85;
+            car.parkTimer = car.isTaxi ? 4.5 : 15 + Math.random() * 12;
+            // Customer exits the car door and walks to the Red Carpet entrance!
+            spawnCustomerFromParkedCar(car, stall);
+          } else {
+            car.gridX += (dx / dist) * pullSpeed;
+            car.gridY += (dy / dist) * pullSpeed;
+            car.currentSpeed = 1.6;
           }
+          continue;
         }
+
+        // 2. STATE: PARKED or WAITING_PICKUP (Resting in the marked parking bay until parkTimer expires or a leaving guest walks back to the car)
+        if (car.carState === 'PARKED' || car.carState === 'WAITING_PICKUP') {
+          car.currentSpeed = 0;
+          car.parkTimer = (car.parkTimer ?? 12) - dt;
+          const hasWalkingGuest = guests.some(
+            (g) => g.state === 'WALKING_TO_CAR' && g.carId === car.id
+          );
+          if (hasWalkingGuest) {
+            car.carState = 'WAITING_PICKUP';
+            car.parkTimer = Math.max(car.parkTimer ?? 2, 1.5);
+            continue;
+          } else if (car.carState === 'WAITING_PICKUP') {
+            car.carState = 'PARKED';
+          }
+
+          if ((car.parkTimer ?? 0) <= 0) {
+            // Check if the Eastbound road lane (gy=13.55) is clear before pulling out of the parking space!
+            const mergeTargetX = car.gridX + 0.65;
+            const isLaneBlocked = trafficCars.some(
+              (other) =>
+                other.id !== car.id &&
+                other.lane === 'FRONT_EAST' &&
+                (other.carState === 'CRUISING' ||
+                  other.carState === 'PULLING_OUT' ||
+                  other.carState === 'PARKING_IN') &&
+                other.gridX > mergeTargetX - 3.9 &&
+                other.gridX < mergeTargetX + 3.1
+            );
+            if (!isLaneBlocked) {
+              car.carState = 'PULLING_OUT';
+              car.headlightFlashTimer = 0.7;
+            } else {
+              // Wait patiently in the stall until passing traffic clears
+              car.parkTimer = 0.65;
+            }
+          }
+          continue;
+        }
+
+        // 3. STATE: PULLING_OUT (Backing/pulling out of the parking stall into FRONT_EAST road lane gy=13.55 without colliding)
+        if (car.carState === 'PULLING_OUT') {
+          const targetGy = 13.55;
+          const targetGx =
+            car.stallIndex !== undefined
+              ? PARKING_LOT_STALLS[car.stallIndex].gx + 0.85
+              : car.gridX + 0.5;
+          // Hold yield if an Eastbound car suddenly approached while pulling out
+          const closeTraffic = trafficCars.some(
+            (other) =>
+              other.id !== car.id &&
+              other.lane === 'FRONT_EAST' &&
+              other.carState === 'CRUISING' &&
+              other.gridX > car.gridX - 3.3 &&
+              other.gridX < car.gridX + 2.4
+          );
+          if (closeTraffic && car.gridY < 12.7) {
+            car.currentSpeed = 0;
+            continue;
+          }
+
+          const dx = targetGx - car.gridX;
+          const dy = targetGy - car.gridY;
+          const dist = Math.hypot(dx, dy);
+          const mergeStep = 1.75 * dt;
+          if (dist <= mergeStep + 0.05) {
+            car.gridY = 13.55;
+            car.carState = 'CRUISING';
+            car.stallIndex = undefined;
+            car.stopCooldown = 7.5;
+            car.currentSpeed = car.speed * 0.75;
+          } else {
+            car.gridX += (dx / dist) * mergeStep;
+            car.gridY += (dy / dist) * mergeStep;
+            car.currentSpeed = 1.5;
+          }
+          continue;
+        }
+
+        // 4. STATE: CRUISING along the avenue with intelligent car-following distance & automatic parking lot entry
         if (car.lane === 'FRONT_EAST') {
-          car.gridX += car.speed * speedMult * dt;
-          if (car.gridX > 16.5) {
-            car.gridX = -7.5 - Math.random() * 2.5;
+          car.gridY = 13.55;
+
+          // Check if this cruising Eastbound car should pull into an open parking stall to park & let a customer out!
+          if (car.stopCooldown <= 0) {
+            const occupiedStalls = new Set<number>();
+            for (let k = 0; k < trafficCars.length; k++) {
+              const stIdx = trafficCars[k].stallIndex;
+              if (stIdx !== undefined && trafficCars[k].carState !== 'CRUISING') {
+                occupiedStalls.add(stIdx);
+              }
+            }
+
+            for (let s = 0; s < PARKING_LOT_STALLS.length; s++) {
+              const stall = PARKING_LOT_STALLS[s];
+              if (occupiedStalls.has(stall.idx)) continue;
+              // Taxis love the TAXI drop bay (idx 1) or any open bay; regular cars take P1..P4
+              if (stall.isTaxiDrop && !car.isTaxi && occupiedStalls.size < 3) continue;
+              const approachDx = stall.gx - car.gridX;
+              if (approachDx >= 0.45 && approachDx <= 1.25) {
+                car.carState = 'PARKING_IN';
+                car.stallIndex = stall.idx;
+                car.headlightFlashTimer = 0.6;
+                break;
+              }
+            }
+            if (car.carState === 'PARKING_IN') continue;
+          }
+
+          // Strict Non-Overlapping Car-Following Check for Eastbound Lane (+X direction)
+          let minAheadGap = Infinity;
+          let leadCarSpeed = car.speed;
+          for (let j = 0; j < trafficCars.length; j++) {
+            if (j === cIdx) continue;
+            const other = trafficCars[j];
+            const inEastCorridor =
+              other.lane === 'FRONT_EAST' &&
+              (other.carState === 'CRUISING' ||
+                other.carState === 'PULLING_OUT' ||
+                (other.carState === 'PARKING_IN' && other.gridY > 12.65));
+            if (!inEastCorridor) continue;
+            const gap = other.gridX - car.gridX;
+            if (gap > 0 && gap < minAheadGap) {
+              minAheadGap = gap;
+              leadCarSpeed = other.currentSpeed ?? other.speed;
+            }
+          }
+
+          let desiredSpeed = car.speed;
+          if (minAheadGap < MIN_SAFE_CAR_GAP) {
+            desiredSpeed = 0;
+            // Hard safety clamp so two cars in the same lane never overlap even by a pixel
+            if (minAheadGap < MIN_SAFE_CAR_GAP - 0.15) {
+              car.gridX -= (MIN_SAFE_CAR_GAP - minAheadGap) * 0.35;
+            }
+          } else if (minAheadGap < SLOW_APPROACH_GAP) {
+            const blend =
+              (minAheadGap - MIN_SAFE_CAR_GAP) / (SLOW_APPROACH_GAP - MIN_SAFE_CAR_GAP);
+            desiredSpeed = Math.min(
+              car.speed,
+              leadCarSpeed * 0.85 + (car.speed - leadCarSpeed * 0.85) * blend
+            );
+          }
+
+          const prevSpeed = car.currentSpeed ?? car.speed;
+          car.currentSpeed = prevSpeed + (desiredSpeed - prevSpeed) * Math.min(1, dt * 7.5);
+          car.gridX += car.currentSpeed * dt;
+
+          // Wrap around at far right of street, ensuring spawn position is at least MIN_SAFE_CAR_GAP behind the rear-most Eastbound car
+          if (car.gridX > 16.8) {
+            let minEastX = -7.5;
+            for (let j = 0; j < trafficCars.length; j++) {
+              if (j !== cIdx && trafficCars[j].lane === 'FRONT_EAST') {
+                minEastX = Math.min(minEastX, trafficCars[j].gridX - MIN_SAFE_CAR_GAP - 0.8);
+              }
+            }
+            car.gridX = Math.min(-7.5 - Math.random() * 1.6, minEastX);
           }
         } else if (car.lane === 'FRONT_WEST') {
-          car.gridX -= car.speed * speedMult * dt;
-          if (car.gridX < -7.5) {
-            car.gridX = 16.5 + Math.random() * 2.5;
+          car.gridY = 14.72;
+
+          // Strict Non-Overlapping Car-Following Check for Westbound Lane (-X direction)
+          let minAheadGap = Infinity;
+          let leadCarSpeed = car.speed;
+          for (let j = 0; j < trafficCars.length; j++) {
+            if (j === cIdx) continue;
+            const other = trafficCars[j];
+            if (other.lane !== 'FRONT_WEST') continue;
+            const gap = car.gridX - other.gridX;
+            if (gap > 0 && gap < minAheadGap) {
+              minAheadGap = gap;
+              leadCarSpeed = other.currentSpeed ?? other.speed;
+            }
           }
-        } else {
-          car.gridY += car.speed * dt;
-          if (car.gridY > 16.2) {
-            car.gridY = -6.5 - Math.random() * 2.5;
+
+          let desiredSpeed = car.speed;
+          if (minAheadGap < MIN_SAFE_CAR_GAP) {
+            desiredSpeed = 0;
+            if (minAheadGap < MIN_SAFE_CAR_GAP - 0.15) {
+              car.gridX += (MIN_SAFE_CAR_GAP - minAheadGap) * 0.35;
+            }
+          } else if (minAheadGap < SLOW_APPROACH_GAP) {
+            const blend =
+              (minAheadGap - MIN_SAFE_CAR_GAP) / (SLOW_APPROACH_GAP - MIN_SAFE_CAR_GAP);
+            desiredSpeed = Math.min(
+              car.speed,
+              leadCarSpeed * 0.85 + (car.speed - leadCarSpeed * 0.85) * blend
+            );
+          }
+
+          const prevSpeed = car.currentSpeed ?? car.speed;
+          car.currentSpeed = prevSpeed + (desiredSpeed - prevSpeed) * Math.min(1, dt * 7.5);
+          car.gridX -= car.currentSpeed * dt;
+
+          if (car.gridX < -7.8) {
+            let maxWestX = 16.5;
+            for (let j = 0; j < trafficCars.length; j++) {
+              if (j !== cIdx && trafficCars[j].lane === 'FRONT_WEST') {
+                maxWestX = Math.max(maxWestX, trafficCars[j].gridX + MIN_SAFE_CAR_GAP + 0.8);
+              }
+            }
+            car.gridX = Math.max(16.5 + Math.random() * 1.6, maxWestX);
           }
         }
       }
@@ -1020,8 +1538,6 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         }
       }
 
-      const guests = guestsRef.current;
-
       // Update Max-Hype (3/3 segments) Dancer Confetti & Bubbles Particle System at 60fps
       const activeParticles = dancerParticlesRef.current;
       for (let i = activeParticles.length - 1; i >= 0; i--) {
@@ -1040,6 +1556,72 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           p.vy += 36 * dt;
         } else {
           p.vy -= 4 * dt;
+        }
+      }
+
+      // Update Dynamic Bass Drop Dance Floor Ripple Waves & Trigger Wave-Synced Crowd Reactions as the Wavefront Reaches Each Guest!
+      const activeRipples = bassDropRipplesRef.current;
+      for (let rIdx = activeRipples.length - 1; rIdx >= 0; rIdx--) {
+        const ripple = activeRipples[rIdx];
+        ripple.age += dt;
+        if (ripple.age >= ripple.maxAge) {
+          activeRipples.splice(rIdx, 1);
+          continue;
+        }
+        // Wavefront expands smoothly across the dance floor at ~5.35 grid tiles per second
+        ripple.radius = 0.18 + ripple.age * 5.35;
+
+        // Check every interior guest on this floor: when the expanding ripple wavefront passes under their feet, trigger a live responsive reaction!
+        let waveChatAssignedThisFrame = false;
+        for (let gIdx = 0; gIdx < guests.length; gIdx++) {
+          const g = guests[gIdx];
+          if (
+            g.floor !== ripple.floor ||
+            isExteriorGuestState(g.state) ||
+            ripple.reactedGuestIds.has(g.id)
+          ) {
+            continue;
+          }
+          const distToOrigin = Math.hypot(
+            g.gridX - ripple.originGx,
+            g.gridY - ripple.originGy
+          );
+          if (Math.abs(distToOrigin - ripple.radius) <= 0.76) {
+            ripple.reactedGuestIds.add(g.id);
+            g.hype = Math.min(100, g.hype + 14);
+            const dropBubbles: BubbleType[] = ['SPARKLE', 'MUSIC', 'VIP_CROWN', 'CHAT'];
+            g.bubble = g.isCelebrity
+              ? 'VIP_CROWN'
+              : dropBubbles[Math.floor(Math.random() * dropBubbles.length)];
+            g.bubbleTimer = Math.max(g.bubbleTimer, 4.2);
+
+            if (g.state === 'DANCING' || g.state === 'DANCER_MOVES') {
+              const highEnergyMoves: DancerMoveVariant[] = [
+                'CYBER_JUMP',
+                'FIST_PUMP',
+                'SPIN_TWIRL',
+                'BREAKDANCE_WAVE',
+              ];
+              g.state = 'DANCER_MOVES';
+              g.danceMove =
+                highEnergyMoves[Math.floor(Math.random() * highEnergyMoves.length)];
+              g.stateTimer = Math.max(g.stateTimer, 7.2);
+              spawnParticlesAboveDancer(g, 5);
+
+              if (!waveChatAssignedThisFrame && ripple.reactedGuestIds.size <= 3) {
+                waveChatAssignedThisFrame = true;
+                const dropChats = [
+                  'THAT BASS DROP RIPPLE!! HANDS UP!! 🙌🔊🔥',
+                  'FEEL THE FLOOR SHOCKWAVE!! 🪩⚡',
+                  'BASS CANNON HIT THE DANCE FLOOR!! 💥🎶',
+                ];
+                g.chatText = dropChats[Math.floor(Math.random() * dropChats.length)];
+                g.chatTimer = 5.5;
+              }
+            } else {
+              spawnParticlesAboveDancer(g, 3);
+            }
+          }
         }
       }
 
@@ -1072,23 +1654,28 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       // Ensure all currently seated/ordering guests occupy distinct, valid furniture slots (no clustering on a single seat)
       reconcileOccupiedFurnitureSlots(items, guests);
 
-      // Separate interior club guests from customers waiting outside on the Red Carpet queue line
-      let insideGuestsCount = guests.filter((g) => g.state !== 'QUEUEING').length;
+      // Separate interior club guests from customers outside (queueing or walking between parked cars and the club door)
+      let insideGuestsCount = guests.filter((g) => !isExteriorGuestState(g.state)).length;
       const queuedList = guests.filter((g) => g.state === 'QUEUEING');
 
-      // Smoothly advance queued customers along the Red Carpet into single-file line slots leading to the Red Carpet Door (x=2.25, y=10.0)
+      // Smoothly advance queued customers (including customers who just stepped out of their parked car!) into single-file line slots leading to the Red Carpet Door (x=2.22, y=10.42)
       for (let qIdx = 0; qIdx < queuedList.length; qIdx++) {
         const qg = queuedList[qIdx];
         const slotX = 2.22 - qIdx * 0.72;
         const slotY = 10.42 + (qIdx % 2) * 0.08;
+        qg.queueSlotCoord = { x: slotX, y: slotY };
         const qdx = slotX - qg.gridX;
         const qdy = slotY - qg.gridY;
         const qDist = Math.hypot(qdx, qdy);
         if (qDist > 0.03) {
-          const walkStep = Math.min(qDist, 1.35 * dt);
+          const walkStep = Math.min(qDist, 1.42 * dt);
           qg.gridX += (qdx / qDist) * walkStep;
           qg.gridY += (qdy / qDist) * walkStep;
-          qg.facingDir = qdx >= 0 ? 'SE' : 'NE';
+          if (Math.abs(qdx) >= Math.abs(qdy)) {
+            qg.facingDir = qdx >= 0 ? 'SE' : 'NW';
+          } else {
+            qg.facingDir = qdy >= 0 ? 'SW' : 'NE';
+          }
         } else {
           qg.gridX = slotX;
           qg.gridY = slotY;
@@ -1291,11 +1878,31 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               guest.stateTimer = 0.5;
               continue;
             }
-            // Customer enters through the Red Carpet Door at DOOR_COORD (x=2, y=9)!
+            // Customer enters through the Red Carpet Door at DOOR_COORD (x=2, y=9) and pays Cover Charge scaled by club build quality!
             insideGuestsCount += 1;
             guest.gridX = DOOR_COORD.x + 0.35;
             guest.gridY = DOOR_COORD.y + 0.55;
             guest.floor = 1;
+            const coverFee = Math.round(
+              (18 +
+                metrics.danceTileCount * 1.8 +
+                (props.parkingState.ropeTier - 1) * 10) *
+                (guest.isCelebrity ? 2.5 : 1)
+            );
+            earnedCashThisFrame += coverFee;
+            earnedXpThisFrame += 8;
+            guest.cashSpent += coverFee;
+            if (fts.length < 18) {
+              fts.push({
+                id: `ft_cover_${performance.now()}_${Math.random()}`,
+                text: `+$${coverFee} COVER`,
+                floor: 1,
+                gridX: guest.gridX,
+                gridY: guest.gridY,
+                color: '#38bdf8',
+                age: 0,
+              });
+            }
             const wantsUpperFloor = maxFloors >= 2 && Math.random() < 0.36;
             if (wantsUpperFloor) {
               guest.targetFloor = (maxFloors === 3 && Math.random() < 0.45 ? 3 : 2) as FloorLevel;
@@ -1470,6 +2077,26 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
                 it.floor === guest.floor &&
                 getCatalogItem(it.catalogId)?.category === 'DANCE_TILE'
             );
+            // Dancers drop a Groove Tip scaled by how many dance floor tiles, lights, and speakers the player has built!
+            const danceTip = Math.round(
+              (22 + metrics.danceTileCount * 2.5 + metrics.lightingCount * 4) *
+                (1 + metrics.tipBonus * 0.5) *
+                (guest.isCelebrity ? 2.2 : 1)
+            );
+            earnedCashThisFrame += danceTip;
+            earnedXpThisFrame += 10;
+            guest.cashSpent += danceTip;
+            if (fts.length < 18) {
+              fts.push({
+                id: `ft_dance_${performance.now()}_${Math.random()}`,
+                text: `+$${danceTip} 🪩`,
+                floor: guest.floor,
+                gridX: guest.gridX,
+                gridY: guest.gridY,
+                color: '#e879f9',
+                age: 0,
+              });
+            }
             if (guest.state === 'DANCING' || (danceTiles.length > 0 && Math.random() < 0.25)) {
               guest.state = 'DANCER_MOVES';
               guest.danceMove = pickRandomDancerMoveForBpm(currentBpm, guest.danceMove);
@@ -1654,6 +2281,55 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             );
             guest.stateTimer = 1.2;
           } else if (guest.state === 'LEAVING') {
+            // Instead of disappearing at the club door, the customer walks outside across the sidewalk back to a parked car in the parking lot!
+            const parkedCars = trafficCarsRef.current.filter(
+              (c) => c.carState === 'PARKED' && c.stallIndex !== undefined
+            );
+            const targetCar =
+              parkedCars.find((c) => c.id === guest.carId) ||
+              parkedCars[Math.floor(Math.random() * parkedCars.length)];
+
+            const fallbackStall = PARKING_LOT_STALLS[1]; // Taxi pickup bay
+            const targetStall =
+              targetCar && targetCar.stallIndex !== undefined
+                ? PARKING_LOT_STALLS[targetCar.stallIndex]
+                : fallbackStall;
+
+            if (targetCar) {
+              targetCar.carState = 'WAITING_PICKUP';
+              targetCar.parkTimer = 6.0;
+              guest.carId = targetCar.id;
+            }
+
+            const carDoorX = targetStall.gx + 0.28;
+            const carDoorY = targetStall.gy - 0.35;
+            guest.state = 'WALKING_TO_CAR';
+            guest.floor = 1;
+            guest.gridX = 2.15;
+            guest.gridY = 10.25;
+            guest.targetCarCoord = { x: carDoorX, y: carDoorY };
+            guest.path = [
+              { x: 2.05, y: 11.2 },
+              { x: carDoorX, y: carDoorY },
+            ];
+            guest.bubble = 'SPARKLE';
+            guest.bubbleTimer = 4.0;
+            guest.chatText = `What an epic night! Walking back to my car in Bay ${targetStall.label}! 🚗✨`;
+            guest.chatTimer = 4.0;
+            guest.stateTimer = 0.25;
+          } else if (guest.state === 'WALKING_TO_CAR') {
+            // Customer reached their parked car door — they hop inside and the car pulls out of the parking bay and merges into traffic!
+            if (guest.carId) {
+              const boardingCar = trafficCarsRef.current.find((c) => c.id === guest.carId);
+              if (
+                boardingCar &&
+                (boardingCar.carState === 'PARKED' || boardingCar.carState === 'WAITING_PICKUP')
+              ) {
+                boardingCar.headlightFlashTimer = 0.95;
+                boardingCar.carState = 'PARKED';
+                boardingCar.parkTimer = 0; // Triggers pull-out check immediately on next traffic tick
+              }
+            }
             guests.splice(i, 1);
           }
         }
@@ -1941,17 +2617,34 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         props.onEarnRevenue(cashToSend, xpToSend);
       }
 
-      // 2C. Spawn Arriving Customers onto the Red Carpet (Even when the club is full, up to 7 customers fall in line!)
+      // 2C. Spawn Arriving Customers from Parked Cars or the Taxi Drop-Off Bay onto the Red Carpet Queue
       spawnAccumulator += dt;
-      if (spawnAccumulator >= 0.75) {
+      if (spawnAccumulator >= 0.85) {
         spawnAccumulator = 0;
         const currentQueueLen = guests.filter((g) => g.state === 'QUEUEING').length;
         const maxQueueLine = 7;
         const shouldSpawnCustomer =
           currentQueueLen < maxQueueLine &&
-          (insideGuestsCount < metrics.maxGuests ? Math.random() < 0.72 : Math.random() < 0.55);
+          (insideGuestsCount < metrics.maxGuests ? Math.random() < 0.68 : Math.random() < 0.48);
 
         if (shouldSpawnCustomer) {
+          // Pick an actively parked car (or the Taxi Drop-Off stall) so the customer visibly steps out of a car in the parking lot!
+          const parkedCarsNow = trafficCarsRef.current.filter(
+            (c) => c.carState === 'PARKED' && c.stallIndex !== undefined
+          );
+          const chosenCar =
+            parkedCarsNow.length > 0
+              ? parkedCarsNow[Math.floor(Math.random() * parkedCarsNow.length)]
+              : null;
+          const chosenStall =
+            chosenCar && chosenCar.stallIndex !== undefined
+              ? PARKING_LOT_STALLS[chosenCar.stallIndex]
+              : PARKING_LOT_STALLS[1];
+
+          if (chosenCar) {
+            chosenCar.headlightFlashTimer = 0.75;
+          }
+
           const isCeleb = metrics.totalHype >= 130 && Math.random() < 0.22;
           const namePool = isCeleb ? CELEBRITY_NAMES : GUEST_NAMES;
           const bouncerStaffCount = staffList.filter((s) => s.role === 'BOUNCER').length;
@@ -1966,9 +2659,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             isCelebrity: isCeleb,
             floor: 1,
             targetFloor: 1,
-            // Spawn at the tail of the Red Carpet so they visibly walk up into line
-            gridX: Math.min(-1.6, 2.22 - (currentQueueLen + 1) * 0.72),
-            gridY: 10.42 + ((currentQueueLen + 1) % 2) * 0.08,
+            // Spawn right by the car door in the parking bay so they walk from the parked car to the Red Carpet line!
+            gridX: chosenStall.gx + 0.3,
+            gridY: chosenStall.gy - 0.38,
             path: [],
             state: 'QUEUEING',
             stateTimer: queueWait,
@@ -1984,7 +2677,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
             hairColor: HAIR_COLORS[Math.floor(Math.random() * HAIR_COLORS.length)],
             pantsColor: PANTS_COLORS[Math.floor(Math.random() * PANTS_COLORS.length)],
             cashSpent: 0,
-            facingDir: 'SE',
+            facingDir: 'NW',
+            carId: chosenCar?.id,
           });
         }
 
@@ -1993,6 +2687,13 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           lastReportedQueueCount = qLen;
           props.onQueueCountChange(qLen);
         }
+      }
+
+      // 2C-Whale. Automatically keep guest.isWhale assigned when cumulative cashSpent exceeds current club average
+      const avgClubSpend = computeAverageClubGuestSpend(guests);
+      for (let i = 0; i < guests.length; i++) {
+        const g = guests[i];
+        g.isWhale = !isExteriorGuestState(g.state) && g.cashSpent > avgClubSpend && g.cashSpent > 0;
       }
 
       // 2D. Periodically report all Sprite Moods (throttled to 1.6s so touch clicks inside the Mood Panel never get interrupted by DOM rebuilds)
@@ -2170,8 +2871,9 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         moodProfile
       );
 
-      // 4. SUNKEN BEVELED DANCE FLOOR GRID + AUTOMATIC GENRE MOOD COLOR FILTER OVERLAY
+      // 4. SUNKEN BEVELED DANCE FLOOR GRID + AUTOMATIC GENRE MOOD COLOR FILTER OVERLAY + BASS DROP RIPPLE WAVE
       const floorItems = props.placedItems.filter((p) => p.floor === props.activeFloor);
+      const activeFloorRipples = bassDropRipplesRef.current;
       for (const item of floorItems) {
         const cat = getCatalogItem(item.catalogId);
         if (!cat || cat.category !== 'DANCE_TILE') continue;
@@ -2186,7 +2888,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
           scale,
           t,
           sequencer,
-          moodProfile
+          moodProfile,
+          activeFloorRipples
         );
         drawDanceFloorMoodFilterOverlay(
           ctx,
@@ -2203,28 +2906,77 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         );
       }
 
-      // 4B. HIGHLIGHT CURRENTLY SELECTED PLACED DECORATION IN EDIT POSITION MODE
-      if (props.editingPlacedItemUid) {
-        const editingItem = floorItems.find((p) => p.uid === props.editingPlacedItemUid);
-        if (editingItem) {
-          const editCat = getCatalogItem(editingItem.catalogId);
-          if (editCat) {
-            const editFp = getRotatedFootprint(editCat, editingItem.rotation);
-            for (let dx = 0; dx < editFp.width; dx++) {
-              for (let dy = 0; dy < editFp.depth; dy++) {
-                drawIsoTilePolygon(
-                  ctx,
-                  editingItem.gridX + dx,
-                  editingItem.gridY + dy,
-                  1.5 * scale,
-                  originX,
-                  originY,
-                  tileW,
-                  tileH,
-                  'rgba(250, 204, 21, 0.32)',
-                  '#facc15',
-                  2.4 * scale
-                );
+      // 4A. EXPANDING ISOMETRIC BASS DROP RIPPLE SHOCKWAVE RINGS ACROSS THE DANCE FLOOR
+      if (activeFloorRipples.length > 0) {
+        drawBassDropDanceFloorRipples(
+          ctx,
+          activeFloorRipples,
+          props.activeFloor,
+          originX,
+          originY,
+          tileW,
+          tileH,
+          scale
+        );
+      }
+
+      // 4B. HIGHLIGHT CURRENTLY SELECTED PLACED DECORATION IN EDIT POSITION MODE (OR ALL MOVABLE ITEMS WHEN EDIT MODE IS ACTIVE)
+      if (props.isEditDecorMode || props.editingPlacedItemUid) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 7.5);
+        for (const pItem of floorItems) {
+          const itemCat = getCatalogItem(pItem.catalogId);
+          if (!itemCat) continue;
+          const itemFp = getRotatedFootprint(itemCat, pItem.rotation);
+          const isTarget = props.editingPlacedItemUid === pItem.uid;
+          for (let dx = 0; dx < itemFp.width; dx++) {
+            for (let dy = 0; dy < itemFp.depth; dy++) {
+              drawIsoTilePolygon(
+                ctx,
+                pItem.gridX + dx,
+                pItem.gridY + dy,
+                (isTarget ? 2.4 : 1.0) * scale,
+                originX,
+                originY,
+                tileW,
+                tileH,
+                isTarget
+                  ? `rgba(34, 211, 238, ${(0.28 + pulse * 0.22).toFixed(2)})`
+                  : 'rgba(250, 204, 21, 0.14)',
+                isTarget ? '#22d3ee' : 'rgba(250, 204, 21, 0.65)',
+                (isTarget ? 2.8 : 1.4) * scale
+              );
+            }
+          }
+        }
+      }
+
+      // 4C. NEWLY BOUGHT DECORATION FLOOR BEACON PAD
+      if (props.newlyPlacedItemHighlight) {
+        const elapsedSec = (performance.now() - props.newlyPlacedItemHighlight.placedAtMs) / 1000;
+        if (elapsedSec >= 0 && elapsedSec <= 9.0) {
+          const newItem = floorItems.find((p) => p.uid === props.newlyPlacedItemHighlight?.uid);
+          if (newItem) {
+            const newCat = getCatalogItem(newItem.catalogId);
+            if (newCat) {
+              const newFp = getRotatedFootprint(newCat, newItem.rotation);
+              const fade = elapsedSec > 7.0 ? Math.max(0, 1 - (elapsedSec - 7.0) / 2.0) : 1;
+              const pulse = 0.5 + 0.5 * Math.sin(t * 9);
+              for (let dx = 0; dx < newFp.width; dx++) {
+                for (let dy = 0; dy < newFp.depth; dy++) {
+                  drawIsoTilePolygon(
+                    ctx,
+                    newItem.gridX + dx,
+                    newItem.gridY + dy,
+                    2.0 * scale,
+                    originX,
+                    originY,
+                    tileW,
+                    tileH,
+                    `rgba(74, 222, 128, ${((0.28 + pulse * 0.25) * fade).toFixed(2)})`,
+                    '#4ade80',
+                    2.6 * scale
+                  );
+                }
               }
             }
           }
@@ -2544,14 +3296,14 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
       // Active Floor Interior Guests (Compute live average spend to identify High-Hype VIP Whales)
       const allGuests = guestsRef.current;
-      const insideGuestsNow = allGuests.filter((g) => g.state !== 'QUEUEING');
+      const insideGuestsNow = allGuests.filter((g) => !isExteriorGuestState(g.state));
       const insideCountNow = insideGuestsNow.length;
       const isClubFullNow = insideCountNow >= props.clubMetrics.maxGuests;
       const avgClubGuestSpend = computeAverageClubGuestSpend(allGuests);
 
       for (let i = 0; i < allGuests.length; i++) {
         const guest = allGuests[i];
-        if (guest.floor !== props.activeFloor || guest.state === 'QUEUEING') continue;
+        if (guest.floor !== props.activeFloor || isExteriorGuestState(guest.state)) continue;
         const depth = guest.gridX + guest.gridY + 0.6;
         const isWhale = isGuestVipWhale(guest, avgClubGuestSpend);
         drawables.push({
@@ -2570,7 +3322,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
               scale,
               t,
               activeBpm,
-              isWhale
+              isWhale,
+              bassDropRipplesRef.current
             );
             if (props.selectedSpriteId === guest.id) {
               const info = computeGuestMoodInfo(
@@ -2618,8 +3371,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         });
       }
 
-      // Front Red Carpet Queueing Customers walking/waiting in line to enter the Red Carpet Door
-      const queueGuests = allGuests.filter((g) => g.state === 'QUEUEING');
+      // Front Red Carpet Queueing Customers + Customers Walking From/Back To Their Parked Cars in the Parking Lot!
+      const queueGuests = allGuests.filter((g) => isExteriorGuestState(g.state));
       queueGuests.forEach((qg) => {
         const qx = qg.gridX;
         const qy = qg.gridY;
@@ -2849,6 +3602,22 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
         ctx.restore();
       }
 
+      // 10. FOREGROUND EDIT-MODE GIZMO, LONG-PRESS RADIAL PROGRESS RING & NEWLY BOUGHT DECORATION SPOTLIGHT BEACON
+      drawDecorationEditAndNewBeaconOverlays(
+        ctx,
+        floorItems,
+        originX,
+        originY,
+        tileW,
+        tileH,
+        scale,
+        t,
+        props.isEditDecorMode,
+        props.editingPlacedItemUid,
+        props.newlyPlacedItemHighlight,
+        longPressStateRef.current
+      );
+
       ctx.restore();
       animId = requestAnimationFrame(renderFrame);
     };
@@ -2878,6 +3647,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     activePointersRef.current.set(e.pointerId, { x: sx, y: sy });
 
     if (activePointersRef.current.size === 2) {
+      clearLongPressTimer();
       const pts = Array.from(activePointersRef.current.values());
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
       pinchStateRef.current = {
@@ -2904,7 +3674,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     };
 
     const props = latestPropsRef.current;
-    const { tileW, tileH, originX, originY } = getViewportTransform(
+    const { scale, tileW, tileH, originX, originY } = getViewportTransform(
       rect.width,
       rect.height,
       props.cameraZoom
@@ -2912,6 +3682,45 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     const iso = screenToIso(sx, sy, originX, originY, tileW, tileH);
     if (iso.x >= 0 && iso.x < GRID_SIZE && iso.y >= 0 && iso.y < GRID_SIZE) {
       hoveredGridRef.current = iso;
+    }
+
+    // Long-press detection (~420ms hold) on any placed decoration on the active floor to enter Edit Mode to move it!
+    clearLongPressTimer();
+    longPressStateRef.current.triggered = false;
+    if (
+      activePointersRef.current.size === 1 &&
+      !props.placementModeStaff &&
+      !props.relocatingStaffUid &&
+      !props.isRemoveMode
+    ) {
+      const hitItem = findPlacedDecorationAtScreenPoint(
+        sx,
+        sy,
+        iso,
+        originX,
+        originY,
+        tileW,
+        tileH,
+        scale,
+        props.placedItems,
+        props.activeFloor
+      );
+      if (hitItem) {
+        longPressStateRef.current.targetItemUid = hitItem.uid;
+        longPressStateRef.current.startTimeMs = performance.now();
+        longPressStateRef.current.durationMs = 420;
+        longPressStateRef.current.timerId = window.setTimeout(() => {
+          if (
+            dragStateRef.current.isDown &&
+            !dragStateRef.current.hasDragged &&
+            !pinchStateRef.current.isPinching
+          ) {
+            longPressStateRef.current.triggered = true;
+            longPressStateRef.current.timerId = null;
+            latestPropsRef.current.onLongPressPlacedItem?.(hitItem.uid);
+          }
+        }, 420);
+      }
     }
   };
 
@@ -2929,6 +3738,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
 
     // Two-finger Pinch-to-Zoom + Two-finger Pan for iPad & Phone browsers
     if (pinchStateRef.current.isPinching && activePointersRef.current.size >= 2) {
+      clearLongPressTimer();
       const pts = Array.from(activePointersRef.current.values());
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
       const ratio = dist / Math.max(20, pinchStateRef.current.initialDist);
@@ -2953,6 +3763,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       const dy = sy - dragStateRef.current.startY;
       if (Math.hypot(dx, dy) > 9) {
         dragStateRef.current.hasDragged = true;
+        clearLongPressTimer();
       }
       if (dragStateRef.current.hasDragged) {
         panOffsetRef.current = {
@@ -2986,6 +3797,10 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       // Ignore
     }
 
+    const wasLongPressTriggered = longPressStateRef.current.triggered;
+    clearLongPressTimer();
+    longPressStateRef.current.triggered = false;
+
     activePointersRef.current.delete(e.pointerId);
     if (activePointersRef.current.size < 2 && pinchStateRef.current.isPinching) {
       pinchStateRef.current.isPinching = false;
@@ -2998,7 +3813,7 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
     dragStateRef.current.isDown = false;
     dragStateRef.current.pointerId = null;
 
-    if (wasDragged) return;
+    if (wasDragged || wasLongPressTriggered) return;
 
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
@@ -3108,6 +3923,8 @@ export const IsometricClubCanvas: React.FC<IsometricClubCanvasProps> = ({
       onPointerUp={handlePointerUp}
       onWheel={handleWheelZoom}
       onPointerCancel={(e) => {
+        clearLongPressTimer();
+        longPressStateRef.current.triggered = false;
         activePointersRef.current.delete(e.pointerId);
         if (activePointersRef.current.size < 2) {
           pinchStateRef.current.isPinching = false;
@@ -3246,14 +4063,19 @@ function drawIllustratedCitySkyline(
 ) {
   ctx.save();
 
-  // 1. DISTANT BACKGROUND SKYLINE SILHOUETTES (Deep atmospheric haze & FAA red beacons)
+  // 1. DISTANT BACKGROUND SKYLINE SILHOUETTES (10 atmospheric high-rise towers with FAA red aviation beacons)
   const distantTowers = [
-    { dx: -520, dy: -285, w: 66, h: 320, sideW: 18, color: '#0d1021', sideColor: '#070914' },
-    { dx: -405, dy: -315, w: 74, h: 350, sideW: 20, color: '#0f1326', sideColor: '#080a17' },
-    { dx: -215, dy: -295, w: 68, h: 310, sideW: 16, color: '#0d1124', sideColor: '#070914' },
-    { dx: 130, dy: -305, w: 72, h: 325, sideW: 18, color: '#0e1225', sideColor: '#070914' },
-    { dx: 245, dy: -320, w: 84, h: 355, sideW: 22, color: '#10152a', sideColor: '#080b18' },
-    { dx: 410, dy: -275, w: 70, h: 315, sideW: 18, color: '#0c1020', sideColor: '#060812' },
+    { dx: -585, dy: -275, w: 62, h: 310, sideW: 16, color: '#0c0f1f', sideColor: '#060812' },
+    { dx: -505, dy: -305, w: 68, h: 335, sideW: 18, color: '#0d1021', sideColor: '#070914' },
+    { dx: -405, dy: -325, w: 74, h: 355, sideW: 20, color: '#0f1326', sideColor: '#080a17' },
+    { dx: -290, dy: -290, w: 64, h: 315, sideW: 16, color: '#0d1123', sideColor: '#070914' },
+    { dx: -185, dy: -315, w: 72, h: 340, sideW: 18, color: '#0e1225', sideColor: '#070914' },
+    { dx: -75, dy: -332, w: 78, h: 365, sideW: 20, color: '#10152a', sideColor: '#080b18' },
+    { dx: 35, dy: -310, w: 70, h: 335, sideW: 18, color: '#0e1224', sideColor: '#070914' },
+    { dx: 145, dy: -305, w: 72, h: 325, sideW: 18, color: '#0e1225', sideColor: '#070914' },
+    { dx: 255, dy: -325, w: 84, h: 355, sideW: 22, color: '#10152a', sideColor: '#080b18' },
+    { dx: 385, dy: -295, w: 74, h: 330, sideW: 18, color: '#0d1122', sideColor: '#070914' },
+    { dx: 495, dy: -275, w: 68, h: 310, sideW: 18, color: '#0c1020', sideColor: '#060812' },
   ];
 
   for (let i = 0; i < distantTowers.length; i++) {
@@ -3280,7 +4102,7 @@ function drawIllustratedCitySkyline(
     ctx.fill();
 
     // Subtle distant office window bands
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.12)';
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.13)';
     for (let wy = y + 16 * scale; wy < y + h - 40 * scale; wy += 14 * scale) {
       ctx.fillRect(x + 6 * scale, wy, w - 12 * scale, 3.5 * scale);
     }
@@ -3294,15 +4116,15 @@ function drawIllustratedCitySkyline(
     ctx.lineTo(spireX, y - 24 * scale);
     ctx.stroke();
 
-    const beaconAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.6 + i * 1.4));
-    ctx.fillStyle = `rgba(2ef, 68, 68, ${beaconAlpha})`.replace('2ef', '239');
+    const beaconAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.2 + i * 1.3));
+    ctx.fillStyle = `rgba(239, 68, 68, ${beaconAlpha})`;
     ctx.beginPath();
     ctx.arc(spireX, y - 24 * scale, 2.2 * scale, 0, Math.PI * 2);
     ctx.fill();
   }
 
   // Helper to draw a realistic 3D architectural building block with front face, perspective side wall,
-  // recessed roof deck, concrete parapet coping, and rooftop HVAC unit
+  // recessed roof deck, concrete parapet coping, and stone cornice moldings
   const drawRealistic3DBuildingBlock = (opts: {
     dx: number;
     dy: number;
@@ -3387,14 +4209,56 @@ function drawIllustratedCitySkyline(
   };
 
   // ===========================================================================
-  // BUILDING 1 (FAR-LEFT): GLASS CURTAIN-WALL CORPORATE SKYSCRAPER ("APEX TOWER")
+  // BUILDING 0 (OUTER FAR-LEFT): PRE-WAR STEPPED LIMESTONE FINANCIAL TOWER
+  // ===========================================================================
+  {
+    const b0 = drawRealistic3DBuildingBlock({
+      dx: -548,
+      dy: -206,
+      w: 78,
+      h: 305,
+      depthX: 18,
+      depthY: -9,
+      frontTopColor: '#44403c',
+      frontBottomColor: '#292524',
+      sideColor: '#1c1917',
+      roofColor: '#292524',
+      parapetColor: '#a8a29e',
+      corniceIntervals: [0.24, 0.68],
+    });
+
+    // Stepped Art-Deco Limestone Crown Tier
+    ctx.fillStyle = '#57534e';
+    ctx.fillRect(b0.bx + 12 * scale, b0.by - 22 * scale, b0.bw - 24 * scale, 18 * scale);
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.3 * scale;
+    ctx.strokeRect(b0.bx + 12 * scale, b0.by - 22 * scale, b0.bw - 24 * scale, 18 * scale);
+
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 3; c++) {
+        const wx = b0.bx + (9 + c * 22) * scale;
+        const wy = b0.by + (16 + r * 29) * scale;
+        const ww = 15 * scale;
+        const wh = 19 * scale;
+        const lit = (r * 5 + c * 3) % 4 !== 0;
+        ctx.fillStyle = lit ? 'rgba(254, 240, 138, 0.64)' : 'rgba(28, 25, 23, 0.85)';
+        ctx.fillRect(wx, wy, ww, wh);
+        ctx.strokeStyle = '#78716c';
+        ctx.lineWidth = 1.1 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // BUILDING 1 (FAR-LEFT): GLASS CURTAIN-WALL CORPORATE SKYSCRAPER
   // ===========================================================================
   {
     const b1 = drawRealistic3DBuildingBlock({
-      dx: -458,
-      dy: -225,
+      dx: -456,
+      dy: -228,
       w: 84,
-      h: 325,
+      h: 328,
       depthX: 22,
       depthY: -11,
       frontTopColor: '#1e293b',
@@ -3410,7 +4274,6 @@ function drawIllustratedCitySkyline(
     ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 1.4 * scale;
     ctx.strokeRect(b1.bx + 18 * scale, b1.by - 18 * scale, 44 * scale, 14 * scale);
-    // Louver vents on penthouse
     ctx.fillStyle = '#0f172a';
     for (let lv = 0; lv < 3; lv++) {
       ctx.fillRect(
@@ -3436,21 +4299,16 @@ function drawIllustratedCitySkyline(
         const ww = cellW - 2.4 * scale;
         const wh = cellH - 2.8 * scale;
 
-        // Deterministic realistic office lighting (warm tungsten, cool daylight, or dark glass reflection)
         const hash = (r * 13 + c * 7) % 11;
         if (hash === 0 || hash === 3 || hash === 8) {
-          // Warm executive office light
           ctx.fillStyle = 'rgba(253, 230, 138, 0.72)';
         } else if (hash === 1 || hash === 5 || hash === 9) {
-          // Cool LED office ceiling light
           ctx.fillStyle = 'rgba(186, 230, 253, 0.58)';
         } else {
-          // Dark reflective architectural glass
           ctx.fillStyle = 'rgba(30, 58, 138, 0.38)';
         }
         ctx.fillRect(wx, wy, ww, wh);
 
-        // Subtle interior ceiling fixture / desk silhouette in lit rooms
         if (hash === 0 || hash === 3 || hash === 1) {
           ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
           ctx.fillRect(wx, wy + wh * 0.62, ww, wh * 0.38);
@@ -3468,10 +4326,6 @@ function drawIllustratedCitySkyline(
       ctx.lineTo(mx, b1.by + padY + rows * cellH);
       ctx.stroke();
     }
-
-    // Architectural Crown Warm-White LED Strip
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(b1.bx + 4 * scale, b1.by + 4 * scale, b1.bw - 8 * scale, 2.5 * scale);
   }
 
   // ===========================================================================
@@ -3480,9 +4334,9 @@ function drawIllustratedCitySkyline(
   {
     const b2 = drawRealistic3DBuildingBlock({
       dx: -356,
-      dy: -192,
+      dy: -194,
       w: 86,
-      h: 290,
+      h: 292,
       depthX: 20,
       depthY: -10,
       frontTopColor: '#5c2d24',
@@ -3507,13 +4361,11 @@ function drawIllustratedCitySkyline(
     ctx.lineTo(wtX + 20 * scale, b2.by - 4 * scale);
     ctx.stroke();
 
-    // Wooden barrel tank + iron bands + conical roof
     ctx.fillStyle = '#78350f';
     ctx.fillRect(wtX + 2 * scale, wtY + 6 * scale, 18 * scale, 14 * scale);
     ctx.strokeStyle = '#090d16';
     ctx.lineWidth = 1.2 * scale;
     ctx.strokeRect(wtX + 2 * scale, wtY + 6 * scale, 18 * scale, 14 * scale);
-    // Conical tin roof
     ctx.fillStyle = '#475569';
     ctx.beginPath();
     ctx.moveTo(wtX, wtY + 6 * scale);
@@ -3531,16 +4383,13 @@ function drawIllustratedCitySkyline(
         const ww = 16 * scale;
         const wh = 22 * scale;
 
-        // Deep brick window recess
         ctx.fillStyle = '#1c0a07';
         ctx.fillRect(wx - 1.5 * scale, wy - 1.5 * scale, ww + 3 * scale, wh + 3 * scale);
 
-        // Warm loft interior light or dimmed studio
         const isWarmLit = (row + col) % 2 === 0 || row === 2;
         ctx.fillStyle = isWarmLit ? 'rgba(254, 215, 170, 0.82)' : 'rgba(51, 65, 85, 0.55)';
         ctx.fillRect(wx, wy, ww, wh);
 
-        // Window muntin crossbars (4-pane industrial sash)
         ctx.strokeStyle = '#1c1917';
         ctx.lineWidth = 1.2 * scale;
         ctx.strokeRect(wx, wy, ww, wh);
@@ -3551,7 +4400,6 @@ function drawIllustratedCitySkyline(
         ctx.lineTo(wx + ww, wy + wh * 0.48);
         ctx.stroke();
 
-        // Limestone window sill
         ctx.fillStyle = '#d6d3d1';
         ctx.fillRect(wx - 2 * scale, wy + wh, ww + 4 * scale, 2.5 * scale);
       }
@@ -3564,14 +4412,12 @@ function drawIllustratedCitySkyline(
       const fy = b2.by + (f * 34 + 34) * scale;
       const fx = b2.bx + 32 * scale;
       const fw = 44 * scale;
-      // Iron balcony grating & railing
       ctx.strokeRect(fx, fy - 7 * scale, fw, 7 * scale);
       ctx.beginPath();
       for (let rail = 4; rail < 44; rail += 6) {
         ctx.moveTo(fx + rail * scale, fy - 7 * scale);
         ctx.lineTo(fx + rail * scale, fy);
       }
-      // Diagonal stair flight to next floor down
       if (f < 5) {
         ctx.moveTo(fx + 6 * scale, fy);
         ctx.lineTo(fx + 34 * scale, fy + 27 * scale);
@@ -3585,10 +4431,10 @@ function drawIllustratedCitySkyline(
   // ===========================================================================
   {
     const b3 = drawRealistic3DBuildingBlock({
-      dx: -252,
-      dy: -214,
+      dx: -254,
+      dy: -216,
       w: 88,
-      h: 270,
+      h: 274,
       depthX: 18,
       depthY: -9,
       frontTopColor: '#3f3f46',
@@ -3599,7 +4445,6 @@ function drawIllustratedCitySkyline(
       corniceIntervals: [0.16, 0.84],
     });
 
-    // Recessed Hotel Suites with Glass Balconies & Warm Sconce Uplighting
     for (let r = 0; r < 6; r++) {
       for (let c = 0; c < 3; c++) {
         const bx0 = b3.bx + (10 + c * 25) * scale;
@@ -3607,16 +4452,13 @@ function drawIllustratedCitySkyline(
         const bw0 = 19 * scale;
         const bh0 = 21 * scale;
 
-        // Recessed suite loggia
         ctx.fillStyle = '#09090b';
         ctx.fillRect(bx0, by0, bw0, bh0);
 
-        // Warm hotel room ambient glow & curtains
         const suiteLit = (r * 3 + c) % 4 !== 0;
         ctx.fillStyle = suiteLit ? 'rgba(253, 224, 71, 0.65)' : 'rgba(39, 39, 42, 0.7)';
         ctx.fillRect(bx0 + 2 * scale, by0 + 2 * scale, bw0 - 4 * scale, bh0 - 4 * scale);
 
-        // Frosted glass balcony railing across bottom half of suite window
         ctx.fillStyle = 'rgba(148, 163, 184, 0.42)';
         ctx.fillRect(bx0 - 1 * scale, by0 + bh0 - 7 * scale, bw0 + 2 * scale, 7 * scale);
         ctx.strokeStyle = '#e4e4e7';
@@ -3624,46 +4466,146 @@ function drawIllustratedCitySkyline(
         ctx.strokeRect(bx0 - 1 * scale, by0 + bh0 - 7 * scale, bw0 + 2 * scale, 7 * scale);
       }
     }
+  }
 
-    // Vertical Architectural Blade Sign mounted on steel brackets ("HOTEL ASTOR")
-    const signX = b3.bx - 12 * scale;
-    const signY = b3.by + 36 * scale;
-    // Steel mounting brackets
-    ctx.strokeStyle = '#18181b';
-    ctx.lineWidth = 2 * scale;
-    ctx.beginPath();
-    ctx.moveTo(signX + 12 * scale, signY + 10 * scale);
-    ctx.lineTo(b3.bx, signY + 10 * scale);
-    ctx.moveTo(signX + 12 * scale, signY + 86 * scale);
-    ctx.lineTo(b3.bx, signY + 86 * scale);
-    ctx.stroke();
+  // ===========================================================================
+  // BUILDING 4 (CENTER-LEFT): NEO-CLASSICAL STONE & CAST-IRON BANK BUILDING
+  // ===========================================================================
+  {
+    const b4c = drawRealistic3DBuildingBlock({
+      dx: -152,
+      dy: -238,
+      w: 84,
+      h: 268,
+      depthX: 18,
+      depthY: -9,
+      frontTopColor: '#334155',
+      frontBottomColor: '#1e293b',
+      sideColor: '#0f172a',
+      roofColor: '#1e293b',
+      parapetColor: '#94a3b8',
+      corniceIntervals: [0.18, 0.75],
+    });
 
-    fillStrokeRoundedRect(
-      ctx,
-      signX,
-      signY,
-      14 * scale,
-      98 * scale,
-      3 * scale,
-      '#18181b',
-      '#fbbf24',
-      1.6 * scale
-    );
-    ctx.fillStyle = '#fef08a';
-    ctx.font = `800 ${Math.max(7, Math.round(7.5 * scale))}px "Outfit", sans-serif`;
-    ctx.textAlign = 'center';
-    const letters = ['H', 'O', 'T', 'E', 'L'];
-    for (let l = 0; l < letters.length; l++) {
-      ctx.fillText(letters[l], signX + 7 * scale, signY + (22 + l * 16) * scale);
+    // Fluted Vertical Stone Columns & Recessed Windows
+    ctx.fillStyle = '#475569';
+    for (let col = 0; col < 4; col++) {
+      ctx.fillRect(
+        b4c.bx + (7 + col * 22) * scale,
+        b4c.by + 6 * scale,
+        4.5 * scale,
+        b4c.bh - 12 * scale
+      );
+    }
+    for (let r = 0; r < 7; r++) {
+      for (let c = 0; c < 3; c++) {
+        const wx = b4c.bx + (13 + c * 22) * scale;
+        const wy = b4c.by + (16 + r * 31) * scale;
+        const ww = 14 * scale;
+        const wh = 20 * scale;
+        const lit = (r + c * 2) % 3 === 0;
+        ctx.fillStyle = lit ? 'rgba(254, 243, 199, 0.62)' : 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(wx, wy, ww, wh);
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
+      }
     }
   }
 
   // ===========================================================================
-  // BUILDING 4 (INNER-RIGHT): MODERN ARCHITECTURAL HIGH-RISE CONDOMINIUMS
+  // BUILDING 5 (CENTER-BACK): TALL MODERNIST STEEL-FRAME HIGH-RISE TOWER
+  // ===========================================================================
+  {
+    const b5c = drawRealistic3DBuildingBlock({
+      dx: -54,
+      dy: -272,
+      w: 96,
+      h: 295,
+      depthX: 22,
+      depthY: -11,
+      frontTopColor: '#1e293b',
+      frontBottomColor: '#0f172a',
+      sideColor: '#090d16',
+      roofColor: '#334155',
+      parapetColor: '#64748b',
+      corniceIntervals: [0.32],
+    });
+
+    // Twin Rooftop Cooling Towers
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(b5c.bx + 16 * scale, b5c.by - 16 * scale, 26 * scale, 12 * scale);
+    ctx.fillRect(b5c.bx + 52 * scale, b5c.by - 16 * scale, 26 * scale, 12 * scale);
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.2 * scale;
+    ctx.strokeRect(b5c.bx + 16 * scale, b5c.by - 16 * scale, 26 * scale, 12 * scale);
+    ctx.strokeRect(b5c.bx + 52 * scale, b5c.by - 16 * scale, 26 * scale, 12 * scale);
+
+    for (let r = 0; r < 10; r++) {
+      for (let c = 0; c < 4; c++) {
+        const wx = b5c.bx + (9 + c * 21) * scale;
+        const wy = b5c.by + (14 + r * 26) * scale;
+        const ww = 16 * scale;
+        const wh = 18 * scale;
+        const hash = (r * 7 + c * 5) % 9;
+        ctx.fillStyle =
+          hash === 0 || hash === 4
+            ? 'rgba(253, 230, 138, 0.65)'
+            : hash === 2 || hash === 6
+            ? 'rgba(186, 230, 253, 0.5)'
+            : 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(wx, wy, ww, wh);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // BUILDING 6 (CENTER-RIGHT): CONTEMPORARY TERRACOTTA & GLASS RESIDENTIAL TOWER
+  // ===========================================================================
+  {
+    const b6c = drawRealistic3DBuildingBlock({
+      dx: 58,
+      dy: -246,
+      w: 94,
+      h: 280,
+      depthX: 20,
+      depthY: -10,
+      frontTopColor: '#431407',
+      frontBottomColor: '#270e07',
+      sideColor: '#180804',
+      roofColor: '#292524',
+      parapetColor: '#a8a29e',
+      corniceIntervals: [0.28, 0.64],
+    });
+
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 3; c++) {
+        const wx = b6c.bx + (10 + c * 27) * scale;
+        const wy = b6c.by + (16 + r * 31) * scale;
+        const ww = 21 * scale;
+        const wh = 20 * scale;
+        const isLit = (r * 3 + c) % 3 !== 1;
+        ctx.fillStyle = isLit ? 'rgba(254, 215, 170, 0.72)' : 'rgba(28, 25, 23, 0.86)';
+        ctx.fillRect(wx, wy, ww, wh);
+        // Balcony slab & glass guard
+        ctx.fillStyle = '#78716c';
+        ctx.fillRect(wx - 1.5 * scale, wy + wh, ww + 3 * scale, 2.8 * scale);
+        ctx.strokeStyle = '#292524';
+        ctx.lineWidth = 1.1 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
+      }
+    }
+  }
+
+  // ===========================================================================
+  // BUILDING 7 (INNER-RIGHT): MODERN ARCHITECTURAL HIGH-RISE CONDOMINIUMS
   // ===========================================================================
   {
     const b4 = drawRealistic3DBuildingBlock({
-      dx: 174,
+      dx: 168,
       dy: -232,
       w: 92,
       h: 292,
@@ -3676,14 +4618,12 @@ function drawIllustratedCitySkyline(
       parapetColor: '#64748b',
     });
 
-    // Rooftop HVAC Chiller Unit & Communication Mast
     ctx.fillStyle = '#475569';
     ctx.fillRect(b4.bx + 22 * scale, b4.by - 15 * scale, 42 * scale, 12 * scale);
     ctx.strokeStyle = '#090d16';
     ctx.lineWidth = 1.3 * scale;
     ctx.strokeRect(b4.bx + 22 * scale, b4.by - 15 * scale, 42 * scale, 12 * scale);
 
-    // Panoramic Floor-to-Ceiling Apartment Windows with Structural Concrete Pillars
     for (let r = 0; r < 10; r++) {
       const wy = b4.by + (16 + r * 25) * scale;
       const wh = 18 * scale;
@@ -3700,7 +4640,6 @@ function drawIllustratedCitySkyline(
           : 'rgba(15, 23, 42, 0.85)';
         ctx.fillRect(wx, wy, ww, wh);
 
-        // Glass mullion dividers
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 1.2 * scale;
         ctx.strokeRect(wx, wy, ww, wh);
@@ -3711,13 +4650,11 @@ function drawIllustratedCitySkyline(
         ctx.lineTo(wx + (ww * 2) / 3, wy + wh);
         ctx.stroke();
 
-        // Concrete floor slab band
         ctx.fillStyle = '#475569';
         ctx.fillRect(b4.bx + 4 * scale, wy + wh, b4.bw - 8 * scale, 3 * scale);
       }
     }
 
-    // Side-wall recessed stairwell strip windows (giving true 3D depth)
     ctx.fillStyle = 'rgba(253, 224, 71, 0.32)';
     for (let r = 0; r < 10; r++) {
       const sy = b4.by + (14 + r * 25) * scale;
@@ -3726,76 +4663,136 @@ function drawIllustratedCitySkyline(
   }
 
   // ===========================================================================
-  // BUILDING 5 (FAR-RIGHT): DOWNTOWN GRANITE & BRUSHED-STEEL MEDIA COMMERCIAL COMPLEX
+  // BUILDING 8 (MID-RIGHT): REALISTIC GRANITE & LIMESTONE EXECUTIVE OFFICE TOWER
+  // (No Metropolitan Plaza billboard or moving bars — pure realistic architecture!)
   // ===========================================================================
   {
     const b5 = drawRealistic3DBuildingBlock({
-      dx: 282,
-      dy: -198,
-      w: 138,
-      h: 312,
-      depthX: 26,
-      depthY: -13,
+      dx: 278,
+      dy: -204,
+      w: 128,
+      h: 316,
+      depthX: 24,
+      depthY: -12,
       frontTopColor: '#27272a',
       frontBottomColor: '#18181b',
       sideColor: '#09090b',
       roofColor: '#27272a',
-      parapetColor: '#71717a',
-      corniceIntervals: [0.42, 0.76],
+      parapetColor: '#a1a1aa',
+      corniceIntervals: [0.22, 0.55, 0.82],
     });
+
+    // Rooftop Architectural Mechanical Penthouse & Exhaust Louvers
+    ctx.fillStyle = '#3f3f46';
+    ctx.fillRect(b5.bx + 24 * scale, b5.by - 20 * scale, 76 * scale, 16 * scale);
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 1.4 * scale;
+    ctx.strokeRect(b5.bx + 24 * scale, b5.by - 20 * scale, 76 * scale, 16 * scale);
+    ctx.fillStyle = '#18181b';
+    for (let lv = 0; lv < 4; lv++) {
+      ctx.fillRect(
+        b5.bx + (30 + lv * 17) * scale,
+        b5.by - 15 * scale,
+        11 * scale,
+        7 * scale
+      );
+    }
 
     // Structural Vertical Granite Pilasters across the Facade
     ctx.fillStyle = '#3f3f46';
     for (let p = 0; p < 5; p++) {
-      const px = b5.bx + (6 + p * 31) * scale;
-      ctx.fillRect(px, b5.by + 4 * scale, 6 * scale, b5.bh - 8 * scale);
+      const px = b5.bx + (6 + p * 28.5) * scale;
+      ctx.fillRect(px, b5.by + 4 * scale, 5.5 * scale, b5.bh - 8 * scale);
     }
 
-    // Realistic Commercial Office Windows between Pilasters
+    // Realistic Recessed Double-Hung Architectural Office Windows with Stone Lintels & Interior Venetian Blinds
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 4; c++) {
-        const wx = b5.bx + (14 + c * 31) * scale;
-        const wy = b5.by + (18 + r * 30) * scale;
-        const ww = 21 * scale;
-        const wh = 18 * scale;
+        const wx = b5.bx + (13.5 + c * 28.5) * scale;
+        const wy = b5.by + (16 + r * 31) * scale;
+        const ww = 19.5 * scale;
+        const wh = 20 * scale;
 
-        const lit = (r * 3 + c) % 3 === 0;
-        ctx.fillStyle = lit ? 'rgba(253, 230, 138, 0.55)' : 'rgba(24, 24, 27, 0.85)';
+        // Deep stone window reveal
+        ctx.fillStyle = '#09090b';
+        ctx.fillRect(wx - 1.2 * scale, wy - 1.2 * scale, ww + 2.4 * scale, wh + 2.4 * scale);
+
+        const litHash = (r * 5 + c * 3) % 7;
+        const isWarmLit = litHash === 0 || litHash === 2 || litHash === 5;
+        const isCoolLit = litHash === 1 || litHash === 4;
+        ctx.fillStyle = isWarmLit
+          ? 'rgba(253, 230, 138, 0.68)'
+          : isCoolLit
+          ? 'rgba(226, 232, 240, 0.48)'
+          : 'rgba(24, 24, 27, 0.9)';
         ctx.fillRect(wx, wy, ww, wh);
+
+        // Realistic interior office desk silhouette & upper venetian blind slats in lit rooms
+        if (isWarmLit || isCoolLit) {
+          ctx.fillStyle = 'rgba(24, 24, 27, 0.35)';
+          ctx.fillRect(wx, wy, ww, wh * 0.28);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.52)';
+          ctx.fillRect(wx + 2 * scale, wy + wh * 0.68, ww - 4 * scale, wh * 0.32);
+        }
+
+        // Double-pane window mullions & limestone sill
         ctx.strokeStyle = '#52525b';
         ctx.lineWidth = 1.1 * scale;
         ctx.strokeRect(wx, wy, ww, wh);
+        ctx.beginPath();
+        ctx.moveTo(wx + ww / 2, wy);
+        ctx.lineTo(wx + ww / 2, wy + wh);
+        ctx.moveTo(wx, wy + wh * 0.5);
+        ctx.lineTo(wx + ww, wy + wh * 0.5);
+        ctx.stroke();
+
+        ctx.fillStyle = '#a1a1aa';
+        ctx.fillRect(wx - 1.5 * scale, wy + wh, ww + 3 * scale, 2.2 * scale);
       }
     }
 
-    // Architectural Widescreen LED Media Facade mounted on Brushed-Steel Frame
-    const sx = b5.bx + 14 * scale;
-    const sy = b5.by + 30 * scale;
-    const sw = b5.bw - 28 * scale;
-    const sh = 74 * scale;
+    // 3D Side-Wall Recessed Office Windows
+    ctx.fillStyle = 'rgba(253, 230, 138, 0.28)';
+    for (let r = 0; r < 9; r++) {
+      const sy = b5.by + (14 + r * 31) * scale;
+      ctx.fillRect(b5.bx + b5.bw + 8 * scale, sy, 7 * scale, 16 * scale);
+    }
+  }
 
-    // Steel mounting shadow & frame
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(sx - 2 * scale, sy + 3 * scale, sw + 4 * scale, sh + 3 * scale);
-    fillStrokeRoundedRect(ctx, sx, sy, sw, sh, 4 * scale, '#0f172a', '#94a3b8', 2.2 * scale);
+  // ===========================================================================
+  // BUILDING 9 (FAR-RIGHT): HISTORIC BROWNSTONE & COPPER-CORNICE LOFT TOWER
+  // ===========================================================================
+  {
+    const b9 = drawRealistic3DBuildingBlock({
+      dx: 424,
+      dy: -188,
+      w: 92,
+      h: 298,
+      depthX: 20,
+      depthY: -10,
+      frontTopColor: '#451a03',
+      frontBottomColor: '#290f02',
+      sideColor: '#1c0a01',
+      roofColor: '#1f2937',
+      parapetColor: '#6ee7b7', // Aged patina copper cornice
+      corniceIntervals: [0.25, 0.72],
+    });
 
-    // Subtle widescreen architectural equalizer / skyline graphic inside the LED screen
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = `800 ${Math.max(8, Math.round(9.5 * scale))}px "Outfit", sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillText('METROPOLITAN PLAZA · LIVE AUDIO', sx + 10 * scale, sy + 18 * scale);
-
-    // Live subtle LED equalizer bars
-    for (let b = 0; b < 14; b++) {
-      const barW = (sw - 24 * scale) / 14 - 2 * scale;
-      const barX = sx + 10 * scale + b * (barW + 2 * scale);
-      const pulseH =
-        (10 + 24 * Math.abs(Math.sin(t * 3.2 + b * 0.55))) * scale;
-      const barGrad = ctx.createLinearGradient(barX, sy + sh - 10 * scale - pulseH, barX, sy + sh - 10 * scale);
-      barGrad.addColorStop(0, '#38bdf8');
-      barGrad.addColorStop(1, '#818cf8');
-      ctx.fillStyle = barGrad;
-      ctx.fillRect(barX, sy + sh - 10 * scale - pulseH, barW, pulseH);
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 3; c++) {
+        const wx = b9.bx + (11 + c * 26) * scale;
+        const wy = b9.by + (18 + r * 32) * scale;
+        const ww = 18 * scale;
+        const wh = 21 * scale;
+        const lit = (r * 2 + c) % 3 !== 0;
+        ctx.fillStyle = lit ? 'rgba(254, 215, 170, 0.75)' : 'rgba(31, 41, 55, 0.75)';
+        ctx.fillRect(wx, wy, ww, wh);
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.2 * scale;
+        ctx.strokeRect(wx, wy, ww, wh);
+        ctx.fillStyle = '#d6d3d1';
+        ctx.fillRect(wx - 1.5 * scale, wy + wh, ww + 3 * scale, 2.2 * scale);
+      }
     }
   }
 
@@ -3926,19 +4923,115 @@ function drawIllustratedParkingAndStreet(
   drawCrosswalk(1.9, 11.55, 0, 0.38, 1.15, 0.2, 5);
   drawCrosswalk(11.55, 8.8, 0.38, 0, 0.2, 1.15, 5);
 
-  // 4. Diagonal White Parking Stall Lines across the Front Asphalt Road (gy = 11.45..13.5)
-  ctx.strokeStyle = 'rgba(226, 232, 240, 0.36)';
-  ctx.lineWidth = 2 * scale;
-  for (let stallGx = -1.8; stallGx <= 8.8; stallGx += 2.15) {
-    const p1x = originX + (stallGx - 11.45) * halfW;
-    const p1y = originY + (stallGx + 11.45) * halfH;
-    const p2x = originX + (stallGx - 0.5 - 13.45) * halfW;
-    const p2y = originY + (stallGx - 0.5 + 13.45) * halfH;
+  // 4. Real-World Marked Parking Lot & Valet Bay Plaza (gy = 11.4..12.88, gx = -1.75..9.35)
+  const lotPadPts = [
+    { gx: -1.75, gy: 11.38 },
+    { gx: 9.35, gy: 11.38 },
+    { gx: 9.35, gy: 12.88 },
+    { gx: -1.75, gy: 12.88 },
+  ];
+  ctx.beginPath();
+  lotPadPts.forEach((pt, idx) => {
+    const sx = originX + (pt.gx - pt.gy) * halfW;
+    const sy = originY + (pt.gx + pt.gy) * halfH;
+    if (idx === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  });
+  ctx.closePath();
+  ctx.fillStyle = '#1b1c27';
+  ctx.fill();
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1.6 * scale;
+  ctx.stroke();
+
+  // Individual Marked Parking Bays (P1, TAXI DROP, P2, P3, P4) with Double White Lines, Concrete Wheel Stops & Stenciled Bay Numbers
+  for (let sIdx = 0; sIdx < PARKING_LOT_STALLS.length; sIdx++) {
+    const stall = PARKING_LOT_STALLS[sIdx];
+    const leftGx = stall.gx - 0.98;
+    const rightGx = stall.gx + 0.98;
+    const topGy = 11.42;
+    const botGy = 12.85;
+
+    // Stall divider line (left boundary)
+    const l1x = originX + (leftGx - topGy) * halfW;
+    const l1y = originY + (leftGx + topGy) * halfH;
+    const l2x = originX + (leftGx - botGy) * halfW;
+    const l2y = originY + (leftGx + botGy) * halfH;
+    ctx.strokeStyle = stall.isTaxiDrop
+      ? 'rgba(250, 204, 21, 0.72)'
+      : 'rgba(226, 232, 240, 0.58)';
+    ctx.lineWidth = 2.0 * scale;
     ctx.beginPath();
-    ctx.moveTo(p1x, p1y);
-    ctx.lineTo(p2x, p2y);
+    ctx.moveTo(l1x, l1y);
+    ctx.lineTo(l2x, l2y);
     ctx.stroke();
+
+    // Rightmost closing stall line
+    if (sIdx === PARKING_LOT_STALLS.length - 1) {
+      const r1x = originX + (rightGx - topGy) * halfW;
+      const r1y = originY + (rightGx + topGy) * halfH;
+      const r2x = originX + (rightGx - botGy) * halfW;
+      const r2y = originY + (rightGx + botGy) * halfH;
+      ctx.beginPath();
+      ctx.moveTo(r1x, r1y);
+      ctx.lineTo(r2x, r2y);
+      ctx.stroke();
+    }
+
+    // Yellow Concrete Wheel-Stop Curb Bumper at top of each parking stall (gy = 11.58)
+    const wbLeftX = originX + (stall.gx - 0.55 - 11.58) * halfW;
+    const wbLeftY = originY + (stall.gx - 0.55 + 11.58) * halfH;
+    const wbRightX = originX + (stall.gx + 0.55 - 11.58) * halfW;
+    const wbRightY = originY + (stall.gx + 0.55 + 11.58) * halfH;
+    ctx.strokeStyle = '#111116';
+    ctx.lineWidth = 4.2 * scale;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(wbLeftX, wbLeftY);
+    ctx.lineTo(wbRightX, wbRightY);
+    ctx.stroke();
+    ctx.strokeStyle = stall.isTaxiDrop ? '#facc15' : '#cbd5e1';
+    ctx.lineWidth = 2.4 * scale;
+    ctx.beginPath();
+    ctx.moveTo(wbLeftX, wbLeftY);
+    ctx.lineTo(wbRightX, wbRightY);
+    ctx.stroke();
+
+    // Stenciled Bay Label on the Asphalt (P1, TAXI, P2, P3, P4)
+    const labelX = originX + (stall.gx - 12.62) * halfW;
+    const labelY = originY + (stall.gx + 12.62) * halfH;
+    ctx.fillStyle = stall.isTaxiDrop
+      ? 'rgba(250, 204, 21, 0.65)'
+      : 'rgba(226, 232, 240, 0.45)';
+    ctx.font = `800 ${Math.max(7, Math.round(7.5 * scale))}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(stall.label, labelX, labelY);
   }
+
+  // Glowing Blue/Gold "P VALET" Parking Lot Entrance Bollard Sign at (gx = -1.65, gy = 11.35)
+  const pSignX = originX + (-1.65 - 11.35) * halfW;
+  const pSignY = originY + (-1.65 + 11.35) * halfH;
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 2.5 * scale;
+  ctx.beginPath();
+  ctx.moveTo(pSignX, pSignY);
+  ctx.lineTo(pSignX, pSignY - 24 * scale);
+  ctx.stroke();
+  fillStrokeRoundedRect(
+    ctx,
+    pSignX - 9 * scale,
+    pSignY - 36 * scale,
+    18 * scale,
+    13 * scale,
+    3 * scale,
+    '#0284c7',
+    '#38bdf8',
+    1.5 * scale
+  );
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 ${Math.max(7, Math.round(7.5 * scale))}px "Outfit", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('P', pSignX, pSignY - 27 * scale);
 
   // 5. Red Carpet Runner leading to the Front VIP Entry
   const drawRedCarpet = (gx0: number, gy0: number, gx1: number, gy1: number) => {
@@ -3998,65 +5091,7 @@ function drawIllustratedParkingAndStreet(
   ctx.ellipse(mhX, mhY, 9.5 * scale, 4.5 * scale, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  // 6B. Stray Stacked Cardboard Boxes on Right Sidewalk/Street (gx=12.6, gy=6.9)
-  drawIsoPrism(
-    ctx,
-    12.3,
-    6.7,
-    0.85,
-    0.85,
-    0,
-    9 * scale,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    '#b47b44',
-    '#8c5a2b',
-    '#6e441f',
-    INK,
-    1.6 * scale
-  );
-  drawIsoPrism(
-    ctx,
-    12.42,
-    6.82,
-    0.55,
-    0.55,
-    9 * scale,
-    6 * scale,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    '#c88d55',
-    '#9c6735',
-    '#784d25',
-    INK,
-    1.4 * scale
-  );
-
-  // 6C. Green Street Dumpster Bin on Far-Right Sidewalk (gx=11.4, gy=4.5)
-  drawIsoPrism(
-    ctx,
-    11.35,
-    4.3,
-    0.95,
-    1.25,
-    0,
-    17 * scale,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    '#15803d',
-    '#166534',
-    '#14532d',
-    INK,
-    1.8 * scale
-  );
-
-  // 6D. Orange Traffic Cones on Front-Right Street Corners
+  // 6B. Orange Traffic Cones on Front-Right Street Corners
   const cones = [
     { gx: -1.35, gy: 10.75 },
     { gx: 10.9, gy: 10.7 },
@@ -4262,90 +5297,8 @@ function drawForegroundQueueCarsAndLamps(
   drawStanchionChain(leftQueueStanchions);
   drawStanchionChain(rightVipStanchions);
 
-  // 2. Front Parked Vehicles in Foreground Stalls with Negative Z-Index & Negative Z-Offset relative to Floor 2+
+  // 2. Dynamic Park-and-Go Vehicles (Parked in Stalls P1-P4/Taxi, Pulling In/Out, and Non-Overlapping Avenue Traffic)
   const underBuildingGyShift = isUnderBuilding ? -0.95 : 0;
-  drawCar(
-    ctx,
-    -0.65,
-    11.85 + underBuildingGyShift,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    scale,
-    '#2dd4bf',
-    '#0f766e',
-    false,
-    zOffset,
-    zIndex
-  );
-  // Stylized Boxy Yellow Taxi Cab right by the front crosswalk
-  drawCar(
-    ctx,
-    1.55,
-    12.15 + underBuildingGyShift,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    scale,
-    '#facc15',
-    '#ca8a04',
-    true,
-    zOffset,
-    zIndex
-  );
-  drawCar(
-    ctx,
-    3.85,
-    12.15 + underBuildingGyShift,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    scale,
-    '#f43f5e',
-    '#9f1239',
-    false,
-    zOffset,
-    zIndex
-  );
-  if (parkingState.lotTier >= 2) {
-    drawCar(
-      ctx,
-      6.1,
-      12.15 + underBuildingGyShift,
-      originX,
-      originY,
-      tileW,
-      tileH,
-      scale,
-      '#38bdf8',
-      '#1e3a8a',
-      false,
-      zOffset,
-      zIndex
-    );
-  }
-  if (parkingState.lotTier >= 3) {
-    drawCar(
-      ctx,
-      8.2,
-      12.1 + underBuildingGyShift,
-      originX,
-      originY,
-      tileW,
-      tileH,
-      scale,
-      '#a855f7',
-      '#581c87',
-      false,
-      zOffset,
-      zIndex
-    );
-  }
-
-  // 3. Realistic Passing Road Traffic Vehicles (Eastbound gy=13.55, Westbound gy=14.65, Southbound gx=-3.15)
   const sortedTraffic = [...trafficCars].sort((a, b) => a.gridX + a.gridY - (b.gridX + b.gridY));
   for (const tc of sortedTraffic) {
     drawMovingTrafficCar(
@@ -4379,47 +5332,61 @@ function drawMovingTrafficCar(
 ) {
   const cx = originX + (gx - gy) * (tileW / 2);
   const cy = originY + (gx + gy) * (tileH / 2) - zOffset;
-  const carScale = (zIndex < 0 ? scale * 0.92 : scale) * 0.96;
+  const isParked = car.carState === 'PARKED' || car.carState === 'WAITING_PICKUP';
+  const carScale = (zIndex < 0 ? scale * 0.92 : scale) * (isParked ? 0.98 : 0.96);
+  const isFacingWest = car.lane === 'FRONT_WEST';
+  const beamDir = isFacingWest ? -1 : 1;
 
-  // Draw warm headlight beam cones & taillight trails on the asphalt road before drawing the car body
-  ctx.save();
-  const isMovingRight = car.lane === 'FRONT_EAST';
-  const beamDir = isMovingRight ? 1 : -1;
+  // Draw headlight beam cones on the asphalt road when the car is moving or flashing its lock/unlock lights
+  if (!isParked || (car.headlightFlashTimer ?? 0) > 0) {
+    ctx.save();
+    const headX = cx + beamDir * 28 * carScale;
+    const headY = cy - 3 * carScale;
+    const flashBoost = (car.headlightFlashTimer ?? 0) > 0 ? 0.65 : 0.42;
+    const beamGrad = ctx.createRadialGradient(
+      headX,
+      headY,
+      2 * carScale,
+      headX + beamDir * 24 * carScale,
+      headY + 8 * carScale,
+      36 * carScale
+    );
+    beamGrad.addColorStop(0, `rgba(254, 240, 138, ${flashBoost})`);
+    beamGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
+    ctx.fillStyle = beamGrad;
+    ctx.beginPath();
+    ctx.ellipse(
+      headX + beamDir * 16 * carScale,
+      headY + 6 * carScale,
+      28 * carScale,
+      12 * carScale,
+      !isFacingWest ? 0.25 : -0.25,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
 
-  // Headlight road glow
-  const headX = cx + beamDir * 28 * carScale;
-  const headY = cy - 3 * carScale;
-  const beamGrad = ctx.createRadialGradient(
-    headX,
-    headY,
-    2 * carScale,
-    headX + beamDir * 24 * carScale,
-    headY + 8 * carScale,
-    36 * carScale
-  );
-  beamGrad.addColorStop(0, 'rgba(254, 240, 138, 0.42)');
-  beamGrad.addColorStop(1, 'rgba(254, 240, 138, 0)');
-  ctx.fillStyle = beamGrad;
-  ctx.beginPath();
-  ctx.ellipse(
-    headX + beamDir * 16 * carScale,
-    headY + 6 * carScale,
-    28 * carScale,
-    12 * carScale,
-    isMovingRight ? 0.25 : -0.25,
-    0,
-    Math.PI * 2
-  );
-  ctx.fill();
-
-  // Red taillight streak
-  const tailX = cx - beamDir * 28 * carScale;
-  const tailY = cy - 3 * carScale;
-  ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
-  ctx.beginPath();
-  ctx.ellipse(tailX - beamDir * 7 * carScale, tailY + 2 * carScale, 11 * carScale, 4.5 * carScale, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+    // Red taillight glow (brighter when braking/stopped in traffic or backing out)
+    const isBraking =
+      (car.currentSpeed !== undefined && car.currentSpeed < 0.8) ||
+      car.carState === 'PULLING_OUT' ||
+      car.carState === 'PARKING_IN';
+    const tailX = cx - beamDir * 28 * carScale;
+    const tailY = cy - 3 * carScale;
+    ctx.fillStyle = isBraking ? 'rgba(244, 63, 94, 0.62)' : 'rgba(244, 63, 94, 0.35)';
+    ctx.beginPath();
+    ctx.ellipse(
+      tailX - beamDir * 7 * carScale,
+      tailY + 2 * carScale,
+      11 * carScale,
+      4.5 * carScale,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+    ctx.restore();
+  }
 
   drawCar(
     ctx,
@@ -4429,12 +5396,13 @@ function drawMovingTrafficCar(
     originY,
     tileW,
     tileH,
-    scale * 0.96,
+    scale * (isParked ? 0.98 : 0.96),
     car.bodyColor,
     car.shadeColor,
     car.isTaxi,
     zOffset,
-    zIndex
+    zIndex,
+    isFacingWest
   );
 }
 
@@ -4577,7 +5545,8 @@ function drawCar(
   shadeColor: string,
   isTaxi: boolean = false,
   zOffset: number = 0,
-  zIndex: number = 100
+  zIndex: number = 100,
+  facingWest: boolean = false
 ) {
   const cx = originX + (gx - gy) * (tileW / 2);
   const cy = originY + (gx + gy) * (tileH / 2) - zOffset;
@@ -4722,14 +5691,16 @@ function drawCar(
     ctx.fill();
   }
 
-  // Glowing Yellow Headlights & Taillights
+  // Glowing Yellow Headlights & Red Taillights oriented to vehicle travel direction
+  const headlightX = facingWest ? cx - 25 * carScale : cx + 25 * carScale;
+  const taillightX = facingWest ? cx + 25 * carScale : cx - 25 * carScale;
   ctx.fillStyle = '#fde047';
   ctx.beginPath();
-  ctx.arc(cx - 25 * carScale, cy - 3 * carScale, 3 * carScale, 0, Math.PI * 2);
+  ctx.arc(headlightX, cy - 3 * carScale, 3 * carScale, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#f43f5e';
   ctx.beginPath();
-  ctx.arc(cx + 25 * carScale, cy - 4 * carScale, 2.5 * carScale, 0, Math.PI * 2);
+  ctx.arc(taillightX, cy - 4 * carScale, 2.5 * carScale, 0, Math.PI * 2);
   ctx.fill();
 
   if (isUnderBuilding) {
@@ -5143,26 +6114,29 @@ function drawIllustratedClubShell(
   ];
   for (let bIdx = 0; bIdx < bayRanges.length; bIdx++) {
     const [u0, u1] = bayRanges[bIdx];
-    const baySeqL = sequencer.getDecorEmissiveState(0, bIdx * 2, bIdx);
     // Upper-Left Wall Recessed Bay
     const lx0 = nw.x + (sw.x - nw.x) * u0;
     const ly0 = nw.y + (sw.y - nw.y) * u0;
     const lx1 = nw.x + (sw.x - nw.x) * u1;
     const ly1 = nw.y + (sw.y - nw.y) * u1;
+    const bayBreathL = 0.72 + 0.28 * Math.sin(t * 2.1 + bIdx * 1.4);
     ctx.beginPath();
     ctx.moveTo(lx0, ly0 - lowerWallH - 6 * scale);
     ctx.lineTo(lx1, ly1 - lowerWallH - 6 * scale);
     ctx.lineTo(lx1, ly1 - wallH + 7 * scale);
     ctx.lineTo(lx0, ly0 - wallH + 7 * scale);
     ctx.closePath();
-    ctx.fillStyle = '#160b2e';
+    ctx.fillStyle = '#180c34';
     ctx.fill();
-    ctx.strokeStyle = baySeqL.toggledOn ? moodSecondary : 'rgba(168, 85, 247, 0.45)';
-    ctx.lineWidth = (baySeqL.toggledOn ? 1.8 : 1.1) * scale;
+    ctx.save();
+    ctx.strokeStyle = moodSecondary;
+    ctx.globalAlpha = bayBreathL;
+    ctx.lineWidth = 2.0 * scale;
     ctx.stroke();
+    ctx.restore();
 
     // Upper-Right Wall Recessed Bay
-    const baySeqR = sequencer.getDecorEmissiveState(bIdx * 2, 0, bIdx + 4);
+    const bayBreathR = 0.72 + 0.28 * Math.cos(t * 2.1 + bIdx * 1.4);
     const rx0 = nw.x + (se.x - nw.x) * u0;
     const ry0 = nw.y + (se.y - nw.y) * u0;
     const rx1 = nw.x + (se.x - nw.x) * u1;
@@ -5173,56 +6147,107 @@ function drawIllustratedClubShell(
     ctx.lineTo(rx1, ry1 - wallH + 7 * scale);
     ctx.lineTo(rx0, ry0 - wallH + 7 * scale);
     ctx.closePath();
-    ctx.fillStyle = '#130926';
+    ctx.fillStyle = '#150a2e';
     ctx.fill();
-    ctx.strokeStyle = baySeqR.toggledOn ? moodPrimary : 'rgba(34, 211, 238, 0.42)';
-    ctx.lineWidth = (baySeqR.toggledOn ? 1.8 : 1.1) * scale;
+    ctx.save();
+    ctx.strokeStyle = moodPrimary;
+    ctx.globalAlpha = bayBreathR;
+    ctx.lineWidth = 2.0 * scale;
     ctx.stroke();
+    ctx.restore();
   }
 
-  // Glowing Genre-Mood Neon Top Crown, Mid-Mezzanine Molding & Base Trim Strips along both Full-Height Back Walls
+  // Bright, Luminous Architectural LED Trim & Vertical Light Cove Strips along both Full-Height Back Walls
   ctx.save();
-  // Top Roofline Neon Tube
-  ctx.strokeStyle = moodPrimary;
-  ctx.lineWidth = (2.6 + sequencer.kickEnvelope * 0.95) * scale;
-  ctx.beginPath();
-  ctx.moveTo(sw.x, sw.y - wallH);
-  ctx.lineTo(nw.x, nw.y - wallH);
-  ctx.lineTo(se.x, se.y - wallH);
-  ctx.stroke();
+  const trimBreath = Math.min(1, 0.9 + 0.1 * Math.sin(t * 2.4) + sequencer.kickEnvelope * 0.12);
 
-  // Mid-Wall Mezzanine Neon Divider Strip at 64 * scale
-  ctx.strokeStyle = moodSecondary;
-  ctx.lineWidth = (2.0 + sequencer.kickEnvelope * 0.65) * scale;
-  ctx.beginPath();
-  ctx.moveTo(sw.x, sw.y - lowerWallH);
-  ctx.lineTo(nw.x, nw.y - lowerWallH);
-  ctx.lineTo(se.x, se.y - lowerWallH);
-  ctx.stroke();
+  // Vivid multi-layer outer bloom + bright color tube + hot white core helper for lit LED strips
+  const drawNaturalLedPath = (
+    drawPath: () => void,
+    colorHex: string,
+    coreWidth: number,
+    alpha: number
+  ) => {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // Wide outer ambient bloom
+    ctx.strokeStyle = colorHex;
+    ctx.globalAlpha = Math.min(1, alpha * 0.45);
+    ctx.lineWidth = coreWidth * 3.8;
+    drawPath();
+    ctx.stroke();
+    // Vivid saturated LED tube body
+    ctx.globalAlpha = Math.min(1, alpha * 0.96);
+    ctx.lineWidth = coreWidth * 1.75;
+    drawPath();
+    ctx.stroke();
+    // Bright hot white inner filament core
+    ctx.strokeStyle = '#ffffff';
+    ctx.globalAlpha = Math.min(1, alpha * 0.88);
+    ctx.lineWidth = coreWidth * 0.72;
+    drawPath();
+    ctx.stroke();
+    ctx.restore();
+  };
 
-  // Base Floor Trim Neon Tube
-  ctx.strokeStyle = moodSecondary;
-  ctx.lineWidth = 2 * scale;
-  ctx.beginPath();
-  ctx.moveTo(sw.x, sw.y - 1.5 * scale);
-  ctx.lineTo(nw.x, nw.y - 1.5 * scale);
-  ctx.lineTo(se.x, se.y - 1.5 * scale);
-  ctx.stroke();
+  // Top Roofline LED Cove
+  drawNaturalLedPath(
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(sw.x, sw.y - wallH);
+      ctx.lineTo(nw.x, nw.y - wallH);
+      ctx.lineTo(se.x, se.y - wallH);
+    },
+    moodPrimary,
+    2.5 * scale,
+    trimBreath
+  );
 
-  // Full-Height Vertical Glowing Genre-Mood Neon Light Pillars along both Back Walls (Sequenced to BPM!)
+  // Mid-Wall Mezzanine LED Cove at 64 * scale
+  drawNaturalLedPath(
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(sw.x, sw.y - lowerWallH);
+      ctx.lineTo(nw.x, nw.y - lowerWallH);
+      ctx.lineTo(se.x, se.y - lowerWallH);
+    },
+    moodSecondary,
+    2.1 * scale,
+    trimBreath
+  );
+
+  // Base Floor Plinth LED Strip
+  drawNaturalLedPath(
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(sw.x, sw.y - 1.5 * scale);
+      ctx.lineTo(nw.x, nw.y - 1.5 * scale);
+      ctx.lineTo(se.x, se.y - 1.5 * scale);
+    },
+    moodSecondary,
+    1.9 * scale,
+    0.92
+  );
+
+  // Full-Height Vertical Architectural LED Light Pillars along both Back Walls (Bright organic wave)
   const leftStrips = [0.18, 0.34, 0.56, 0.84];
   for (let i = 0; i < leftStrips.length; i++) {
     const u = leftStrips[i];
     const sx = nw.x + (sw.x - nw.x) * u;
     const sy = nw.y + (sw.y - nw.y) * u;
-    const stripSeq = sequencer.getDecorEmissiveState(0, u * 10, i);
-    ctx.strokeStyle = i % 2 === 0 ? moodSecondary : moodPrimary;
-    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.38;
-    ctx.lineWidth = (stripSeq.toggledOn ? 2.8 : 1.7) * scale;
-    ctx.beginPath();
-    ctx.moveTo(sx, sy - 6 * scale);
-    ctx.lineTo(sx, sy - wallH + 6 * scale);
-    ctx.stroke();
+    const pillarAlpha = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(t * 2.2 - i * 0.9));
+    const pillarColor = i % 2 === 0 ? moodSecondary : moodPrimary;
+    drawNaturalLedPath(
+      () => {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - 6 * scale);
+        ctx.lineTo(sx, sy - wallH + 6 * scale);
+      },
+      pillarColor,
+      2.2 * scale,
+      pillarAlpha
+    );
   }
 
   const rightStrips = [0.16, 0.36, 0.62, 0.84];
@@ -5230,16 +6255,19 @@ function drawIllustratedClubShell(
     const u = rightStrips[i];
     const sx = nw.x + (se.x - nw.x) * u;
     const sy = nw.y + (se.y - nw.y) * u;
-    const stripSeq = sequencer.getDecorEmissiveState(u * 10, 0, i + 4);
-    ctx.strokeStyle = i % 2 === 0 ? moodPrimary : moodSecondary;
-    ctx.globalAlpha = stripSeq.toggledOn ? 1.0 : 0.38;
-    ctx.lineWidth = (stripSeq.toggledOn ? 2.8 : 1.7) * scale;
-    ctx.beginPath();
-    ctx.moveTo(sx, sy - 6 * scale);
-    ctx.lineTo(sx, sy - wallH + 6 * scale);
-    ctx.stroke();
+    const pillarAlpha = 0.76 + 0.24 * (0.5 + 0.5 * Math.cos(t * 2.2 - i * 0.9));
+    const pillarColor = i % 2 === 0 ? moodPrimary : moodSecondary;
+    drawNaturalLedPath(
+      () => {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - 6 * scale);
+        ctx.lineTo(sx, sy - wallH + 6 * scale);
+      },
+      pillarColor,
+      2.2 * scale,
+      pillarAlpha
+    );
   }
-  ctx.globalAlpha = 1;
   ctx.restore();
 
   // 4. GLOWING PURPLE/CYAN VIP ALCOVE DOORWAY ON THE BACK-LEFT WALL (gy = 6.2..7.3 along gx = 0)
@@ -5394,16 +6422,29 @@ function drawIllustratedClubShell(
     }
     ctx.stroke();
 
-    // Mounted Genre-Mood Spotlight Cans (Crisp vector art — NO blurry spotlight fog cones)
+    // Mounted Genre-Mood Spotlight Cans with bright radial light halos & hot white core
     for (let sp = 0; sp < 3; sp++) {
+      const lx = tx + 5 * scale;
       const ly = ty - th + (10 + sp * 16) * scale;
-      ctx.fillStyle = sp % 2 === 0 ? moodSecondary : moodTertiary;
+      const spotColor = sp % 2 === 0 ? moodSecondary : moodTertiary;
+      // Dark spotlight housing can
+      ctx.fillStyle = '#1e1b4b';
       ctx.beginPath();
-      ctx.arc(tx + 5 * scale, ly, 3.4 * scale, 0, Math.PI * 2);
+      ctx.arc(lx - 1.2 * scale, ly, 3.2 * scale, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.6 * scale;
-      ctx.stroke();
+      // Bright radial LED lens halo
+      const haloR = (10.5 + Math.sin(t * 2.5 + sp) * 1.5) * scale;
+      const lensGrad = ctx.createRadialGradient(lx, ly, 0.6 * scale, lx, ly, haloR);
+      lensGrad.addColorStop(0, '#ffffff');
+      lensGrad.addColorStop(0.28, '#ffffff');
+      lensGrad.addColorStop(0.55, spotColor);
+      lensGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.save();
+      ctx.fillStyle = lensGrad;
+      ctx.beginPath();
+      ctx.arc(lx, ly, haloR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
   };
 
@@ -5595,9 +6636,8 @@ function drawIllustratedClubShell(
   // 9. OVERHEAD SILVER MIRROR DISCO BALL & GENRE-TINTED LASER PYRAMID RAYS (Centerpiece of IMG_1506_5bdf15ca.jpeg)
   const discoX = originX + (3.2 - 3.6) * halfW;
   const discoY = originY + (3.2 + 3.6) * halfH - 86 * scale;
-  const apexY = discoY - 26 * scale;
 
-  // Multi-ray laser pyramid radiating from above the disco ball down across the dance floor, colored by active genre mood
+  // Vivid, natural volumetric light beams radiating from the mirror disco ball down to the dance floor
   ctx.save();
   const rayTargets = [
     { dx: -75, dy: 92, c: moodSecondary },
@@ -5605,18 +6645,58 @@ function drawIllustratedClubShell(
     { dx: -12, dy: 120, c: moodPrimary },
     { dx: 22, dy: 115, c: moodSecondary },
     { dx: 58, dy: 98, c: moodPrimary },
-    { dx: 138, dy: 72, c: moodTertiary },
+    { dx: 122, dy: 74, c: moodTertiary },
   ];
   for (let r = 0; r < rayTargets.length; r++) {
     const rt = rayTargets[r];
-    const wobble = Math.sin(t * 2.4 + r) * 6 * scale;
-    ctx.strokeStyle = rt.c;
-    ctx.globalAlpha = 0.56 + sequencer.kickEnvelope * 0.24;
-    ctx.lineWidth = (1.8 + sequencer.kickEnvelope * 0.6) * scale;
+    const wobble = Math.sin(t * 1.35 + r * 1.1) * 7.5 * scale;
+    const endX = discoX + rt.dx * scale + wobble;
+    const endY = discoY + rt.dy * scale;
+    const coneSpread = (13.5 + (r % 2) * 3.5) * scale;
+    const beamAlpha = 0.38 + 0.1 * Math.sin(t * 1.9 + r) + sequencer.kickEnvelope * 0.12;
+
+    const beamGrad = ctx.createLinearGradient(discoX, discoY, endX, endY);
+    beamGrad.addColorStop(0, '#ffffff');
+    beamGrad.addColorStop(0.22, rt.c);
+    beamGrad.addColorStop(0.75, rt.c);
+    beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = beamGrad;
+    ctx.globalAlpha = beamAlpha;
     ctx.beginPath();
-    ctx.moveTo(discoX, apexY);
-    ctx.lineTo(discoX + rt.dx * scale + wobble, discoY + rt.dy * scale);
+    ctx.moveTo(discoX - 2.0 * scale, discoY);
+    ctx.lineTo(discoX + 2.0 * scale, discoY);
+    ctx.lineTo(endX + coneSpread, endY);
+    ctx.lineTo(endX - coneSpread, endY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Luminous inner core ray inside each volumetric cone
+    ctx.strokeStyle = rt.c;
+    ctx.globalAlpha = Math.min(1, beamAlpha * 1.25);
+    ctx.lineWidth = 1.6 * scale;
+    ctx.beginPath();
+    ctx.moveTo(discoX, discoY);
+    ctx.lineTo(endX, endY);
     ctx.stroke();
+
+    // Bright reflected disco light pool on the floor
+    const poolGrad = ctx.createRadialGradient(
+      endX,
+      endY,
+      0.8 * scale,
+      endX,
+      endY,
+      coneSpread * 1.35
+    );
+    poolGrad.addColorStop(0, '#ffffff');
+    poolGrad.addColorStop(0.32, rt.c);
+    poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = poolGrad;
+    ctx.globalAlpha = Math.min(1, beamAlpha * 1.1);
+    ctx.beginPath();
+    ctx.ellipse(endX, endY, coneSpread * 1.35, coneSpread * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.globalAlpha = 1;
   ctx.restore();
@@ -5925,8 +7005,8 @@ function drawWallStringLights(
 }
 
 /**
- * Draws the sunken-look grid of glowing square dance floor tiles cycling smoothly through
- * the active music genre's curated Mood palette with a thick #111116 dark outline and subtle inner bevel.
+ * Draws the sunken-look grid of glowing acrylic-glass dance floor tiles with natural radial LED diffusion,
+ * smooth organic wave transitions, and subtle glass reflections instead of harsh binary strobing.
  */
 function drawTile(
   ctx: CanvasRenderingContext2D,
@@ -5939,7 +7019,8 @@ function drawTile(
   scale: number,
   t: number,
   sequencer?: RhythmicLightingSequencerState,
-  moodProfile?: ClubMoodLightingProfile
+  moodProfile?: ClubMoodLightingProfile,
+  bassRipples?: BassDropRippleWave[]
 ) {
   const fp = getRotatedFootprint(cat, item.rotation);
   const palette = moodProfile?.tilePalette || [
@@ -5951,11 +7032,17 @@ function drawTile(
     '#fb923c', // neon orange
   ];
 
-  // Subdivide each 1x1 grid cell into 2x2 sunken beveled LED sub-squares
+  // Subdivide each 1x1 grid cell into 2x2 sunken frosted-glass LED sub-squares
   const subDiv = 2;
   const subStep = 1 / subDiv;
   const halfW = tileW / 2;
   const halfH = tileH / 2;
+
+  const centerGx = item.gridX + fp.width * 0.5;
+  const centerGy = item.gridY + fp.depth * 0.5;
+  const kickEnv = sequencer ? sequencer.kickEnvelope : 0.25;
+  const vibeRatio = sequencer ? sequencer.vibeRatio : 0.5;
+  const bpmRate = sequencer ? Math.max(1.4, (sequencer.bpm / 60) * 0.85) : 1.75;
 
   for (let dx = 0; dx < fp.width; dx += subStep) {
     for (let dy = 0; dy < fp.depth; dy += subStep) {
@@ -5964,59 +7051,33 @@ function drawTile(
 
       const ix = Math.round(gx * 2);
       const iy = Math.round(gy * 2);
-      const liveStep16 = sequencer ? sequencer.liveAudioStep16 : Math.floor(t * 2.5) % 16;
-      const altStep = sequencer ? sequencer.alternatingStep : Math.floor(t * 3);
-      const vibePulseEnv = sequencer ? sequencer.vibeBeatEnvelope : 0.65;
-      const vibeRatio = sequencer ? sequencer.vibeRatio : 0.5;
 
-      // Cycle alternating geometric pattern mode every 4 beat-steps (Checkerboard -> Diagonal Wave -> Row/Col Stripes -> Diamond Ring)
-      const patternMode = Math.floor(liveStep16 / 4) % 4;
-      const centerIx = Math.round((item.gridX + fp.width * 0.5) * 2);
-      const centerIy = Math.round((item.gridY + fp.depth * 0.5) * 2);
+      // Compute dynamic Bass Drop Ripple Wave excitation & 3D vertical lift at this sub-tile
+      const subCenterGx = gx + subStep * 0.5;
+      const subCenterGy = gy + subStep * 0.5;
+      const rippleHit = computeBassDropRippleExcitation(
+        subCenterGx,
+        subCenterGy,
+        bassRipples,
+        item.floor
+      );
+      const rippleIntensity = rippleHit.intensity;
+      const rippleLiftY = -rippleIntensity * 5.8 * scale;
 
-      let tileParity = 0;
-      if (patternMode === 0) {
-        // Classic Alternating Checkerboard
-        tileParity = Math.abs(ix + iy) % 2;
-      } else if (patternMode === 1) {
-        // Alternating Diagonal Beat Wave
-        tileParity = Math.abs(ix - iy + 16) % 2;
-      } else if (patternMode === 2) {
-        // Alternating Dual-Axis Stripes
-        tileParity = (liveStep16 % 2 === 0 ? Math.abs(ix) : Math.abs(iy)) % 2;
-      } else {
-        // Alternating Concentric Diamond Rings from Dance Floor Center
-        tileParity = Math.round(Math.abs(ix - centerIx) + Math.abs(iy - centerIy)) % 2;
-      }
+      // Sunken recess offset (+1.0 * scale below floor level, dynamically lifted by passing bass drop ripple wave!)
+      const baseP0y = originY + (gx + gy) * halfH + 1.0 * scale;
+      const baseP1y = originY + (gx + subStep + gy) * halfH + 1.0 * scale;
+      const baseP2y = originY + (gx + subStep + (gy + subStep)) * halfH + 1.0 * scale;
+      const baseP3y = originY + (gx + (gy + subStep)) * halfH + 1.0 * scale;
 
-      // Alternating A/B phase flips at a rate that accelerates as the Vibe thermometer rises!
-      const isActiveAlternatingPhase = tileParity === altStep % 2;
-
-      // Color selection shifts strictly in lockstep with the 16-step beat-step & alternating phase
-      const colorIdx = isActiveAlternatingPhase
-        ? Math.abs(ix + iy + liveStep16) % palette.length
-        : Math.abs(ix * 2 + iy * 3 + Math.floor(liveStep16 * 0.5) + 3) % palette.length;
-      const baseColor = palette[colorIdx];
-
-      // BPM-synced rhythmic sequencer + Vibe-accelerated alternating pulse envelope
-      const emissiveState = sequencer
-        ? sequencer.getDecorEmissiveState(gx, gy, ix + iy)
-        : { isToggledOn: true, emissiveIntensity: 1.0, channelIndex: 0 };
-
-      // Active-phase tiles surge brightly on each Vibe-accelerated beat pulse while counter-phase tiles dip for high-contrast alternation
-      const alternatingPulseFactor = isActiveAlternatingPhase
-        ? Math.min(1, 0.78 + vibePulseEnv * (0.28 + vibeRatio * 0.18))
-        : Math.max(0.28, 0.52 - vibePulseEnv * (0.18 + vibeRatio * 0.12));
-
-      // Sunken recess offset (+1.0 * scale below floor level)
       const p0x = originX + (gx - gy) * halfW;
-      const p0y = originY + (gx + gy) * halfH + 1.0 * scale;
+      const p0y = baseP0y + rippleLiftY;
       const p1x = originX + (gx + subStep - gy) * halfW;
-      const p1y = originY + (gx + subStep + gy) * halfH + 1.0 * scale;
+      const p1y = baseP1y + rippleLiftY;
       const p2x = originX + (gx - gy) * halfW;
-      const p2y = originY + (gx + subStep + (gy + subStep)) * halfH + 1.0 * scale;
+      const p2y = baseP2y + rippleLiftY;
       const p3x = originX + (gx - (gy + subStep)) * halfW;
-      const p3y = originY + (gx + (gy + subStep)) * halfH + 1.0 * scale;
+      const p3y = baseP3y + rippleLiftY;
 
       // Check AssetManager for custom uploaded floor_tile PNG sprite anchored at bottom-center
       if (
@@ -6032,57 +7093,95 @@ function drawTile(
         continue;
       }
 
-      // Outer tile frame with dark #14141F grout line & solid #0D0D14 black ink outline
+      // Smooth radial + diagonal wave traveling organically across the dance floor
+      const distFromCenter = Math.hypot(subCenterGx - centerGx, subCenterGy - centerGy);
+      const radialWave = Math.sin(t * bpmRate * 1.45 - distFromCenter * 1.35);
+      const diagonalWave = Math.cos(t * bpmRate * 1.1 - (gx + gy) * 0.95);
+      const smoothWave = Math.min(
+        1,
+        0.5 + 0.5 * (radialWave * 0.6 + diagonalWave * 0.4) + rippleIntensity * 0.48
+      );
+
+      // Gentle color progression across the palette, shifting dynamically when the bass ripple crest passes
+      const colorFloat =
+        (ix * 0.65 + iy * 0.85 + t * bpmRate * 0.28 + rippleIntensity * 2.2) %
+        palette.length;
+      const colorIdx = Math.floor(Math.abs(colorFloat)) % palette.length;
+      const nextColorIdx = (colorIdx + 1) % palette.length;
+      const baseColor =
+        rippleIntensity > 0.38 ? rippleHit.primaryColor : palette[colorIdx];
+      const secondaryColor =
+        rippleIntensity > 0.25 ? rippleHit.secondaryColor : palette[nextColorIdx];
+
+      // Vivid, brightly lit luminous intensity: smoothly waving between 0.80 and 1.0
+      const glowIntensity = Math.min(
+        1.0,
+        0.80 +
+          smoothWave * (0.16 + vibeRatio * 0.06) +
+          kickEnv * 0.08 +
+          rippleIntensity * 0.22
+      );
+
+      const cx = p0x;
+      const cy = (p0y + p2y) / 2;
+      const subRadius = tileW * (0.34 + rippleIntensity * 0.08);
+
       ctx.save();
+
+      // If this sub-tile is lifted by the passing bass drop ripple wave, render its glowing 3D acrylic side skirt
+      if (rippleIntensity > 0.05) {
+        ctx.fillStyle = rippleHit.primaryColor;
+        ctx.globalAlpha = Math.min(0.88, rippleIntensity * 0.92);
+        ctx.beginPath();
+        ctx.moveTo(p3x, p3y);
+        ctx.lineTo(p2x, p2y);
+        ctx.lineTo(p1x, p1y);
+        ctx.lineTo(p1x, baseP1y);
+        ctx.lineTo(p2x, baseP2y);
+        ctx.lineTo(p3x, baseP3y);
+        ctx.closePath();
+        ctx.fill();
+      }
+
       ctx.beginPath();
       ctx.moveTo(p0x, p0y);
       ctx.lineTo(p1x, p1y);
       ctx.lineTo(p2x, p2y);
       ctx.lineTo(p3x, p3y);
       ctx.closePath();
+
+      // 1. Vibrant illuminated base fill so every tile is richly lit even at the corners
       ctx.fillStyle = baseColor;
-      ctx.globalAlpha = alternatingPulseFactor;
+      ctx.globalAlpha = glowIntensity * 0.85;
       ctx.fill();
 
-      // Extra additive neon bloom flash on active alternating tiles when Vibe thermometer is high
-      if (isActiveAlternatingPhase && vibePulseEnv > 0.35) {
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = Math.min(0.42, (vibePulseEnv - 0.3) * (0.24 + vibeRatio * 0.25));
-        ctx.fill();
-      }
+      // 2. Bright radial LED diffuser light underneath the glass panel with a hot white center core
+      const tileGrad = ctx.createRadialGradient(
+        cx,
+        cy,
+        (0.8 + rippleIntensity * 2.2) * scale,
+        cx,
+        cy,
+        subRadius
+      );
+      tileGrad.addColorStop(0, '#ffffff');
+      tileGrad.addColorStop(
+        Math.min(0.55, 0.32 + rippleIntensity * 0.2),
+        rippleIntensity > 0.45 ? '#ffffff' : baseColor
+      );
+      tileGrad.addColorStop(0.82, secondaryColor);
+      tileGrad.addColorStop(1, baseColor);
 
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = '#14141F';
-      ctx.lineWidth = 2.4 * scale;
-      ctx.stroke();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.6 * scale;
-      ctx.stroke();
+      ctx.fillStyle = tileGrad;
+      ctx.globalAlpha = glowIntensity;
+      ctx.fill();
 
-      // Inner sunken bevel rim (crisp cel-shaded highlight that flares on active alternating phase)
-      const cx = p0x;
-      const cy = (p0y + p2y) / 2;
-      const bevelAlpha = isActiveAlternatingPhase
-        ? Math.min(0.96, 0.48 + vibePulseEnv * 0.48)
-        : Math.max(0.14, 0.24 - vibePulseEnv * 0.08);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${bevelAlpha.toFixed(2)})`;
-      ctx.lineWidth = (isActiveAlternatingPhase ? 1.45 + vibePulseEnv * 0.45 : 0.85) * scale;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - tileH * 0.17);
-      ctx.lineTo(cx + tileW * 0.17, cy);
-      ctx.lineTo(cx, cy + tileH * 0.17);
-      ctx.lineTo(cx - tileW * 0.17, cy);
-      ctx.closePath();
-      ctx.stroke();
-
-      // Specular center glow core expanding and contracting with the alternating BPM + Vibe pulse
-      const coreScale = isActiveAlternatingPhase
-        ? 0.11 + vibePulseEnv * (0.065 + vibeRatio * 0.045)
-        : 0.06 + emissiveState.emissiveIntensity * 0.02;
-      const coreAlpha = isActiveAlternatingPhase
-        ? Math.min(0.92, 0.36 + vibePulseEnv * 0.52)
-        : 0.12;
-      ctx.fillStyle = `rgba(255, 255, 255, ${coreAlpha.toFixed(2)})`;
+      // 3. Luminous center LED hot-spot diamond that surges outward when the bass drop ripple crest hits
+      const coreScale =
+        0.09 + smoothWave * 0.06 + kickEnv * 0.03 + rippleIntensity * 0.14;
+      ctx.fillStyle =
+        rippleIntensity > 0.2 ? '#ffffff' : 'rgba(255, 255, 255, 0.68)';
+      ctx.globalAlpha = Math.min(1, 0.65 + smoothWave * 0.35 + rippleIntensity * 0.35);
       ctx.beginPath();
       ctx.moveTo(cx, cy - tileH * coreScale);
       ctx.lineTo(cx + tileW * coreScale, cy);
@@ -6090,6 +7189,43 @@ function drawTile(
       ctx.lineTo(cx - tileW * coreScale, cy);
       ctx.closePath();
       ctx.fill();
+
+      // 4. Glossy acrylic glass surface reflection along the upper-left facet
+      const sheenGrad = ctx.createLinearGradient(p0x, p0y, p2x, p2y);
+      sheenGrad.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
+      sheenGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.06)');
+      sheenGrad.addColorStop(1, 'rgba(0, 0, 0, 0.12)');
+      ctx.fillStyle = sheenGrad;
+      ctx.globalAlpha = 1;
+      ctx.fill();
+
+      // 5. Sleek dark glass bezel seam between tiles (flashes neon cyan/white along the ripple wavefront!)
+      ctx.beginPath();
+      ctx.moveTo(p0x, p0y);
+      ctx.lineTo(p1x, p1y);
+      ctx.lineTo(p2x, p2y);
+      ctx.lineTo(p3x, p3y);
+      ctx.closePath();
+      ctx.strokeStyle =
+        rippleIntensity > 0.22 ? '#ffffff' : 'rgba(15, 11, 29, 0.78)';
+      ctx.lineWidth = (1.2 + rippleIntensity * 1.4) * scale;
+      ctx.stroke();
+
+      // 6. Bright inner diffused rim highlight
+      ctx.strokeStyle =
+        rippleIntensity > 0.18
+          ? rippleHit.primaryColor
+          : 'rgba(255, 255, 255, 0.72)';
+      ctx.globalAlpha = Math.min(1, 0.45 + smoothWave * 0.4 + rippleIntensity * 0.5);
+      ctx.lineWidth = (0.95 + rippleIntensity * 1.1) * scale;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - tileH * 0.18);
+      ctx.lineTo(cx + tileW * 0.18, cy);
+      ctx.lineTo(cx, cy + tileH * 0.18);
+      ctx.lineTo(cx - tileW * 0.18, cy);
+      ctx.closePath();
+      ctx.stroke();
+
       ctx.restore();
     }
   }
@@ -6098,8 +7234,73 @@ function drawTile(
 const drawIllustratedDanceTile = drawTile;
 
 /**
- * Automatically applies a genre-reactive color filter overlay across each placed dance floor footprint
- * so shifting the music genre visibly bathes the dance floor in the genre's Mood lighting color.
+ * Renders concentric isometric shockwave rings traveling across the dance floor plane
+ * whenever a Bass Drop is triggered.
+ */
+function drawBassDropDanceFloorRipples(
+  ctx: CanvasRenderingContext2D,
+  ripples: BassDropRippleWave[],
+  activeFloor: FloorLevel,
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  ctx.save();
+  for (let i = 0; i < ripples.length; i++) {
+    const r = ripples[i];
+    if (r.floor !== activeFloor) continue;
+
+    const lifeRatio = r.age / r.maxAge;
+    const fade =
+      Math.min(1, r.age / 0.08) * Math.max(0, 1 - Math.pow(lifeRatio, 1.55));
+    if (fade <= 0.01) continue;
+
+    const cx = originX + (r.originGx - r.originGy) * halfW;
+    const cy = originY + (r.originGx + r.originGy) * halfH;
+
+    // Draw 3 concentric harmonic wave rings in isometric floor projection (2:1 aspect ellipse)
+    const ringOffsets = [
+      { dr: 0, widthMul: 3.2, alphaMul: 0.85, color: '#ffffff', glow: r.primaryColor },
+      { dr: -1.45, widthMul: 2.4, alphaMul: 0.65, color: r.primaryColor, glow: r.secondaryColor },
+      { dr: -2.85, widthMul: 1.7, alphaMul: 0.42, color: r.secondaryColor, glow: r.primaryColor },
+    ];
+
+    for (let k = 0; k < ringOffsets.length; k++) {
+      const ring = ringOffsets[k];
+      const radGrid = r.radius + ring.dr;
+      if (radGrid <= 0.25) continue;
+
+      const rx = radGrid * tileW * 0.72;
+      const ry = radGrid * tileH * 0.72;
+
+      // Soft outer neon shockwave halo
+      ctx.strokeStyle = ring.glow;
+      ctx.lineWidth = (ring.widthMul * 2.4) * scale;
+      ctx.globalAlpha = fade * ring.alphaMul * 0.38;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Crisp inner wavefront crest
+      ctx.strokeStyle = ring.color;
+      ctx.lineWidth = ring.widthMul * scale;
+      ctx.globalAlpha = fade * ring.alphaMul;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * Applies a bright, natural radial ambient light bloom across each placed dance floor footprint
+ * so the dance floor visibly illuminates the surrounding club space.
  */
 function drawDanceFloorMoodFilterOverlay(
   ctx: CanvasRenderingContext2D,
@@ -6140,6 +7341,13 @@ function drawDanceFloorMoodFilterOverlay(
     y: originY + (gx0 + gy1) * halfH,
   };
 
+  const centerX = (pTop.x + pBottom.x) * 0.5;
+  const centerY = (pTop.y + pBottom.y) * 0.5;
+  const radius = Math.max(
+    16,
+    Math.hypot(pRight.x - pLeft.x, pBottom.y - pTop.y) * 0.62
+  );
+
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(pTop.x, pTop.y);
@@ -6148,19 +7356,28 @@ function drawDanceFloorMoodFilterOverlay(
   ctx.lineTo(pLeft.x, pLeft.y);
   ctx.closePath();
 
-  // Genre-reactive color filter wash across the dance floor
-  const filterGrad = ctx.createLinearGradient(pTop.x, pTop.y, pBottom.x, pBottom.y);
-  filterGrad.addColorStop(0, moodProfile.filterOverlayRgba);
-  filterGrad.addColorStop(0.5, moodProfile.filterOverlayRgba);
-  filterGrad.addColorStop(1, moodProfile.filterOverlayRgba);
-  ctx.fillStyle = filterGrad;
-  ctx.globalAlpha = Math.min(1, 0.75 + sequencer.kickEnvelope * 0.25 + Math.sin(t * 3.2) * 0.08);
+  // Luminous radial ambient bloom across the dance floor
+  const ambientGrad = ctx.createRadialGradient(
+    centerX,
+    centerY,
+    radius * 0.05,
+    centerX,
+    centerY,
+    radius
+  );
+  ambientGrad.addColorStop(0, '#ffffff');
+  ambientGrad.addColorStop(0.28, moodProfile.primaryHex);
+  ambientGrad.addColorStop(0.7, moodProfile.secondaryHex);
+  ambientGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+  ctx.fillStyle = ambientGrad;
+  ctx.globalAlpha = 0.28 + sequencer.kickEnvelope * 0.12 + Math.sin(t * 2.1) * 0.05;
   ctx.fill();
 
-  // Pulsing genre-colored perimeter rim border framing the dance floor filter
+  // Subtle glowing LED edge strip around the dance floor perimeter
   ctx.strokeStyle = moodProfile.filterBorderHex || moodProfile.primaryHex;
-  ctx.lineWidth = (1.9 + sequencer.kickEnvelope * 1.1) * scale;
-  ctx.globalAlpha = Math.min(1, 0.62 + sequencer.kickEnvelope * 0.35);
+  ctx.lineWidth = (1.5 + sequencer.kickEnvelope * 0.6) * scale;
+  ctx.globalAlpha = 0.52 + sequencer.kickEnvelope * 0.2;
   ctx.stroke();
   ctx.restore();
 }
@@ -6581,24 +7798,7 @@ function drawDJBooth(
     ctx.stroke();
   }
 
-  // 4.5. Draw the DJ's Hands actively scratching the left Vinyl Turntable & working the Central Mixer!
-  drawResidentDjAtTurntable(ctx, deckCenterX, deckCenterY, scale, t, 'HANDS_AND_BADGE');
-
-  // Right Flanking Stacked Studio Monitor Speaker Tower
-  drawStudioMonitorSpeakerStack(
-    ctx,
-    item.gridX + fp.width + 0.25,
-    item.gridY + 0.45,
-    riserH,
-    originX,
-    originY,
-    tileW,
-    tileH,
-    scale,
-    t
-  );
-
-  // Central 4-Channel DJ Mixer with Glowing Faders
+  // Central 4-Channel DJ Mixer with Glowing Faders (drawn BEFORE DJ arms & hands so the DJ's hand sits ON TOP of the mixer!)
   fillStrokeRoundedRect(
     ctx,
     deckCenterX - 5.5 * scale,
@@ -6643,6 +7843,23 @@ function drawDJBooth(
   // Laptop screen waveform highlight
   ctx.fillStyle = '#e0f2fe';
   ctx.fillRect(lapX - 4 * scale, lapY - 5.5 * scale, 8 * scale, 2 * scale);
+
+  // 4.5. Draw the DJ's Arms, Forearms & Hands ON TOP OF the Console Table, Vinyl Turntables & Central Mixer!
+  drawResidentDjAtTurntable(ctx, deckCenterX, deckCenterY, scale, t, 'HANDS_AND_BADGE');
+
+  // Right Flanking Stacked Studio Monitor Speaker Tower
+  drawStudioMonitorSpeakerStack(
+    ctx,
+    item.gridX + fp.width + 0.25,
+    item.gridY + 0.45,
+    riserH,
+    originX,
+    originY,
+    tileW,
+    tileH,
+    scale,
+    t
+  );
 
   // 5. Mounted Gold Record Plaques on Wall + Golden Crown Trophy Pedestal beside DJ Booth
   const plaqueX = deckCenterX - 36 * scale;
@@ -7353,21 +8570,35 @@ function drawLightingFixture(
   ctx.lineWidth = 1.4 * scale;
   ctx.strokeRect(tx - 3 * scale, ty - th + 2 * scale, 6 * scale, th - 4 * scale);
 
-  // Glowing top spotlight orb
+  // Glowing top spotlight head with bright radial light halo
   const orbY = ty - th - 4 * scale;
-  ctx.fillStyle = moodProfile?.secondaryHex || cat.accentColor;
+  const orbColor = moodProfile?.secondaryHex || cat.accentColor || '#22d3ee';
+  const haloRadius = (16.5 + Math.sin(t * 3.2) * 2.0) * scale;
+
+  ctx.save();
+  const haloGrad = ctx.createRadialGradient(tx, orbY, 1.0 * scale, tx, orbY, haloRadius);
+  haloGrad.addColorStop(0, '#ffffff');
+  haloGrad.addColorStop(0.28, '#ffffff');
+  haloGrad.addColorStop(0.55, orbColor);
+  haloGrad.addColorStop(0.82, fixtureAccent);
+  haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = haloGrad;
   ctx.beginPath();
-  ctx.arc(tx, orbY, (6.5 + Math.sin(t * 4) * 1.2) * scale, 0, Math.PI * 2);
+  ctx.arc(tx, orbY, haloRadius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.6 * scale;
-  ctx.stroke();
+
+  // Bright hot white emitter core
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(tx, orbY, 3.8 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawLightingBeams(
   ctx: CanvasRenderingContext2D,
   item: PlacedItem,
-  _cat: CatalogItem,
+  cat: CatalogItem,
   originX: number,
   originY: number,
   tileW: number,
@@ -7375,20 +8606,62 @@ function drawLightingBeams(
   scale: number,
   t: number
 ) {
-  // Crisp thin cyan/magenta laser rays (NO blurry white fog or large translucent cones)
+  // Bright volumetric spotlight cone & luminous elliptical floor light pool
   const srcX = originX + (item.gridX + 0.5 - (item.gridY + 0.5)) * (tileW / 2);
   const srcY =
-    originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * (tileH / 2) - 50 * scale;
-  const sweepX = originX + Math.sin(t * 1.25 + item.gridX) * 95 * scale;
-  const sweepY = originY + (120 + Math.cos(t * 0.95 + item.gridY) * 35) * scale;
+    originY + (item.gridX + 0.5 + (item.gridY + 0.5)) * (tileH / 2) - 52 * scale;
+  const sweepX =
+    srcX + Math.sin(t * 0.95 + item.gridX * 1.3) * 58 * scale;
+  const sweepY =
+    srcY + (78 + Math.cos(t * 0.75 + item.gridY * 1.1) * 18) * scale;
+  const beamColor = cat.accentColor || '#22d3ee';
+  const coneRadius = 21 * scale;
 
   ctx.save();
-  ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+  // 1. Bright tapered volumetric light cone fading naturally to transparent
+  const coneGrad = ctx.createLinearGradient(srcX, srcY, sweepX, sweepY);
+  coneGrad.addColorStop(0, '#ffffff');
+  coneGrad.addColorStop(0.2, beamColor);
+  coneGrad.addColorStop(0.75, beamColor);
+  coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+  ctx.fillStyle = coneGrad;
+  ctx.globalAlpha = 0.42 + 0.1 * Math.sin(t * 2.2 + item.gridX);
+  ctx.beginPath();
+  ctx.moveTo(srcX - 2.2 * scale, srcY);
+  ctx.lineTo(srcX + 2.2 * scale, srcY);
+  ctx.lineTo(sweepX + coneRadius, sweepY);
+  ctx.lineTo(sweepX - coneRadius, sweepY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Inner concentrated light beam core
+  ctx.strokeStyle = '#ffffff';
+  ctx.globalAlpha = 0.35;
   ctx.lineWidth = 1.6 * scale;
   ctx.beginPath();
   ctx.moveTo(srcX, srcY);
   ctx.lineTo(sweepX, sweepY);
   ctx.stroke();
+
+  // 2. Vivid diffused elliptical light pool where the spotlight illuminates the club floor
+  const poolGrad = ctx.createRadialGradient(
+    sweepX,
+    sweepY,
+    1.2 * scale,
+    sweepX,
+    sweepY,
+    coneRadius * 1.35
+  );
+  poolGrad.addColorStop(0, '#ffffff');
+  poolGrad.addColorStop(0.38, beamColor);
+  poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+  ctx.fillStyle = poolGrad;
+  ctx.globalAlpha = 0.48;
+  ctx.beginPath();
+  ctx.ellipse(sweepX, sweepY, coneRadius * 1.3, coneRadius * 0.65, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -7415,9 +8688,13 @@ function drawResidentDjAtTurntable(
   const beatBobY = Math.abs(Math.sin(t * 5.2)) * 2.2 * scale;
   const px = deckCenterX + 3.5 * scale + grooveSwayX;
   const torsoBaseY = deckCenterY + 3.5 * scale;
+  const torsoTopY = torsoBaseY - 21 * scale + beatBobY * 0.6;
 
+  // Exact screen coordinates of the left (-1) and right (+1) vinyl turntables & central mixer on the tabletop
   const leftDeckX = deckCenterX - 12 * scale;
   const leftDeckY = deckCenterY - 4.5 * scale;
+  const rightDeckX = deckCenterX + 12 * scale;
+  const rightDeckY = deckCenterY + 4.5 * scale;
   const mixerX = deckCenterX;
   const mixerY = deckCenterY;
 
@@ -7425,7 +8702,6 @@ function drawResidentDjAtTurntable(
     ctx.save();
 
     // 1. DJ Streetwear Hoodie Torso (Clean lineless fill)
-    const torsoTopY = torsoBaseY - 21 * scale + beatBobY * 0.6;
     fillStrokeRoundedRect(
       ctx,
       px - 8.5 * scale,
@@ -7447,43 +8723,7 @@ function drawResidentDjAtTurntable(
       '#ec4899'
     );
 
-    // 2. DJ Arms Reaching Forward from Shoulders onto the Left Vinyl Turntable & Central Mixer
-    const leftShoulderX = px - 7.5 * scale;
-    const leftShoulderY = torsoTopY + 4.5 * scale;
-    const rightShoulderX = px + 7.5 * scale;
-    const rightShoulderY = torsoTopY + 4.5 * scale;
-
-    const scratchOffset = Math.sin(t * 9.5) * 2.2 * scale;
-    const leftHandX = leftDeckX + 2.5 * scale + scratchOffset;
-    const leftHandY = leftDeckY - 0.5 * scale;
-
-    const hypeRaise = Math.sin(t * 2.6) > 0.45;
-    const rightHandX = hypeRaise
-      ? rightShoulderX + 7.5 * scale
-      : mixerX + 1.5 * scale + Math.cos(t * 5.5) * 1.5 * scale;
-    const rightHandY = hypeRaise
-      ? torsoTopY - 12 * scale - beatBobY
-      : mixerY - 1.0 * scale;
-
-    // Cyan sleeve fill (no dark outline line)
-    ctx.strokeStyle = '#06b6d4';
-    ctx.lineWidth = 3.8 * scale;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(leftShoulderX, leftShoulderY);
-    ctx.lineTo(leftHandX, leftHandY);
-    ctx.moveTo(rightShoulderX, rightShoulderY);
-    ctx.lineTo(rightHandX, rightHandY);
-    ctx.stroke();
-
-    if (hypeRaise) {
-      ctx.fillStyle = '#f5cba7';
-      ctx.beginPath();
-      ctx.arc(rightHandX, rightHandY, 3.0 * scale, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // 3. Oversized Chibi DJ Head (1:1 head-to-body ratio) nodding to the beat
+    // 2. Oversized Chibi DJ Head (1:1 head-to-body ratio) nodding to the beat
     const headY = torsoTopY - 8.5 * scale + beatBobY * 0.4;
     const headR = 9.2 * scale;
 
@@ -7500,7 +8740,7 @@ function drawResidentDjAtTurntable(
     ctx.arc(px, headY, headR, 0, Math.PI * 2);
     ctx.fill();
 
-    // 4. Spiky Magenta Punk DJ Hair (clean lineless fill, no forehead line!)
+    // 3. Spiky Magenta Punk DJ Hair (clean lineless fill, no forehead line!)
     ctx.fillStyle = '#ec4899';
     ctx.beginPath();
     ctx.moveTo(px - 8.8 * scale, headY - 2.2 * scale);
@@ -7513,7 +8753,7 @@ function drawResidentDjAtTurntable(
     ctx.closePath();
     ctx.fill();
 
-    // 5. Cool Neon Cyan DJ Shades / Visor
+    // 4. Cool Neon Cyan DJ Shades / Visor
     fillStrokeRoundedRect(
       ctx,
       px - 6.8 * scale,
@@ -7528,7 +8768,7 @@ function drawResidentDjAtTurntable(
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(px - 4.5 * scale, headY - 0.8 * scale, 3.2 * scale, 1.3 * scale);
 
-    // 6. Oversized Glowing Purple & Cyan DJ Headphones Ear Cups (clean lineless fill)
+    // 5. Oversized Glowing Purple & Cyan DJ Headphones Ear Cups (clean lineless fill)
     for (const side of [-1, 1]) {
       const earX = px + side * 9.4 * scale;
       const earY = headY + 0.6 * scale;
@@ -7545,24 +8785,73 @@ function drawResidentDjAtTurntable(
 
     ctx.restore();
   } else {
-    // PASS 2: HANDS ON TURNTABLE & MIXER + FLOATING DJ BADGE (Clean lineless fill)
+    // PASS 2: DRAWN ON TOP OF THE DJ CONSOLE TABLE, TURNTABLES, AND CENTRAL MIXER!
+    // Renders both DJ arms/sleeves reaching over the top surface of the console and both hands resting on top of the vinyl platter & mixer
     ctx.save();
+
+    const leftShoulderX = px - 7.2 * scale;
+    const leftShoulderY = torsoTopY + 4.8 * scale;
+    const rightShoulderX = px + 7.2 * scale;
+    const rightShoulderY = torsoTopY + 4.8 * scale;
+
     const scratchOffset = Math.sin(t * 9.5) * 2.2 * scale;
-    const leftHandX = leftDeckX + 2.5 * scale + scratchOffset;
-    const leftHandY = leftDeckY - 0.5 * scale;
+    const leftHandX = leftDeckX + 1.2 * scale + scratchOffset;
+    const leftHandY = leftDeckY - 1.2 * scale;
+    const leftElbowX = (leftShoulderX + leftHandX) * 0.5 - 2.5 * scale;
+    const leftElbowY = Math.min(leftShoulderY, leftHandY) - 2.8 * scale;
 
-    ctx.fillStyle = '#f5cba7';
+    const hypeRaise = Math.sin(t * 2.6) > 0.55;
+    const useRightTurntable = !hypeRaise && Math.sin(t * 1.4) > 0.15;
+    const rightHandX = hypeRaise
+      ? rightShoulderX + 7.5 * scale
+      : useRightTurntable
+      ? rightDeckX - 1.2 * scale + Math.cos(t * 8.5) * 2.0 * scale
+      : mixerX + 1.2 * scale + Math.cos(t * 5.5) * 1.6 * scale;
+    const rightHandY = hypeRaise
+      ? torsoTopY - 12 * scale - beatBobY
+      : useRightTurntable
+      ? rightDeckY - 1.2 * scale
+      : mixerY - 1.5 * scale;
+    const rightElbowX = (rightShoulderX + rightHandX) * 0.5 + 2.5 * scale;
+    const rightElbowY = hypeRaise
+      ? (rightShoulderY + rightHandY) * 0.5
+      : Math.min(rightShoulderY, rightHandY) - 2.8 * scale;
+
+    // Draw DJ Hoodie Sleeves (arched OVER the top of the table so arms never clip underneath the console!)
+    ctx.strokeStyle = '#0891b2';
+    ctx.lineWidth = 4.2 * scale;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.arc(leftHandX, leftHandY, 2.9 * scale, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(leftShoulderX, leftShoulderY);
+    ctx.quadraticCurveTo(leftElbowX, leftElbowY, leftHandX, leftHandY);
+    ctx.moveTo(rightShoulderX, rightShoulderY);
+    ctx.quadraticCurveTo(rightElbowX, rightElbowY, rightHandX, rightHandY);
+    ctx.stroke();
 
-    const hypeRaise = Math.sin(t * 2.6) > 0.45;
-    if (!hypeRaise) {
-      const rightHandX = mixerX + 1.5 * scale + Math.cos(t * 5.5) * 1.5 * scale;
-      const rightHandY = mixerY - 1.0 * scale;
+    // Inner bright cyan sleeve highlight
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 2.6 * scale;
+    ctx.beginPath();
+    ctx.moveTo(leftShoulderX, leftShoulderY);
+    ctx.quadraticCurveTo(leftElbowX, leftElbowY, leftHandX, leftHandY);
+    ctx.moveTo(rightShoulderX, rightShoulderY);
+    ctx.quadraticCurveTo(rightElbowX, rightElbowY, rightHandX, rightHandY);
+    ctx.stroke();
+
+    // Draw Left & Right Hands clearly ON TOP of the vinyl turntable record and mixer faders
+    for (const hand of [
+      { x: leftHandX, y: leftHandY },
+      { x: rightHandX, y: rightHandY },
+    ]) {
+      ctx.fillStyle = '#090514';
+      ctx.beginPath();
+      ctx.arc(hand.x, hand.y + 0.8 * scale, 3.3 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
       ctx.fillStyle = '#f5cba7';
       ctx.beginPath();
-      ctx.arc(rightHandX, rightHandY, 2.8 * scale, 0, Math.PI * 2);
+      ctx.arc(hand.x, hand.y, 3.0 * scale, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -8021,12 +9310,12 @@ function computeAverageClubGuestSpend(guests: GuestAgent[]): number {
 }
 
 /**
- * Identifies 'Whale' guests who have reached a high hype threshold (hype >= 86)
- * and are currently spending more than the club average.
+ * Identifies 'Whale' guests whose cumulative cashSpent exceeds the current average spend
+ * of all guests in the club (automatically synced via guest.isWhale).
  */
 function isGuestVipWhale(guest: GuestAgent, avgGuestSpend: number): boolean {
   if (guest.state === 'QUEUEING') return false;
-  return guest.hype >= 86 && guest.cashSpent > avgGuestSpend;
+  return Boolean(guest.isWhale || (guest.cashSpent > avgGuestSpend && guest.cashSpent > 0));
 }
 
 function drawCharacter(
@@ -8041,7 +9330,8 @@ function drawCharacter(
   scale: number,
   t: number,
   clubBpm: number = 124,
-  isVipWhale: boolean = false
+  isVipWhale: boolean = false,
+  bassRipples?: BassDropRippleWave[]
 ) {
   const px = originX + (gx - gy) * (tileW / 2);
   const py = originY + (gx + gy) * (tileH / 2);
@@ -8060,7 +9350,15 @@ function drawCharacter(
     return;
   }
 
-  const isWalking = guest.path.length > 0;
+  const isWalkingInQueue =
+    guest.state === 'QUEUEING' &&
+    guest.queueSlotCoord !== undefined &&
+    Math.hypot(guest.queueSlotCoord.x - gx, guest.queueSlotCoord.y - gy) > 0.08;
+  const isWalking =
+    guest.path.length > 0 ||
+    guest.state === 'WALKING_TO_CAR' ||
+    guest.state === 'ARRIVING_FROM_CAR' ||
+    isWalkingInQueue;
   const isDancing =
     !isWalking && (guest.state === 'DANCING' || guest.state === 'DANCER_MOVES');
   const isFreestyleMove = guest.state === 'DANCER_MOVES';
@@ -8274,12 +9572,70 @@ function drawCharacter(
     }
   }
 
-  // 0. Soft Contact Shadow (plus soft lineless neon glow for synchronized Group Dancers)
+  // Dynamic Bass Drop Ripple Wave Crowd Excitation: guests jump & throw both hands up in the air as the shockwave passes beneath them!
+  const charRipple = !isExteriorGuestState(guest.state)
+    ? computeBassDropRippleExcitation(gx, gy, bassRipples, guest.floor)
+    : { intensity: 0, crestSign: 0, primaryColor: '#22d3ee', secondaryColor: '#e879f9' };
+  if (charRipple.intensity > 0.03) {
+    const waveJump =
+      (isSittingAny ? 2.4 : isDancing ? 8.8 : 5.8) * charRipple.intensity * scale;
+    bounce += waveJump;
+    const handsRaise = (isSittingAny ? 5.6 : 10.8) * charRipple.intensity * scale;
+    leftHandOffsetY -= handsRaise;
+    rightHandOffsetY -= handsRaise;
+    leftHandOffsetX -= 2.4 * charRipple.intensity * scale;
+    rightHandOffsetX += 2.4 * charRipple.intensity * scale;
+    if (!isSittingAny) {
+      leftLegLift += 2.8 * charRipple.intensity * scale;
+      rightLegLift += 2.8 * charRipple.intensity * scale;
+    }
+    moveRingColor = charRipple.primaryColor;
+  }
+
+  // 0. Soft Contact Shadow (plus soft lineless neon glow for synchronized Group Dancers & passing Bass Drop Ripple Halo)
   const shadowY = isSittingOnBarStool
     ? py - 12.2 * scale
     : isSittingInChair
     ? py - 9.8 * scale
     : py;
+
+  if (charRipple.intensity > 0.04) {
+    ctx.save();
+    const haloRx = (12.5 + charRipple.intensity * 8.5) * scale;
+    const haloRy = (6.2 + charRipple.intensity * 4.2) * scale;
+    const haloGrad = ctx.createRadialGradient(
+      px + swayX * 0.5,
+      shadowY,
+      1.2 * scale,
+      px + swayX * 0.5,
+      shadowY,
+      haloRx
+    );
+    haloGrad.addColorStop(0, '#ffffff');
+    haloGrad.addColorStop(0.42, charRipple.primaryColor);
+    haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = haloGrad;
+    ctx.globalAlpha = Math.min(0.88, charRipple.intensity * 0.92);
+    ctx.beginPath();
+    ctx.ellipse(px + swayX * 0.5, shadowY, haloRx, haloRy, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = (1.4 + charRipple.intensity * 1.4) * scale;
+    ctx.globalAlpha = Math.min(0.95, charRipple.intensity);
+    ctx.beginPath();
+    ctx.ellipse(
+      px + swayX * 0.5,
+      shadowY,
+      haloRx * 0.78,
+      haloRy * 0.78,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
 
   if (isDancing && guest.groupDanceId && (guest.groupDanceTimer ?? 0) > 0) {
     ctx.save();
@@ -8299,46 +9655,64 @@ function drawCharacter(
     ctx.restore();
   }
 
-  // Persistent Golden VIP Whale Glow for high-hype guests spending above the club average
-  if (isVipWhale) {
-    const whalePulse = 0.88 + 0.14 * Math.sin(t * 4.5 + seed);
+  // Persistent Golden VIP Whale Glowing Aura for guests whose cumulative cashSpent exceeds the club average
+  if (isVipWhale || guest.isWhale) {
+    const whalePulse = 0.92 + 0.12 * Math.sin(t * 3.6 + seed);
+    const auraCenterX = px + swayX;
+    const auraCenterY = py - 19 * scale - bounce;
+    const auraRadius = 18.5 * scale * whalePulse;
+
     ctx.save();
-    // Soft ambient golden aura behind the sprite body
-    ctx.fillStyle = 'rgba(250, 204, 21, 0.16)';
+    // 1. Smooth radial golden aura halo behind the guest sprite body
+    const auraGrad = ctx.createRadialGradient(
+      auraCenterX,
+      auraCenterY,
+      2.5 * scale,
+      auraCenterX,
+      auraCenterY,
+      auraRadius
+    );
+    auraGrad.addColorStop(0, 'rgba(254, 240, 138, 0.34)');
+    auraGrad.addColorStop(0.5, 'rgba(250, 204, 21, 0.18)');
+    auraGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(auraCenterX, auraCenterY, auraRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Soft diffused golden floor glow ring under the whale's feet
+    const floorGlowGrad = ctx.createRadialGradient(
+      px + swayX * 0.5,
+      shadowY,
+      1 * scale,
+      px + swayX * 0.5,
+      shadowY,
+      12.5 * scale * whalePulse
+    );
+    floorGlowGrad.addColorStop(0, 'rgba(254, 240, 138, 0.38)');
+    floorGlowGrad.addColorStop(0.6, 'rgba(250, 204, 21, 0.22)');
+    floorGlowGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+    ctx.fillStyle = floorGlowGrad;
     ctx.beginPath();
     ctx.ellipse(
-      px + swayX,
-      py - 19 * scale - bounce,
-      11.5 * scale * whalePulse,
-      16.5 * scale * whalePulse,
+      px + swayX * 0.5,
+      shadowY,
+      12.5 * scale * whalePulse,
+      6.4 * scale * whalePulse,
       0,
       0,
       Math.PI * 2
     );
     ctx.fill();
 
-    // Glowing golden floor ring under the whale's feet
-    ctx.fillStyle = 'rgba(250, 204, 21, 0.28)';
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.65)';
+    ctx.lineWidth = Math.max(1, 1.15 * scale);
     ctx.beginPath();
     ctx.ellipse(
       px + swayX * 0.5,
       shadowY,
-      11.2 * scale * whalePulse,
-      5.6 * scale * whalePulse,
-      0,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    ctx.strokeStyle = '#facc15';
-    ctx.lineWidth = Math.max(1, 1.35 * scale);
-    ctx.beginPath();
-    ctx.ellipse(
-      px + swayX * 0.5,
-      shadowY,
-      9.6 * scale * whalePulse,
-      4.8 * scale * whalePulse,
+      9.4 * scale * whalePulse,
+      4.7 * scale * whalePulse,
       0,
       0,
       Math.PI * 2
@@ -8744,9 +10118,10 @@ function drawCharacter(
     ctx.fill();
   }
 
-  // 7. Small, Persistent '★ VIP' Badge for High-Hype Above-Average Spending Whales
+  // 7. Small, Persistent '★ VIP' Badge for Above-Average Spending Whales
   const hasActiveBubble = Boolean(guest.bubble && (guest.bubbleTimer ?? 0) > 0);
-  if (isVipWhale) {
+  const showWhaleVisuals = Boolean(isVipWhale || guest.isWhale);
+  if (showWhaleVisuals) {
     const badgeW = 23.5 * scale;
     const badgeH = 9.2 * scale;
     const badgeX = headX - badgeW * 0.5;
@@ -8775,7 +10150,7 @@ function drawCharacter(
 
   // 8. Clean Event-Driven Speech / Thought Bubbles (Only shown when guest has an active event bubble)
   if (hasActiveBubble && guest.bubble) {
-    const bubbleOffsetY = isVipWhale ? headY - 27 * scale : headY - 19 * scale;
+    const bubbleOffsetY = showWhaleVisuals ? headY - 27 * scale : headY - 19 * scale;
     drawIllustratedSpeechBubble(ctx, headX, bubbleOffsetY, scale * 0.88, guest.bubble);
   }
 }
@@ -9053,23 +10428,55 @@ function drawGlobalDayNightOverlay(
 }
 
 /**
- * Crisp rhythmic neon accent pass (NO blurry radial gradients or white fog over the dance floor or entrance).
+ * Natural ambient floor light reflection pass for placed lighting, bar units, and DJ booths.
  */
 function drawPlacedItemsNeonEmissivePass(
-  _ctx: CanvasRenderingContext2D,
-  _floorItems: PlacedItem[],
-  _originX: number,
-  _originY: number,
-  _tileW: number,
-  _tileH: number,
-  _scale: number,
-  _t: number,
+  ctx: CanvasRenderingContext2D,
+  floorItems: PlacedItem[],
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number,
   _cycle: InternalDayNightState,
   _activeDrink: DrinkMix,
-  _sequencer: RhythmicLightingSequencerState
+  sequencer: RhythmicLightingSequencerState
 ) {
-  // All BPM-synced rhythmic emissive states are rendered directly as crisp cel-shaded tile colors,
-  // wall neon strips, and sharp laser lines without blurry radial bloom washes.
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+  ctx.save();
+  for (let i = 0; i < floorItems.length; i++) {
+    const item = floorItems[i];
+    const cat = getCatalogItem(item.catalogId);
+    if (!cat) continue;
+    if (
+      cat.category !== 'LIGHTING' &&
+      cat.category !== 'DJ_BOOTH' &&
+      cat.category !== 'BAR_UNIT'
+    ) {
+      continue;
+    }
+    const fp = getRotatedFootprint(cat, item.rotation);
+    const gx = item.gridX + fp.width * 0.5;
+    const gy = item.gridY + fp.depth * 0.5;
+    const px = originX + (gx - gy) * halfW;
+    const py = originY + (gx + gy) * halfH;
+    const radius = Math.max(fp.width, fp.depth) * tileW * 0.68;
+    const glowColor = cat.accentColor || '#22d3ee';
+
+    const poolGrad = ctx.createRadialGradient(px, py, 1.5 * scale, px, py, radius);
+    poolGrad.addColorStop(0, '#ffffff');
+    poolGrad.addColorStop(0.28, glowColor);
+    poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = poolGrad;
+    ctx.globalAlpha =
+      0.26 + 0.08 * Math.sin(t * 2.1 + i) + sequencer.kickEnvelope * 0.08;
+    ctx.beginPath();
+    ctx.ellipse(px, py, radius, radius * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 /**
@@ -10233,17 +11640,34 @@ function computeGuestMoodInfo(
   let activity = 'Grooving on the Dance Floor';
   let thought = guest.chatText || `Loving this ${activeGenre || 'club'} vibe!`;
 
-  if (guest.state === 'QUEUEING') {
+  if (guest.state === 'WALKING_TO_CAR') {
+    moodLabel = 'ECSTATIC';
+    moodEmoji = '🚗';
+    moodColor = '#4ade80';
+    moodScore = 95;
+    activity = 'Walking Back to Parked Car in Parking Lot';
+    thought =
+      guest.chatText || 'Unforgettable night! Heading back to my parked car and driving home happy!';
+  } else if (guest.state === 'QUEUEING' || guest.state === 'ARRIVING_FROM_CAR') {
+    const isSteppingFromCar =
+      guest.queueSlotCoord !== undefined &&
+      Math.hypot(guest.queueSlotCoord.x - guest.gridX, guest.queueSlotCoord.y - guest.gridY) > 0.35;
     moodLabel = 'WAITING IN LINE';
-    moodEmoji = isClubFull ? '⏳' : '🎟️';
-    moodColor = isClubFull ? '#fb923c' : '#facc15';
-    moodScore = isClubFull ? Math.max(48, 72 - queueIndex * 4) : 80;
-    activity = isClubFull
+    moodEmoji = isSteppingFromCar ? '🚗' : isClubFull ? '⏳' : '🎟️';
+    moodColor = isSteppingFromCar ? '#38bdf8' : isClubFull ? '#fb923c' : '#facc15';
+    moodScore = isClubFull ? Math.max(48, 72 - queueIndex * 4) : 82;
+    activity = isSteppingFromCar
+      ? 'Just Parked! Walking from Car to Red Carpet Line'
+      : isClubFull
       ? `Waiting in Red Carpet Line (#${queueIndex + 1} · Club Full)`
       : `Stepping to Red Carpet Entrance (#${queueIndex + 1})`;
-    thought = isClubFull
-      ? 'Club is at max capacity! Falling in line on the red carpet...'
-      : 'Almost at the red carpet door! Ready to party!';
+    thought =
+      guest.chatText ||
+      (isSteppingFromCar
+        ? 'Just parked in the lot and heading across the crosswalk to the red carpet!'
+        : isClubFull
+        ? 'Club is at max capacity! Falling in line on the red carpet...'
+        : 'Almost at the red carpet door! Ready to party!');
   } else if (guest.state === 'WALKING_TO_BAR') {
     moodLabel = 'THIRSTY';
     moodEmoji = '🍹';
@@ -10608,13 +12032,14 @@ function findTappedSpriteMoodAtScreenPoint(
     }
   };
 
-  // 1. Check interior guests on active floor + red carpet queued guests
+  // 1. Check interior guests on active floor + red carpet queued & car-walking guests
   const avgSpend = computeAverageClubGuestSpend(guests);
-  const queuedList = guests.filter((g) => g.state === 'QUEUEING');
+  const queuedList = guests.filter((g) => isExteriorGuestState(g.state));
   for (const g of guests) {
-    if (g.state !== 'QUEUEING' && g.floor !== activeFloor) continue;
-    const refOriginY = g.state === 'QUEUEING' ? streetOriginY : originY;
-    const qIdx = g.state === 'QUEUEING' ? Math.max(0, queuedList.indexOf(g)) : 0;
+    const isExt = isExteriorGuestState(g.state);
+    if (!isExt && g.floor !== activeFloor) continue;
+    const refOriginY = isExt ? streetOriginY : originY;
+    const qIdx = isExt ? Math.max(0, queuedList.indexOf(g)) : 0;
     const isWhale = isGuestVipWhale(g, avgSpend);
     const info = computeGuestMoodInfo(
       g,
@@ -10675,6 +12100,394 @@ function findTappedSpriteMoodAtScreenPoint(
   }
 
   return bestMatch ? (bestMatch as { dist: number; info: SpriteMoodInfo }).info : null;
+}
+
+/**
+ * Hit-tests placed decorations on the active floor at either the isometric grid coordinate `iso`
+ * or the 3D screen-space bounding volume of tall furniture/lights so long-pressing a decoration
+ * reliably picks it up for Edit Mode. Prioritizes 3D furniture/equipment over underlying dance tiles.
+ */
+function findPlacedDecorationAtScreenPoint(
+  screenX: number,
+  screenY: number,
+  iso: { x: number; y: number },
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  items: PlacedItem[],
+  activeFloor: FloorLevel
+): PlacedItem | null {
+  const floorItems = items.filter((p) => p.floor === activeFloor);
+  if (floorItems.length === 0) return null;
+
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  // 1. First pass: check non-DANCE_TILE 3D furniture by grid footprint OR 3D visual sprite body
+  for (let i = floorItems.length - 1; i >= 0; i--) {
+    const p = floorItems[i];
+    const cat = getCatalogItem(p.catalogId);
+    if (!cat || cat.category === 'DANCE_TILE') continue;
+    const fp = getRotatedFootprint(cat, p.rotation);
+    if (
+      iso.x >= p.gridX &&
+      iso.x < p.gridX + fp.width &&
+      iso.y >= p.gridY &&
+      iso.y < p.gridY + fp.depth
+    ) {
+      return p;
+    }
+
+    // Screen-space 3D body hit test (for tall lighting trusses, speakers, bars, DJ booth, tables)
+    const cx = p.gridX + fp.width * 0.5;
+    const cy = p.gridY + fp.depth * 0.5;
+    const sx = originX + (cx - cy) * halfW;
+    const sy = originY + (cx + cy) * halfH;
+    const hitW = Math.max(24, (fp.width + fp.depth) * 16) * scale;
+    const hitH = (cat.category === 'LIGHTING' ? 54 : 42) * scale;
+    if (
+      Math.abs(screenX - sx) <= hitW &&
+      screenY >= sy - hitH &&
+      screenY <= sy + 14 * scale
+    ) {
+      return p;
+    }
+  }
+
+  // 2. Second pass: check DANCE_TILE items by grid footprint
+  for (let i = floorItems.length - 1; i >= 0; i--) {
+    const p = floorItems[i];
+    const cat = getCatalogItem(p.catalogId);
+    if (!cat || cat.category !== 'DANCE_TILE') continue;
+    const fp = getRotatedFootprint(cat, p.rotation);
+    if (
+      iso.x >= p.gridX &&
+      iso.x < p.gridX + fp.width &&
+      iso.y >= p.gridY &&
+      iso.y < p.gridY + fp.depth
+    ) {
+      return p;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Draws unmistakable foreground visual overlays for:
+ * 1) Long-press hold progress ring ("HOLD TO EDIT...") while pressing down on any decoration
+ * 2) Active Edit Mode gizmo (4-way isometric movement arrows, pulsing corner brackets, and "✥ EDIT MODE · TAP TILE TO MOVE" overhead banner)
+ * 3) Newly Purchased Decoration Spotlight Beacon ("✨ NEW! [NAME] HERE" with bouncing arrow & glowing ring) so the player immediately sees where a newly bought decoration was placed
+ */
+function drawDecorationEditAndNewBeaconOverlays(
+  ctx: CanvasRenderingContext2D,
+  floorItems: PlacedItem[],
+  originX: number,
+  originY: number,
+  tileW: number,
+  tileH: number,
+  scale: number,
+  t: number,
+  isEditDecorMode: boolean | undefined,
+  editingPlacedItemUid: string | null | undefined,
+  newlyPlacedItemHighlight: { uid: string; placedAtMs: number } | null | undefined,
+  longPressState: {
+    timerId: number | null;
+    targetItemUid: string | null;
+    startTimeMs: number;
+    durationMs: number;
+    triggered: boolean;
+  }
+) {
+  const halfW = tileW / 2;
+  const halfH = tileH / 2;
+
+  // A. When Edit Mode is active across the floor, draw subtle glowing corner ticks on all movable decorations
+  if (isEditDecorMode) {
+    ctx.save();
+    for (const item of floorItems) {
+      if (item.uid === editingPlacedItemUid) continue;
+      const cat = getCatalogItem(item.catalogId);
+      if (!cat) continue;
+      const fp = getRotatedFootprint(cat, item.rotation);
+      const cx = item.gridX + fp.width * 0.5;
+      const cy = item.gridY + fp.depth * 0.5;
+      const sx = originX + (cx - cy) * halfW;
+      const sy = originY + (cx + cy) * halfH - 16 * scale;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 1.4 * scale;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 8.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#fef08a';
+      ctx.font = `900 ${Math.max(8, Math.round(9 * scale))}px "Outfit", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('✥', sx, sy + 0.5 * scale);
+    }
+    ctx.restore();
+  }
+
+  // B. Unmistakable 4-Direction Move Gizmo & Floating Overhead Banner on the Selected Decoration in Edit Mode
+  if (editingPlacedItemUid) {
+    const editingItem = floorItems.find((p) => p.uid === editingPlacedItemUid);
+    if (editingItem) {
+      const cat = getCatalogItem(editingItem.catalogId);
+      if (cat) {
+        const fp = getRotatedFootprint(cat, editingItem.rotation);
+        const cx = editingItem.gridX + fp.width * 0.5;
+        const cy = editingItem.gridY + fp.depth * 0.5;
+        const sx = originX + (cx - cy) * halfW;
+        const sy = originY + (cx + cy) * halfH;
+        const pulse = Math.sin(t * 7) * 4 * scale;
+        const ringRx = Math.max(26, (fp.width + fp.depth) * 16) * scale + pulse * 0.5;
+        const ringRy = ringRx * 0.5;
+
+        ctx.save();
+
+        // Outer pulsing dashed cyan/gold selection halo around the decoration
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 2.8 * scale;
+        ctx.setLineDash([7 * scale, 4 * scale]);
+        ctx.lineDashOffset = -t * 28 * scale;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy - 2 * scale, ringRx, ringRy, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 4 Isometric Directional Movement Arrows (NW, NE, SE, SW) radiating from the decoration
+        const arrowDirs = [
+          { dx: -1, dy: -0.5, label: '↖' },
+          { dx: 1, dy: -0.5, label: '↗' },
+          { dx: 1, dy: 0.5, label: '↘' },
+          { dx: -1, dy: 0.5, label: '↙' },
+        ];
+        for (const dir of arrowDirs) {
+          const dist = ringRx * 0.92 + Math.abs(pulse) * 0.7;
+          const ax = sx + dir.dx * dist;
+          const ay = sy - 2 * scale + dir.dy * dist;
+
+          fillStrokeRoundedRect(
+            ctx,
+            ax - 9.5 * scale,
+            ay - 9.5 * scale,
+            19 * scale,
+            19 * scale,
+            6 * scale,
+            '#0f172a',
+            '#22d3ee',
+            1.8 * scale
+          );
+          ctx.fillStyle = '#facc15';
+          ctx.font = `900 ${Math.max(9, Math.round(10.5 * scale))}px "Outfit", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(dir.label, ax, ay + 0.5 * scale);
+        }
+
+        // High-visibility overhead Edit Mode Badge above the decoration
+        const floatY = sy - 54 * scale - Math.abs(Math.sin(t * 5.5)) * 5 * scale;
+        const titleText = `✥ EDIT MODE: ${cat.name.toUpperCase()}`;
+        const subText = 'TAP ANY OPEN TILE TO MOVE · ROTATE OR NUDGE BELOW';
+
+        ctx.font = `900 ${Math.max(9, Math.round(10.5 * scale))}px "Outfit", sans-serif`;
+        const w1 = ctx.measureText(titleText).width;
+        ctx.font = `800 ${Math.max(7, Math.round(7.8 * scale))}px "JetBrains Mono", monospace`;
+        const w2 = ctx.measureText(subText).width;
+
+        const boxW = Math.max(w1, w2) + 22 * scale;
+        const boxH = 30 * scale;
+
+        // Vertical connector beam from badge to item center
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 2.2 * scale;
+        ctx.beginPath();
+        ctx.moveTo(sx, floatY + boxH * 0.5);
+        ctx.lineTo(sx, sy - 10 * scale);
+        ctx.stroke();
+
+        fillStrokeRoundedRect(
+          ctx,
+          sx - boxW * 0.5,
+          floatY - boxH * 0.5,
+          boxW,
+          boxH,
+          9 * scale,
+          'rgba(10, 14, 34, 0.96)',
+          '#22d3ee',
+          2.4 * scale
+        );
+
+        ctx.fillStyle = '#facc15';
+        ctx.font = `900 ${Math.max(9, Math.round(10.5 * scale))}px "Outfit", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(titleText, sx, floatY - 5 * scale);
+
+        ctx.fillStyle = '#67e8f9';
+        ctx.font = `800 ${Math.max(7, Math.round(7.8 * scale))}px "JetBrains Mono", monospace`;
+        ctx.fillText(subText, sx, floatY + 7.5 * scale);
+
+        ctx.restore();
+      }
+    }
+  }
+
+  // C. Long-Press Charging Radial Progress Ring ("HOLD TO EDIT...") while finger/mouse is held down
+  if (longPressState.targetItemUid && !longPressState.triggered) {
+    const heldItem = floorItems.find((p) => p.uid === longPressState.targetItemUid);
+    if (heldItem) {
+      const cat = getCatalogItem(heldItem.catalogId);
+      if (cat) {
+        const elapsed = performance.now() - longPressState.startTimeMs;
+        const progress = Math.max(0, Math.min(1, elapsed / Math.max(1, longPressState.durationMs)));
+        if (progress > 0.08) {
+          const fp = getRotatedFootprint(cat, heldItem.rotation);
+          const cx = heldItem.gridX + fp.width * 0.5;
+          const cy = heldItem.gridY + fp.depth * 0.5;
+          const sx = originX + (cx - cy) * halfW;
+          const sy = originY + (cx + cy) * halfH - 22 * scale;
+          const radius = 20 * scale;
+
+          ctx.save();
+          // Dark circular backing
+          ctx.fillStyle = 'rgba(10, 14, 34, 0.88)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, radius + 3 * scale, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Progress arc
+          ctx.strokeStyle = '#22d3ee';
+          ctx.lineWidth = 4 * scale;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.arc(
+            sx,
+            sy,
+            radius,
+            -Math.PI / 2,
+            -Math.PI / 2 + progress * Math.PI * 2
+          );
+          ctx.stroke();
+
+          ctx.fillStyle = '#facc15';
+          ctx.font = `900 ${Math.max(8, Math.round(8.5 * scale))}px "Outfit", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('HOLD', sx, sy - 3 * scale);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `800 ${Math.max(7, Math.round(7.2 * scale))}px "JetBrains Mono", monospace`;
+          ctx.fillText('EDIT', sx, sy + 6 * scale);
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  // D. Newly Purchased Decoration Spotlight Beacon ("✨ NEW! [ITEM NAME] HERE")
+  if (newlyPlacedItemHighlight && newlyPlacedItemHighlight.uid !== editingPlacedItemUid) {
+    const elapsedSec = (performance.now() - newlyPlacedItemHighlight.placedAtMs) / 1000;
+    if (elapsedSec >= 0 && elapsedSec <= 9.0) {
+      const newItem = floorItems.find((p) => p.uid === newlyPlacedItemHighlight.uid);
+      if (newItem) {
+        const cat = getCatalogItem(newItem.catalogId);
+        if (cat) {
+          const fp = getRotatedFootprint(cat, newItem.rotation);
+          const cx = newItem.gridX + fp.width * 0.5;
+          const cy = newItem.gridY + fp.depth * 0.5;
+          const sx = originX + (cx - cy) * halfW;
+          const sy = originY + (cx + cy) * halfH;
+          const fade = elapsedSec > 7.0 ? Math.max(0, 1 - (elapsedSec - 7.0) / 2.0) : 1;
+          const bounce = Math.abs(Math.sin(t * 7.5)) * 9 * scale;
+          const ringPulse = 1 + 0.14 * Math.sin(t * 8);
+
+          ctx.save();
+          ctx.globalAlpha = fade;
+
+          // Vertical spotlight beam column so you can spot the new decoration immediately anywhere on the floor
+          const beamW = Math.max(26, (fp.width + fp.depth) * 15) * scale;
+          const beamGrad = ctx.createLinearGradient(sx, sy - 95 * scale, sx, sy + 6 * scale);
+          beamGrad.addColorStop(0, 'rgba(74, 222, 128, 0)');
+          beamGrad.addColorStop(0.5, 'rgba(34, 211, 238, 0.20)');
+          beamGrad.addColorStop(1, 'rgba(74, 222, 128, 0.42)');
+          ctx.fillStyle = beamGrad;
+          ctx.beginPath();
+          ctx.moveTo(sx - beamW * 0.45, sy - 95 * scale);
+          ctx.lineTo(sx + beamW * 0.45, sy - 95 * scale);
+          ctx.lineTo(sx + beamW * 0.7, sy + 4 * scale);
+          ctx.lineTo(sx - beamW * 0.7, sy + 4 * scale);
+          ctx.closePath();
+          ctx.fill();
+
+          // Expanding radar ring around the newly placed decoration's base
+          ctx.strokeStyle = '#4ade80';
+          ctx.lineWidth = 2.6 * scale;
+          ctx.beginPath();
+          ctx.ellipse(
+            sx,
+            sy - 1 * scale,
+            beamW * 0.75 * ringPulse,
+            beamW * 0.38 * ringPulse,
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.stroke();
+
+          // Bouncing downward pointer arrow + floating "✨ NEW! [ITEM NAME] (X,Y)" badge
+          const badgeY = sy - 64 * scale - bounce;
+          const titleText = `✨ NEW: ${cat.name.toUpperCase()} (${newItem.gridX},${newItem.gridY})`;
+          const subText = 'HOLD ITEM TO MOVE · TAP TO INTERACT';
+
+          ctx.font = `900 ${Math.max(9, Math.round(10 * scale))}px "Outfit", sans-serif`;
+          const tw1 = ctx.measureText(titleText).width;
+          ctx.font = `800 ${Math.max(7, Math.round(7.5 * scale))}px "JetBrains Mono", monospace`;
+          const tw2 = ctx.measureText(subText).width;
+          const pillW = Math.max(tw1, tw2) + 20 * scale;
+          const pillH = 28 * scale;
+
+          // Downward triangle pointer under the badge
+          ctx.fillStyle = '#4ade80';
+          ctx.beginPath();
+          ctx.moveTo(sx - 7 * scale, badgeY + pillH * 0.5);
+          ctx.lineTo(sx + 7 * scale, badgeY + pillH * 0.5);
+          ctx.lineTo(sx, badgeY + pillH * 0.5 + 9 * scale);
+          ctx.closePath();
+          ctx.fill();
+
+          fillStrokeRoundedRect(
+            ctx,
+            sx - pillW * 0.5,
+            badgeY - pillH * 0.5,
+            pillW,
+            pillH,
+            8 * scale,
+            'rgba(6, 24, 18, 0.95)',
+            '#4ade80',
+            2.3 * scale
+          );
+
+          ctx.fillStyle = '#4ade80';
+          ctx.font = `900 ${Math.max(9, Math.round(10 * scale))}px "Outfit", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(titleText, sx, badgeY - 4.5 * scale);
+
+          ctx.fillStyle = '#a7f3d0';
+          ctx.font = `800 ${Math.max(7, Math.round(7.5 * scale))}px "JetBrains Mono", monospace`;
+          ctx.fillText(subText, sx, badgeY + 7 * scale);
+
+          ctx.restore();
+        }
+      }
+    }
+  }
 }
 
 
